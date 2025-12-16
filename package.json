@@ -1,47 +1,40 @@
 {
-  "name": "cutlist-processor",
+  "name": "dawin-cutlist-processor",
   "version": "1.0.0",
-  "description": "A React-based cutting list processor and optimizer for woodworking projects",
-  "main": "src/index.js",
+  "description": "Cutting list processor and optimizer for Dawin Group millwork operations",
+  "type": "module",
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "dev": "react-scripts start"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "deploy": "npm run build && firebase deploy",
+    "deploy:preview": "npm run build && firebase hosting:channel:deploy preview",
+    "firebase:login": "firebase login",
+    "firebase:init": "firebase init hosting"
   },
-  "keywords": [
-    "woodworking",
-    "cutting-list",
-    "optimizer",
-    "react",
-    "cabinet-making"
-  ],
-  "author": "Daniel Fredrick Onzimai",
-  "license": "MIT",
   "dependencies": {
+    "lucide-react": "^0.263.1",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "lucide-react": "^0.294.0",
-    "tailwindcss": "^3.3.0",
-    "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.31"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0"
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.0.3",
+    "autoprefixer": "^10.4.14",
+    "postcss": "^8.4.27",
+    "tailwindcss": "^3.3.3",
+    "vite": "^4.4.5"
   },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  }
+  "keywords": [
+    "cutlist",
+    "cutting-optimizer",
+    "millwork",
+    "bom",
+    "cabinetry"
+  ],
+  "author": "Dawin Group",
+  "license": "UNLICENSED",
+  "private": true
 }
