@@ -28,6 +28,11 @@ import type {
   DesignStage,
   StageTransition,
   DesignCategory,
+  Approval,
+  ApprovalType,
+  ApprovalStatus,
+  Deliverable,
+  DeliverableType,
 } from '../types';
 import { 
   createInitialRAGStatus, 
@@ -39,6 +44,8 @@ import { formatItemCode } from '../utils/formatting';
 // Collection names
 const PROJECTS_COLLECTION = 'designProjects';
 const ITEMS_SUBCOLLECTION = 'designItems';
+const APPROVALS_SUBCOLLECTION = 'approvals';
+const DELIVERABLES_SUBCOLLECTION = 'deliverables';
 
 // ============================================
 // Project CRUD Operations
@@ -433,4 +440,230 @@ export async function batchUpdateRAGAspects(
   }
   
   await batch.commit();
+}
+
+// ============================================
+// Approvals CRUD Operations
+// ============================================
+
+/**
+ * Get approvals subcollection reference
+ */
+function getApprovalsCollection(projectId: string, itemId: string) {
+  return collection(db, PROJECTS_COLLECTION, projectId, ITEMS_SUBCOLLECTION, itemId, APPROVALS_SUBCOLLECTION);
+}
+
+/**
+ * Create a new approval request
+ */
+export async function createApproval(
+  projectId: string,
+  itemId: string,
+  data: {
+    type: ApprovalType;
+    assignedTo: string;
+    notes?: string;
+  },
+  userId: string
+): Promise<string> {
+  const approvalsRef = getApprovalsCollection(projectId, itemId);
+  
+  const approval = {
+    type: data.type,
+    status: 'pending' as ApprovalStatus,
+    assignedTo: data.assignedTo,
+    requestedBy: userId,
+    requestedAt: serverTimestamp(),
+    notes: data.notes || null,
+    decision: null,
+    decidedAt: null,
+    attachments: [],
+  };
+  
+  const docRef = await addDoc(approvalsRef, approval);
+  
+  // Also update the design item's approvals array for quick access
+  const itemRef = getItemDoc(projectId, itemId);
+  const itemSnap = await getDoc(itemRef);
+  if (itemSnap.exists()) {
+    const currentApprovals = itemSnap.data().approvals || [];
+    await updateDoc(itemRef, {
+      approvals: [...currentApprovals, { id: docRef.id, ...approval }],
+      updatedAt: serverTimestamp(),
+      updatedBy: userId,
+    });
+  }
+  
+  return docRef.id;
+}
+
+/**
+ * Respond to an approval request
+ */
+export async function respondToApproval(
+  projectId: string,
+  itemId: string,
+  approvalId: string,
+  status: 'approved' | 'rejected' | 'revision-requested',
+  decision: string,
+  userId: string
+): Promise<void> {
+  const approvalRef = doc(db, PROJECTS_COLLECTION, projectId, ITEMS_SUBCOLLECTION, itemId, APPROVALS_SUBCOLLECTION, approvalId);
+  
+  await updateDoc(approvalRef, {
+    status,
+    decision,
+    decidedAt: serverTimestamp(),
+    respondedBy: userId,
+  });
+  
+  // Update the item's approvals array
+  const itemRef = getItemDoc(projectId, itemId);
+  const itemSnap = await getDoc(itemRef);
+  if (itemSnap.exists()) {
+    const currentApprovals = itemSnap.data().approvals || [];
+    const updatedApprovals = currentApprovals.map((a: Approval) => 
+      a.id === approvalId 
+        ? { ...a, status, decision, decidedAt: new Date(), respondedBy: userId }
+        : a
+    );
+    await updateDoc(itemRef, {
+      approvals: updatedApprovals,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId,
+    });
+  }
+}
+
+/**
+ * Subscribe to approvals for a design item
+ */
+export function subscribeToApprovals(
+  projectId: string,
+  itemId: string,
+  callback: (approvals: Approval[]) => void
+): () => void {
+  const approvalsRef = getApprovalsCollection(projectId, itemId);
+  const q = query(approvalsRef, orderBy('requestedAt', 'desc'));
+  
+  return onSnapshot(q, (snapshot) => {
+    const approvals = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Approval[];
+    callback(approvals);
+  });
+}
+
+// ============================================
+// Deliverables CRUD Operations
+// ============================================
+
+/**
+ * Get deliverables subcollection reference
+ */
+function getDeliverablesCollection(projectId: string, itemId: string) {
+  return collection(db, PROJECTS_COLLECTION, projectId, ITEMS_SUBCOLLECTION, itemId, DELIVERABLES_SUBCOLLECTION);
+}
+
+/**
+ * Create a new deliverable
+ */
+export async function createDeliverable(
+  projectId: string,
+  itemId: string,
+  data: {
+    name: string;
+    type: DeliverableType;
+    description?: string;
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+    storageUrl: string;
+    storagePath: string;
+  },
+  userId: string,
+  currentStage: DesignStage
+): Promise<string> {
+  const deliverablesRef = getDeliverablesCollection(projectId, itemId);
+  
+  // Get the next version number for this type
+  const existingQuery = query(deliverablesRef, where('type', '==', data.type));
+  const existingSnap = await getDocs(existingQuery);
+  const version = existingSnap.size + 1;
+  
+  const deliverable = {
+    name: data.name,
+    type: data.type,
+    description: data.description || null,
+    stage: currentStage,
+    version,
+    status: 'draft' as const,
+    fileName: data.fileName,
+    fileType: data.fileType,
+    fileSize: data.fileSize,
+    storageUrl: data.storageUrl,
+    storagePath: data.storagePath,
+    uploadedBy: userId,
+    uploadedAt: serverTimestamp(),
+    approvedBy: null,
+    approvedAt: null,
+  };
+  
+  const docRef = await addDoc(deliverablesRef, deliverable);
+  return docRef.id;
+}
+
+/**
+ * Update deliverable status
+ */
+export async function updateDeliverableStatus(
+  projectId: string,
+  itemId: string,
+  deliverableId: string,
+  status: 'draft' | 'review' | 'approved' | 'superseded',
+  userId: string
+): Promise<void> {
+  const deliverableRef = doc(db, PROJECTS_COLLECTION, projectId, ITEMS_SUBCOLLECTION, itemId, DELIVERABLES_SUBCOLLECTION, deliverableId);
+  
+  const updateData: Record<string, unknown> = { status };
+  
+  if (status === 'approved') {
+    updateData.approvedBy = userId;
+    updateData.approvedAt = serverTimestamp();
+  }
+  
+  await updateDoc(deliverableRef, updateData);
+}
+
+/**
+ * Delete a deliverable
+ */
+export async function deleteDeliverable(
+  projectId: string,
+  itemId: string,
+  deliverableId: string
+): Promise<void> {
+  const deliverableRef = doc(db, PROJECTS_COLLECTION, projectId, ITEMS_SUBCOLLECTION, itemId, DELIVERABLES_SUBCOLLECTION, deliverableId);
+  await deleteDoc(deliverableRef);
+}
+
+/**
+ * Subscribe to deliverables for a design item
+ */
+export function subscribeToDeliverables(
+  projectId: string,
+  itemId: string,
+  callback: (deliverables: Deliverable[]) => void
+): () => void {
+  const deliverablesRef = getDeliverablesCollection(projectId, itemId);
+  const q = query(deliverablesRef, orderBy('uploadedAt', 'desc'));
+  
+  return onSnapshot(q, (snapshot) => {
+    const deliverables = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Deliverable[];
+    callback(deliverables);
+  });
 }

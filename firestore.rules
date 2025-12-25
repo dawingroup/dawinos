@@ -1,9 +1,47 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Work Instances collection (Cutlist Processor)
+    
+    // ============================================
+    // Helper Functions
+    // ============================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    function isProjectMember(projectId) {
+      let project = get(/databases/$(database)/documents/designProjects/$(projectId)).data;
+      return isAuthenticated() && (
+        project.createdBy == request.auth.token.email ||
+        project.assignedDesigner == request.auth.token.email ||
+        project.assignedEngineer == request.auth.token.email ||
+        isAdmin()
+      );
+    }
+    
+    // ============================================
+    // Cutlist Processor Collections
+    // ============================================
+    
+    // Work Instances collection
     match /workInstances/{instanceId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Material Mappings
+    match /materialMappings/{mappingId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Stock Materials
+    match /stockMaterials/{materialId} {
+      allow read, write: if isAuthenticated();
     }
     
     // ============================================
@@ -12,38 +50,68 @@ service cloud.firestore {
     
     // Design Projects
     match /designProjects/{projectId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null && (
-        resource.data.createdBy == request.auth.token.email ||
-        resource.data.assignedDesigner == request.auth.token.email ||
-        resource.data.assignedEngineer == request.auth.token.email
-      );
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isProjectMember(projectId);
       
       // Design Items (subcollection)
       match /designItems/{itemId} {
-        allow read: if request.auth != null;
-        allow create, update: if request.auth != null;
-        allow delete: if request.auth != null && 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow read: if isAuthenticated();
+        allow create, update: if isProjectMember(projectId);
+        allow delete: if isAdmin();
+        
+        // Stage History (append-only audit trail)
+        match /stageHistory/{historyId} {
+          allow read: if isAuthenticated();
+          allow create: if isProjectMember(projectId);
+          allow update, delete: if false; // Immutable audit trail
+        }
+        
+        // Approvals
+        match /approvals/{approvalId} {
+          allow read: if isAuthenticated();
+          allow create: if isProjectMember(projectId);
+          allow update: if isAuthenticated() && 
+            resource.data.assignedTo == request.auth.token.email;
+          allow delete: if isAdmin();
+        }
+        
+        // Deliverables
+        match /deliverables/{deliverableId} {
+          allow read: if isAuthenticated();
+          allow create, update: if isProjectMember(projectId);
+          allow delete: if isAdmin();
+        }
+      }
+      
+      // AI Analyses (project-level)
+      match /aiAnalyses/{analysisId} {
+        allow read: if isAuthenticated();
+        allow create: if isProjectMember(projectId);
+        allow update: if isAuthenticated() && 
+          resource.data.requestedBy == request.auth.token.email;
+        allow delete: if isAdmin();
       }
     }
     
+    // ============================================
+    // User Management
+    // ============================================
+    
     // Users collection (for role-based access)
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if isAuthenticated();
+      allow write: if request.auth.uid == userId || isAdmin();
     }
     
-    // Material Mappings (Cutlist Processor)
-    match /materialMappings/{mappingId} {
-      allow read, write: if request.auth != null;
-    }
+    // ============================================
+    // Error Logging (Design Manager)
+    // ============================================
     
-    // Stock Materials (Cutlist Processor)
-    match /stockMaterials/{materialId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+    match /designManagerErrors/{errorId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
     }
   }
 }

@@ -1,0 +1,405 @@
+/**
+ * Deliverables Manager Component
+ * Manages design deliverables (files, drawings, models) for a design item
+ */
+
+import { useState } from 'react';
+import { 
+  FileText, Upload, Download, Trash2, Eye, Check, 
+  FileImage, Box, FileSpreadsheet, Clock, ChevronDown, ChevronUp
+} from 'lucide-react';
+import { cn } from '@/shared/lib/utils';
+import type { Deliverable, DeliverableType, DesignStage } from '../../types';
+
+export interface DeliverablesManagerProps {
+  deliverables: Deliverable[];
+  currentStage: DesignStage;
+  onUpload: (file: File, type: DeliverableType, name: string, description: string) => Promise<void>;
+  onDelete: (deliverableId: string) => Promise<void>;
+  onApprove: (deliverableId: string) => Promise<void>;
+  isReadOnly?: boolean;
+  className?: string;
+}
+
+const DELIVERABLE_TYPES: { value: DeliverableType; label: string; icon: typeof FileText }[] = [
+  { value: 'concept-sketch', label: 'Concept Sketch', icon: FileImage },
+  { value: 'mood-board', label: 'Mood Board', icon: FileImage },
+  { value: '3d-model', label: '3D Model', icon: Box },
+  { value: 'rendering', label: 'Rendering', icon: FileImage },
+  { value: 'shop-drawing', label: 'Shop Drawing', icon: FileText },
+  { value: 'cut-list', label: 'Cut List', icon: FileSpreadsheet },
+  { value: 'bom', label: 'Bill of Materials', icon: FileSpreadsheet },
+  { value: 'cnc-program', label: 'CNC Program', icon: FileText },
+  { value: 'assembly-instructions', label: 'Assembly Instructions', icon: FileText },
+  { value: 'specification-sheet', label: 'Specification Sheet', icon: FileText },
+  { value: 'client-presentation', label: 'Client Presentation', icon: FileImage },
+  { value: 'other', label: 'Other', icon: FileText },
+];
+
+const STAGE_DELIVERABLES: Record<DesignStage, DeliverableType[]> = {
+  'concept': ['concept-sketch', 'mood-board'],
+  'preliminary': ['3d-model', 'rendering', 'client-presentation'],
+  'technical': ['shop-drawing', 'cut-list', 'bom', 'specification-sheet'],
+  'pre-production': ['cnc-program', 'assembly-instructions'],
+  'production-ready': ['shop-drawing', 'cut-list', 'bom', 'cnc-program', 'assembly-instructions'],
+};
+
+const STATUS_CONFIG = {
+  draft: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Draft' },
+  review: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'In Review' },
+  approved: { bg: 'bg-green-100', text: 'text-green-800', label: 'Approved' },
+  superseded: { bg: 'bg-red-100', text: 'text-red-800', label: 'Superseded' },
+};
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function DeliverablesManager({
+  deliverables,
+  currentStage,
+  onUpload,
+  onDelete,
+  onApprove,
+  isReadOnly = false,
+  className,
+}: DeliverablesManagerProps) {
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadType, setUploadType] = useState<DeliverableType>('shop-drawing');
+  const [uploadName, setUploadName] = useState('');
+  const [uploadDescription, setUploadDescription] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [expandedStages, setExpandedStages] = useState<Set<DesignStage>>(new Set([currentStage]));
+
+  const handleUpload = async () => {
+    if (!selectedFile || !uploadName.trim()) return;
+    
+    setIsUploading(true);
+    try {
+      await onUpload(selectedFile, uploadType, uploadName, uploadDescription);
+      setShowUpload(false);
+      setSelectedFile(null);
+      setUploadName('');
+      setUploadDescription('');
+    } catch (error) {
+      console.error('Failed to upload:', error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const toggleStage = (stage: DesignStage) => {
+    setExpandedStages(prev => {
+      const next = new Set(prev);
+      if (next.has(stage)) {
+        next.delete(stage);
+      } else {
+        next.add(stage);
+      }
+      return next;
+    });
+  };
+
+  // Group deliverables by stage
+  const groupedDeliverables = deliverables.reduce((acc, del) => {
+    if (!acc[del.stage]) acc[del.stage] = [];
+    acc[del.stage].push(del);
+    return acc;
+  }, {} as Record<DesignStage, Deliverable[]>);
+
+  // Recommended deliverables for current stage
+  const recommendedTypes = STAGE_DELIVERABLES[currentStage] || [];
+  const existingTypes = new Set(deliverables.filter(d => d.stage === currentStage).map(d => d.type));
+  const missingTypes = recommendedTypes.filter(t => !existingTypes.has(t));
+
+  const getTypeIcon = (type: DeliverableType) => {
+    const typeConfig = DELIVERABLE_TYPES.find(t => t.value === type);
+    return typeConfig?.icon || FileText;
+  };
+
+  const stages: DesignStage[] = ['concept', 'preliminary', 'technical', 'pre-production', 'production-ready'];
+
+  return (
+    <div className={cn('space-y-6', className)}>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Deliverables</h3>
+          <p className="text-sm text-gray-500">
+            {deliverables.length} file{deliverables.length !== 1 ? 's' : ''} uploaded
+          </p>
+        </div>
+        {!isReadOnly && (
+          <button
+            onClick={() => setShowUpload(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#0A7C8E]/90 text-sm font-medium"
+          >
+            <Upload className="w-4 h-4" />
+            Upload File
+          </button>
+        )}
+      </div>
+
+      {/* Missing Deliverables Alert */}
+      {missingTypes.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex items-center gap-2 text-amber-800 font-medium mb-2">
+            <Clock className="w-5 h-5" />
+            Recommended for {currentStage} stage
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {missingTypes.map(type => {
+              const typeConfig = DELIVERABLE_TYPES.find(t => t.value === type);
+              return (
+                <span
+                  key={type}
+                  className="px-3 py-1 bg-amber-100 text-amber-800 text-sm rounded-full"
+                >
+                  {typeConfig?.label || type}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Upload Form */}
+      {showUpload && (
+        <div className="border rounded-lg p-4 bg-gray-50 space-y-4">
+          <h4 className="font-medium text-gray-900">Upload Deliverable</h4>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">File Type</label>
+              <select
+                value={uploadType}
+                onChange={e => setUploadType(e.target.value as DeliverableType)}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+              >
+                {DELIVERABLE_TYPES.map(type => (
+                  <option key={type.value} value={type.value}>{type.label}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <input
+                type="text"
+                value={uploadName}
+                onChange={e => setUploadName(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+                placeholder="e.g., Reception Desk - Shop Drawing v1"
+              />
+            </div>
+            
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
+              <input
+                type="text"
+                value={uploadDescription}
+                onChange={e => setUploadDescription(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+                placeholder="Brief description of this deliverable..."
+              />
+            </div>
+            
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">File</label>
+              <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                {selectedFile ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <FileText className="w-5 h-5 text-gray-500" />
+                    <span className="text-sm">{selectedFile.name}</span>
+                    <span className="text-xs text-gray-500">({formatFileSize(selectedFile.size)})</span>
+                    <button
+                      onClick={() => setSelectedFile(null)}
+                      className="p-1 text-red-500 hover:bg-red-50 rounded"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      onChange={e => setSelectedFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                    <div className="flex flex-col items-center gap-2 text-gray-500">
+                      <Upload className="w-8 h-8" />
+                      <span className="text-sm">Click to select a file</span>
+                    </div>
+                  </label>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setShowUpload(false);
+                setSelectedFile(null);
+              }}
+              className="px-4 py-2 text-gray-700 border rounded-lg hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleUpload}
+              disabled={!selectedFile || !uploadName.trim() || isUploading}
+              className="flex items-center gap-2 px-4 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#0A7C8E]/90 disabled:opacity-50"
+            >
+              <Upload className="w-4 h-4" />
+              {isUploading ? 'Uploading...' : 'Upload'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Deliverables by Stage */}
+      {stages.map(stage => {
+        const stageDeliverables = groupedDeliverables[stage] || [];
+        if (stageDeliverables.length === 0 && stage !== currentStage) return null;
+        
+        const isExpanded = expandedStages.has(stage);
+        const isCurrentStage = stage === currentStage;
+        
+        return (
+          <div 
+            key={stage} 
+            className={cn(
+              'border rounded-lg overflow-hidden',
+              isCurrentStage && 'border-[#0A7C8E]'
+            )}
+          >
+            <button
+              onClick={() => toggleStage(stage)}
+              className={cn(
+                'w-full flex items-center justify-between p-4',
+                isCurrentStage ? 'bg-[#0A7C8E]/10' : 'bg-gray-50',
+                'hover:bg-gray-100 transition-colors'
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <h4 className="font-medium text-gray-900 capitalize">{stage.replace('-', ' ')}</h4>
+                <span className="px-2 py-0.5 text-xs rounded-full bg-gray-200 text-gray-700">
+                  {stageDeliverables.length} file{stageDeliverables.length !== 1 ? 's' : ''}
+                </span>
+                {isCurrentStage && (
+                  <span className="px-2 py-0.5 text-xs rounded-full bg-[#0A7C8E] text-white">
+                    Current
+                  </span>
+                )}
+              </div>
+              {isExpanded ? (
+                <ChevronUp className="w-5 h-5 text-gray-500" />
+              ) : (
+                <ChevronDown className="w-5 h-5 text-gray-500" />
+              )}
+            </button>
+            
+            {isExpanded && (
+              <div className="p-4 space-y-3">
+                {stageDeliverables.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No deliverables uploaded for this stage yet
+                  </p>
+                ) : (
+                  stageDeliverables.map(deliverable => {
+                    const Icon = getTypeIcon(deliverable.type);
+                    const statusConfig = STATUS_CONFIG[deliverable.status];
+                    
+                    return (
+                      <div 
+                        key={deliverable.id}
+                        className="flex items-center justify-between p-3 bg-white border rounded-lg"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-gray-100 rounded-lg">
+                            <Icon className="w-5 h-5 text-gray-600" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-gray-900">{deliverable.name}</span>
+                              <span className={cn('px-2 py-0.5 text-xs rounded-full', statusConfig.bg, statusConfig.text)}>
+                                {statusConfig.label}
+                              </span>
+                              <span className="text-xs text-gray-500">v{deliverable.version}</span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                              <span>{DELIVERABLE_TYPES.find(t => t.value === deliverable.type)?.label}</span>
+                              <span>{formatFileSize(deliverable.fileSize)}</span>
+                              <span>{deliverable.fileType.toUpperCase()}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          {deliverable.storageUrl && (
+                            <a
+                              href={deliverable.storageUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 text-gray-500 hover:bg-gray-100 rounded"
+                              title="View"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </a>
+                          )}
+                          {deliverable.storageUrl && (
+                            <a
+                              href={deliverable.storageUrl}
+                              download
+                              className="p-2 text-gray-500 hover:bg-gray-100 rounded"
+                              title="Download"
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
+                          )}
+                          {!isReadOnly && deliverable.status === 'review' && (
+                            <button
+                              onClick={() => onApprove(deliverable.id)}
+                              className="p-2 text-green-600 hover:bg-green-50 rounded"
+                              title="Approve"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                          )}
+                          {!isReadOnly && deliverable.status === 'draft' && (
+                            <button
+                              onClick={() => onDelete(deliverable.id)}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Empty State */}
+      {deliverables.length === 0 && !showUpload && (
+        <div className="text-center py-8 text-gray-500">
+          <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+          <p>No deliverables yet</p>
+          <p className="text-sm mt-1">Upload files to track design progress</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default DeliverablesManager;

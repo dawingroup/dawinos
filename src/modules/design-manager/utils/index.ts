@@ -51,3 +51,20 @@ export {
   getInitials,
   truncate,
 } from './formatting';
+
+// Error logging utilities
+export {
+  errorLogger,
+  ErrorCategory,
+  ErrorSeverity,
+  ERROR_CODES,
+  logFirebaseError,
+  logKatanaError,
+  logAIError,
+  logValidationError,
+  logUIError,
+  logCritical,
+  withErrorLogging,
+  type ErrorLog,
+  type ErrorCode,
+} from './error-logger';

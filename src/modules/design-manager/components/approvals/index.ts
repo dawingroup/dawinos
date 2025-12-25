@@ -3,4 +3,4 @@
  * Components for approval workflow and sign-offs
  */
 
-export {};
+export { ApprovalWorkflow } from './ApprovalWorkflow';
