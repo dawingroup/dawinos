@@ -41,3 +41,15 @@ pids
 
 # OS generated files
 Thumbs.db
+
+# Environment files
+.env
+.env.*
+functions/.env.*
+
+# Firebase
+.firebase/
+firebase-debug.log
+
+# Build output
+dist/
