@@ -7,19 +7,60 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Dawin brand colors (customize as needed)
-        dawin: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          200: '#bae6fd',
-          300: '#7dd3fc',
-          400: '#38bdf8',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          700: '#0369a1',
-          800: '#075985',
-          900: '#0c4a6e',
+        // Dawin Finishes brand colors
+        boysenberry: {
+          DEFAULT: '#872E5C',
+          light: '#a34573',
+          dark: '#6a2449',
+          50: '#fdf2f7',
+          100: '#fce7f0',
+          200: '#fbcfe2',
+          300: '#f9a8c9',
+          400: '#f472a5',
+          500: '#872E5C',
+          600: '#6a2449',
+          700: '#5a1e3d',
+          800: '#4a1932',
+          900: '#3d1529',
         },
+        goldenBell: {
+          DEFAULT: '#E18425',
+          light: '#e89d4d',
+          dark: '#c06e1c',
+          50: '#fef7ed',
+          100: '#fdecd4',
+          200: '#fad5a8',
+          300: '#f6b871',
+          400: '#f19038',
+          500: '#E18425',
+          600: '#c06e1c',
+          700: '#9f5519',
+          800: '#80441b',
+          900: '#6a3a19',
+        },
+        cashmere: {
+          DEFAULT: '#E2CAA9',
+          light: '#efe3d4',
+          dark: '#c9a87a',
+        },
+        pesto: {
+          DEFAULT: '#8A7D4B',
+          light: '#a69862',
+          dark: '#6e6339',
+        },
+        seaform: {
+          DEFAULT: '#7ABDCD',
+          light: '#a3d4e0',
+          dark: '#5aa3b5',
+        },
+        teal: {
+          DEFAULT: '#0A7C8E',
+          light: '#0d9bb2',
+          dark: '#085f6d',
+        },
+      },
+      fontFamily: {
+        outfit: ['Outfit', 'sans-serif'],
       },
     },
   },

@@ -2,13 +2,20 @@
 
 A comprehensive cutting list processing and optimization tool for millwork operations. Transforms design software exports (Polyboard, SketchUp) into optimized cutting patterns, BOMs, and supplier-ready formats.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
 ![License](https://img.shields.io/badge/license-Proprietary-red.svg)
 
 ## Features
 
+### 🆕 v1.1 Integration Features
+- **Google Authentication**: Sign in with Google account for seamless access
+- **Notion Integration**: Connect to customer and project databases
+- **Google Drive Upload**: Upload CSV files directly from Google Drive
+- **Auto-Save to Drive**: Automatically save outputs to project-specific folders
+- **Project Management**: Link processing cycles to customers and projects
+
 ### Data Processing
-- **Import**: Paste cutting lists directly from Polyboard or SketchUp exports
+- **Import**: Upload CSV files locally or from Google Drive
 - **Material Mapping**: Convert generic material names to supplier-specific names
 - **Grain Direction**: Preserve material grain orientation from design software
 

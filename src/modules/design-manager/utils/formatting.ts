@@ -1,0 +1,216 @@
+/**
+ * Formatting Utilities
+ * Display formatting for Design Manager types
+ */
+
+import type { DesignStage, DesignCategory, RAGStatusValue } from '../types';
+
+/**
+ * Human-readable labels for design stages
+ */
+export const STAGE_LABELS: Record<DesignStage, string> = {
+  'concept': 'Concept Development',
+  'preliminary': 'Preliminary Design',
+  'technical': 'Technical Design',
+  'pre-production': 'Pre-Production',
+  'production-ready': 'Production Ready',
+};
+
+/**
+ * Short labels for design stages
+ */
+export const STAGE_SHORT_LABELS: Record<DesignStage, string> = {
+  'concept': 'Concept',
+  'preliminary': 'Preliminary',
+  'technical': 'Technical',
+  'pre-production': 'Pre-Prod',
+  'production-ready': 'Ready',
+};
+
+/**
+ * Emoji icons for design stages
+ */
+export const STAGE_ICONS: Record<DesignStage, string> = {
+  'concept': '💡',
+  'preliminary': '📐',
+  'technical': '⚙️',
+  'pre-production': '🔧',
+  'production-ready': '✅',
+};
+
+/**
+ * Human-readable labels for design categories
+ */
+export const CATEGORY_LABELS: Record<DesignCategory, string> = {
+  'casework': 'Casework',
+  'furniture': 'Furniture',
+  'millwork': 'Millwork',
+  'doors': 'Doors',
+  'fixtures': 'Fixtures',
+  'specialty': 'Specialty',
+};
+
+/**
+ * Hex color values for RAG statuses
+ */
+export const RAG_COLORS: Record<RAGStatusValue, string> = {
+  'red': '#EF4444',
+  'amber': '#F59E0B',
+  'green': '#22C55E',
+  'not-applicable': '#9CA3AF',
+};
+
+/**
+ * Tailwind background color classes for RAG statuses
+ */
+export const RAG_BG_COLORS: Record<RAGStatusValue, string> = {
+  'red': 'bg-red-500',
+  'amber': 'bg-amber-500',
+  'green': 'bg-green-500',
+  'not-applicable': 'bg-gray-400',
+};
+
+/**
+ * Tailwind text color classes for RAG statuses
+ */
+export const RAG_TEXT_COLORS: Record<RAGStatusValue, string> = {
+  'red': 'text-red-500',
+  'amber': 'text-amber-500',
+  'green': 'text-green-500',
+  'not-applicable': 'text-gray-400',
+};
+
+/**
+ * Tailwind border color classes for RAG statuses
+ */
+export const RAG_BORDER_COLORS: Record<RAGStatusValue, string> = {
+  'red': 'border-red-500',
+  'amber': 'border-amber-500',
+  'green': 'border-green-500',
+  'not-applicable': 'border-gray-400',
+};
+
+/**
+ * Human-readable labels for RAG statuses
+ */
+export const RAG_LABELS: Record<RAGStatusValue, string> = {
+  'red': 'Not Ready',
+  'amber': 'In Progress',
+  'green': 'Complete',
+  'not-applicable': 'N/A',
+};
+
+/**
+ * Format a project code
+ * @param year - Year (e.g., 2025)
+ * @param sequence - Sequence number
+ * @returns Formatted code (e.g., DF-2025-001)
+ */
+export function formatProjectCode(year: number, sequence: number): string {
+  return `DF-${year}-${String(sequence).padStart(3, '0')}`;
+}
+
+/**
+ * Format a design item code
+ * @param projectCode - Parent project code
+ * @param sequence - Item sequence number
+ * @returns Formatted code (e.g., DF-2025-001-003)
+ */
+export function formatItemCode(projectCode: string, sequence: number): string {
+  return `${projectCode}-${String(sequence).padStart(3, '0')}`;
+}
+
+/**
+ * Format a date timestamp
+ * @param timestamp - Firestore timestamp
+ * @returns Formatted date string
+ */
+export function formatDate(timestamp: { seconds: number; nanoseconds: number }): string {
+  const date = new Date(timestamp.seconds * 1000);
+  return date.toLocaleDateString('en-ZA', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/**
+ * Format a datetime timestamp
+ * @param timestamp - Firestore timestamp
+ * @returns Formatted datetime string
+ */
+export function formatDateTime(timestamp: { seconds: number; nanoseconds: number }): string {
+  const date = new Date(timestamp.seconds * 1000);
+  return date.toLocaleString('en-ZA', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * Format relative time (e.g., "2 hours ago")
+ * @param timestamp - Firestore timestamp
+ * @returns Relative time string
+ */
+export function formatRelativeTime(timestamp: { seconds: number; nanoseconds: number }): string {
+  const now = Date.now();
+  const then = timestamp.seconds * 1000;
+  const diff = now - then;
+  
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7) return `${days}d ago`;
+  
+  return formatDate(timestamp);
+}
+
+/**
+ * Format a percentage with optional decimal places
+ * @param value - Percentage value (0-100)
+ * @param decimals - Number of decimal places (default: 0)
+ * @returns Formatted percentage string
+ */
+export function formatPercentage(value: number, decimals: number = 0): string {
+  return `${value.toFixed(decimals)}%`;
+}
+
+/**
+ * Get initials from a name or email
+ * @param nameOrEmail - Full name or email address
+ * @returns Initials (e.g., "JD" or "JS")
+ */
+export function getInitials(nameOrEmail: string): string {
+  if (!nameOrEmail) return '??';
+  
+  // If it's an email, use the part before @
+  const name = nameOrEmail.includes('@') 
+    ? nameOrEmail.split('@')[0] 
+    : nameOrEmail;
+  
+  const parts = name.split(/[\s._-]+/).filter(Boolean);
+  
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  
+  return name.substring(0, 2).toUpperCase();
+}
+
+/**
+ * Truncate text with ellipsis
+ * @param text - Text to truncate
+ * @param maxLength - Maximum length
+ * @returns Truncated text
+ */
+export function truncate(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength - 3) + '...';
+}

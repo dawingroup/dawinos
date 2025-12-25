@@ -1,5 +1,24 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Upload, Settings, FileSpreadsheet, Calculator, Download, ChevronDown, ChevronRight, Plus, Trash2, Edit2, Check, X, AlertCircle, Package, Layers, Scissors, Grid, RotateCcw, ZoomIn, ZoomOut, Play } from 'lucide-react';
+import { Upload, Settings, FileSpreadsheet, Calculator, Download, ChevronDown, ChevronRight, Plus, Trash2, Edit2, Check, X, AlertCircle, Package, Layers, Scissors, Grid, RotateCcw, ZoomIn, ZoomOut, Play, Save, Cloud, CheckCircle, Info, Archive, FileText, RefreshCw } from 'lucide-react';
+import { useAuth } from './contexts/AuthContext';
+import { useConfig } from './contexts/ConfigContext';
+import { useOffcuts } from './contexts/OffcutContext';
+import AuthButton from './components/AuthButton';
+import CustomerProjectSelector from './components/CustomerProjectSelector';
+import FileUpload from './components/FileUpload';
+import SettingsPanel from './components/SettingsPanel';
+import OffcutManager from './components/OffcutManager';
+import OptimizationReport from './components/OptimizationReport';
+import WorkInstancePanel from './components/WorkInstancePanel';
+import DFLogo from './components/DFLogo';
+import { useWorkInstance } from './contexts/WorkInstanceContext';
+import { useDriveService } from './services/driveService';
+import { analyzeMaterials, getMaterialSummary } from './utils/materialUtils';
+import { optimizePanelLayout, calculateStatistics } from './utils/optimizationEngine';
+import { exportOptimizationPDF } from './utils/pdfExport';
+import MaterialMappingPanelV2 from './components/ConfigureTab/MaterialMappingPanel';
+import StockMaterialsManager from './components/ConfigureTab/StockMaterialsManager';
+import SplitIndicator from './components/ImportTab/SplitIndicator';
 
 // ==================== CONFIGURATION ====================
 
@@ -320,10 +339,10 @@ class CuttingOptimizer {
 const TabButton = ({ active, onClick, children, icon: Icon }) => (
   <button
     onClick={onClick}
-    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all font-medium ${
       active
-        ? 'bg-blue-600 text-white shadow-md'
-        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+        ? 'bg-boysenberry text-white shadow-md'
+        : 'bg-cashmere-light text-gray-700 hover:bg-cashmere'
     }`}
   >
     {Icon && <Icon size={18} />}
@@ -338,13 +357,13 @@ const CollapsibleSection = ({ title, icon: Icon, children, defaultOpen = true, b
     <div className="border border-gray-200 rounded-lg overflow-hidden mb-4">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center gap-2 px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+        className="w-full flex items-center gap-2 px-4 py-3 bg-cashmere-light hover:bg-cashmere transition-colors"
       >
         {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-        {Icon && <Icon size={18} className="text-blue-600" />}
+        {Icon && <Icon size={18} className="text-boysenberry" />}
         <span className="font-medium flex-1 text-left">{title}</span>
         {badge && (
-          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">
+          <span className="px-2 py-0.5 bg-boysenberry-100 text-boysenberry rounded-full text-xs">
             {badge}
           </span>
         )}
@@ -447,128 +466,422 @@ const SheetVisualization = ({ sheet, scale = 0.15 }) => {
   );
 };
 
-// Data Input Panel
+// Data Input Panel - With manual entry support
 const DataInputPanel = ({ rawData, setRawData }) => {
-  const [pasteText, setPasteText] = useState('');
-  
-  const handleParse = () => {
-    const lines = pasteText.trim().split('\n');
-    const parsed = lines.slice(1).map(line => {
-      const cols = line.split('\t');
-      if (cols.length >= 8) {
-        return {
-          cabinet: cols[0] || '',
-          label: cols[1] || '',
-          material: cols[2] || '',
-          thickness: parseFloat(cols[3]) || 0,
-          quantity: parseInt(cols[4]) || 1,
-          length: parseFloat(cols[5]) || 0,
-          width: parseFloat(cols[6]) || 0,
-          grain: parseInt(cols[7]) || 0,
-          topEdge: cols[8] || '',
-          rightEdge: cols[9] || '',
-          bottomEdge: cols[10] || '',
-          leftEdge: cols[11] || '',
-        };
-      }
-      return null;
-    }).filter(Boolean);
-    
-    if (parsed.length > 0) {
-      setRawData(parsed);
-      setPasteText('');
+  const [editingRow, setEditingRow] = useState(null);
+  const [newRow, setNewRow] = useState({
+    cabinet: '',
+    label: '',
+    material: 'Generic 0180',
+    thickness: 18,
+    quantity: 1,
+    length: 0,
+    width: 0,
+    grain: 0,
+    topEdge: '',
+    rightEdge: '',
+    bottomEdge: '',
+    leftEdge: ''
+  });
+
+  const handleAddRow = () => {
+    if (newRow.label && newRow.length > 0 && newRow.width > 0) {
+      setRawData(prev => [...prev, { ...newRow }]);
+      setNewRow({
+        cabinet: newRow.cabinet, // Keep cabinet for convenience
+        label: '',
+        material: newRow.material, // Keep material for convenience
+        thickness: newRow.thickness,
+        quantity: 1,
+        length: 0,
+        width: 0,
+        grain: 0,
+        topEdge: '',
+        rightEdge: '',
+        bottomEdge: '',
+        leftEdge: ''
+      });
+    }
+  };
+
+  const handleDeleteRow = (idx) => {
+    setRawData(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleEditRow = (idx) => {
+    setEditingRow(idx);
+  };
+
+  const handleSaveEdit = (idx, updatedRow) => {
+    setRawData(prev => prev.map((row, i) => i === idx ? updatedRow : row));
+    setEditingRow(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingRow(null);
+  };
+
+  const handleClearAll = () => {
+    if (window.confirm('Are you sure you want to clear all data?')) {
+      setRawData([]);
     }
   };
 
   return (
     <div className="space-y-4">
-      <CollapsibleSection title="Paste from Polyboard/SketchUp" icon={Upload}>
-        <div className="space-y-3">
-          <p className="text-sm text-gray-600">
-            Paste your cutting list data (tab-separated) from Polyboard or SketchUp export.
-            Expected columns: Cabinet, Label, Material, Thickness, Qty, Length, Width, Grain, TopEdge, RightEdge, BottomEdge, LeftEdge
-          </p>
-          <textarea
-            value={pasteText}
-            onChange={(e) => setPasteText(e.target.value)}
-            placeholder="Paste cutting list data here..."
-            className="w-full h-32 p-3 border border-gray-300 rounded-lg font-mono text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-          <div className="flex gap-2">
+      <CollapsibleSection 
+        title="Cutlist Data" 
+        icon={FileSpreadsheet} 
+        defaultOpen={true}
+        badge={rawData.length > 0 ? `${rawData.length} items` : null}
+      >
+        {/* Add New Panel Form */}
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h4 className="font-medium text-blue-900 mb-3 flex items-center gap-2">
+            <Plus size={16} />
+            Add New Panel
+          </h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Cabinet</label>
+              <input
+                type="text"
+                value={newRow.cabinet}
+                onChange={(e) => setNewRow(prev => ({ ...prev, cabinet: e.target.value }))}
+                placeholder="Cabinet name"
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Label *</label>
+              <input
+                type="text"
+                value={newRow.label}
+                onChange={(e) => setNewRow(prev => ({ ...prev, label: e.target.value }))}
+                placeholder="Part label"
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Material</label>
+              <select
+                value={newRow.material}
+                onChange={(e) => setNewRow(prev => ({ ...prev, material: e.target.value }))}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              >
+                <option value="Generic 0180">Generic 0180</option>
+                <option value="OSB3">OSB3</option>
+                <option value="Generic 0031">Generic 0031</option>
+                <option value="Blockboard">Blockboard</option>
+                <option value="Plywood">Plywood</option>
+                <option value="MDF">MDF</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Thickness</label>
+              <input
+                type="number"
+                value={newRow.thickness}
+                onChange={(e) => setNewRow(prev => ({ ...prev, thickness: parseInt(e.target.value) || 0 }))}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Quantity</label>
+              <input
+                type="number"
+                min="1"
+                value={newRow.quantity}
+                onChange={(e) => setNewRow(prev => ({ ...prev, quantity: parseInt(e.target.value) || 1 }))}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Length (mm) *</label>
+              <input
+                type="number"
+                value={newRow.length || ''}
+                onChange={(e) => setNewRow(prev => ({ ...prev, length: parseInt(e.target.value) || 0 }))}
+                placeholder="Length"
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Width (mm) *</label>
+              <input
+                type="number"
+                value={newRow.width || ''}
+                onChange={(e) => setNewRow(prev => ({ ...prev, width: parseInt(e.target.value) || 0 }))}
+                placeholder="Width"
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Grain</label>
+              <select
+                value={newRow.grain}
+                onChange={(e) => setNewRow(prev => ({ ...prev, grain: parseInt(e.target.value) }))}
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              >
+                <option value={0}>═ Horizontal</option>
+                <option value={1}>║ Vertical</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Top Edge</label>
+              <input
+                type="text"
+                value={newRow.topEdge}
+                onChange={(e) => setNewRow(prev => ({ ...prev, topEdge: e.target.value }))}
+                placeholder="e.g., Edge-020"
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Right Edge</label>
+              <input
+                type="text"
+                value={newRow.rightEdge}
+                onChange={(e) => setNewRow(prev => ({ ...prev, rightEdge: e.target.value }))}
+                placeholder="e.g., Edge-020"
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Bottom Edge</label>
+              <input
+                type="text"
+                value={newRow.bottomEdge}
+                onChange={(e) => setNewRow(prev => ({ ...prev, bottomEdge: e.target.value }))}
+                placeholder="e.g., Edge-020"
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Left Edge</label>
+              <input
+                type="text"
+                value={newRow.leftEdge}
+                onChange={(e) => setNewRow(prev => ({ ...prev, leftEdge: e.target.value }))}
+                placeholder="e.g., Edge-020"
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              />
+            </div>
+          </div>
+          <div className="mt-3 flex justify-end">
             <button
-              onClick={handleParse}
-              disabled={!pasteText.trim()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              onClick={handleAddRow}
+              disabled={!newRow.label || newRow.length <= 0 || newRow.width <= 0}
+              className="flex items-center gap-2 px-4 py-2 bg-boysenberry text-white rounded-lg hover:bg-boysenberry-dark disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
             >
-              Parse Data
-            </button>
-            <button
-              onClick={() => setRawData(SAMPLE_DATA)}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-            >
-              Load Sample Data
+              <Plus size={16} />
+              Add Panel
             </button>
           </div>
         </div>
-      </CollapsibleSection>
 
-      <CollapsibleSection 
-        title="Raw Data" 
-        icon={FileSpreadsheet} 
-        defaultOpen={rawData.length > 0}
-        badge={rawData.length > 0 ? `${rawData.length} items` : null}
-      >
+        {/* Data Table */}
         {rawData.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">No data loaded. Paste data above or load sample data.</p>
+          <p className="text-gray-500 text-center py-8">No panels added yet. Add panels manually above or upload a CSV file.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="px-2 py-2 text-left">Cabinet</th>
-                  <th className="px-2 py-2 text-left">Label</th>
-                  <th className="px-2 py-2 text-left">Material</th>
-                  <th className="px-2 py-2 text-right">Thk</th>
-                  <th className="px-2 py-2 text-right">Qty</th>
-                  <th className="px-2 py-2 text-right">L</th>
-                  <th className="px-2 py-2 text-right">W</th>
-                  <th className="px-2 py-2 text-center">Grain</th>
-                  <th className="px-2 py-2 text-center">Edges</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rawData.map((row, idx) => {
-                  const edgeCount = [row.topEdge, row.rightEdge, row.bottomEdge, row.leftEdge].filter(Boolean).length;
-                  return (
-                    <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-2 py-2 truncate max-w-32">{row.cabinet}</td>
-                      <td className="px-2 py-2 truncate max-w-32">{row.label}</td>
-                      <td className="px-2 py-2 truncate max-w-28">{row.material}</td>
-                      <td className="px-2 py-2 text-right">{row.thickness}</td>
-                      <td className="px-2 py-2 text-right">{row.quantity}</td>
-                      <td className="px-2 py-2 text-right">{row.length}</td>
-                      <td className="px-2 py-2 text-right">{row.width}</td>
-                      <td className="px-2 py-2 text-center">
-                        <span className={`px-2 py-0.5 rounded text-xs ${
-                          row.grain === 1 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
-                        }`}>
-                          {row.grain === 1 ? '║ V' : '═ H'}
-                        </span>
-                      </td>
-                      <td className="px-2 py-2 text-center">
-                        <span className={`px-2 py-0.5 rounded text-xs ${edgeCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
-                          {edgeCount}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm text-gray-600">{rawData.length} panel(s)</span>
+              <button
+                onClick={handleClearAll}
+                className="flex items-center gap-1 px-3 py-1 text-red-600 hover:bg-red-50 rounded text-sm"
+              >
+                <Trash2 size={14} />
+                Clear All
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="px-2 py-2 text-left">Cabinet</th>
+                    <th className="px-2 py-2 text-left">Label</th>
+                    <th className="px-2 py-2 text-left">Material</th>
+                    <th className="px-2 py-2 text-right">Thk</th>
+                    <th className="px-2 py-2 text-right">Qty</th>
+                    <th className="px-2 py-2 text-right">L</th>
+                    <th className="px-2 py-2 text-right">W</th>
+                    <th className="px-2 py-2 text-center">Grain</th>
+                    <th className="px-2 py-2 text-center">Edges</th>
+                    <th className="px-2 py-2 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rawData.map((row, idx) => {
+                    const edgeCount = [row.topEdge, row.rightEdge, row.bottomEdge, row.leftEdge].filter(Boolean).length;
+                    
+                    if (editingRow === idx) {
+                      return (
+                        <EditableRow 
+                          key={idx} 
+                          row={row} 
+                          onSave={(updatedRow) => handleSaveEdit(idx, updatedRow)}
+                          onCancel={handleCancelEdit}
+                        />
+                      );
+                    }
+                    
+                    return (
+                      <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-2 py-2 truncate max-w-32">{row.cabinet}</td>
+                        <td className="px-2 py-2 truncate max-w-32">
+                          <div className="flex items-center gap-1">
+                            <span className="truncate">{row.label}</span>
+                            <SplitIndicator row={row} />
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 truncate max-w-28">{row.material}</td>
+                        <td className="px-2 py-2 text-right">{row.thickness}</td>
+                        <td className="px-2 py-2 text-right">{row.quantity}</td>
+                        <td className="px-2 py-2 text-right">{row.length}</td>
+                        <td className="px-2 py-2 text-right">{row.width}</td>
+                        <td className="px-2 py-2 text-center">
+                          <span className={`px-2 py-0.5 rounded text-xs ${
+                            row.grain === 1 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
+                          }`}>
+                            {row.grain === 1 ? '║ V' : '═ H'}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          <span className={`px-2 py-0.5 rounded text-xs ${edgeCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {edgeCount}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => handleEditRow(idx)}
+                              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                              title="Edit"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRow(idx)}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded"
+                              title="Delete"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </CollapsibleSection>
     </div>
+  );
+};
+
+// Editable Row Component
+const EditableRow = ({ row, onSave, onCancel }) => {
+  const [editedRow, setEditedRow] = useState({ ...row });
+
+  return (
+    <tr className="border-b border-gray-100 bg-yellow-50">
+      <td className="px-1 py-1">
+        <input
+          type="text"
+          value={editedRow.cabinet}
+          onChange={(e) => setEditedRow(prev => ({ ...prev, cabinet: e.target.value }))}
+          className="w-full px-1 py-1 border border-gray-300 rounded text-sm"
+        />
+      </td>
+      <td className="px-1 py-1">
+        <input
+          type="text"
+          value={editedRow.label}
+          onChange={(e) => setEditedRow(prev => ({ ...prev, label: e.target.value }))}
+          className="w-full px-1 py-1 border border-gray-300 rounded text-sm"
+        />
+      </td>
+      <td className="px-1 py-1">
+        <select
+          value={editedRow.material}
+          onChange={(e) => setEditedRow(prev => ({ ...prev, material: e.target.value }))}
+          className="w-full px-1 py-1 border border-gray-300 rounded text-sm"
+        >
+          <option value="Generic 0180">Generic 0180</option>
+          <option value="OSB3">OSB3</option>
+          <option value="Generic 0031">Generic 0031</option>
+          <option value="Blockboard">Blockboard</option>
+          <option value="Plywood">Plywood</option>
+          <option value="MDF">MDF</option>
+        </select>
+      </td>
+      <td className="px-1 py-1">
+        <input
+          type="number"
+          value={editedRow.thickness}
+          onChange={(e) => setEditedRow(prev => ({ ...prev, thickness: parseInt(e.target.value) || 0 }))}
+          className="w-16 px-1 py-1 border border-gray-300 rounded text-sm text-right"
+        />
+      </td>
+      <td className="px-1 py-1">
+        <input
+          type="number"
+          min="1"
+          value={editedRow.quantity}
+          onChange={(e) => setEditedRow(prev => ({ ...prev, quantity: parseInt(e.target.value) || 1 }))}
+          className="w-14 px-1 py-1 border border-gray-300 rounded text-sm text-right"
+        />
+      </td>
+      <td className="px-1 py-1">
+        <input
+          type="number"
+          value={editedRow.length}
+          onChange={(e) => setEditedRow(prev => ({ ...prev, length: parseInt(e.target.value) || 0 }))}
+          className="w-16 px-1 py-1 border border-gray-300 rounded text-sm text-right"
+        />
+      </td>
+      <td className="px-1 py-1">
+        <input
+          type="number"
+          value={editedRow.width}
+          onChange={(e) => setEditedRow(prev => ({ ...prev, width: parseInt(e.target.value) || 0 }))}
+          className="w-16 px-1 py-1 border border-gray-300 rounded text-sm text-right"
+        />
+      </td>
+      <td className="px-1 py-1">
+        <select
+          value={editedRow.grain}
+          onChange={(e) => setEditedRow(prev => ({ ...prev, grain: parseInt(e.target.value) }))}
+          className="w-full px-1 py-1 border border-gray-300 rounded text-sm"
+        >
+          <option value={0}>═ H</option>
+          <option value={1}>║ V</option>
+        </select>
+      </td>
+      <td className="px-1 py-1 text-center text-xs text-gray-500">-</td>
+      <td className="px-1 py-1 text-center">
+        <div className="flex items-center justify-center gap-1">
+          <button
+            onClick={() => onSave(editedRow)}
+            className="p-1 text-green-600 hover:bg-green-50 rounded"
+            title="Save"
+          >
+            <Check size={14} />
+          </button>
+          <button
+            onClick={onCancel}
+            className="p-1 text-gray-600 hover:bg-gray-100 rounded"
+            title="Cancel"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      </td>
+    </tr>
   );
 };
 
@@ -848,10 +1161,46 @@ const MillingConfigPanel = ({ millingConfig, setMillingConfig }) => {
 };
 
 // Cutting Optimizer Panel
-const CuttingOptimizerPanel = ({ rawData, materialMapping, stockSheets, kerf }) => {
-  const [optimizationResults, setOptimizationResults] = useState(null);
+const CuttingOptimizerPanel = ({ rawData, materialMapping, stockSheets, kerf, projectCode, optimizationState, setOptimizationState }) => {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [scale, setScale] = useState(0.15);
+  const [showReport, setShowReport] = useState(false);
+
+  // Extract state from lifted optimization state
+  const optimizationResults = optimizationState?.results || null;
+  const newOptimizationResults = optimizationState?.newResults || null;
+  const optimizedPanelCount = optimizationState?.panelCount || 0;
+  const optimizedPanelHash = optimizationState?.panelHash || '';
+  const optimizationTimestamp = optimizationState?.timestamp || null;
+
+  // Generate a hash of panel data to detect changes
+  const generatePanelHash = useCallback((panels) => {
+    if (!panels || panels.length === 0) return '';
+    return panels.map(p => `${p.label}|${p.length}|${p.width}|${p.quantity}`).sort().join(';');
+  }, []);
+
+  // Calculate current panel hash and detect changes
+  const currentPanelHash = useMemo(() => generatePanelHash(rawData), [rawData, generatePanelHash]);
+  const currentPanelCount = rawData.length;
+
+  // Detect if panels have changed since optimization
+  const panelsChanged = useMemo(() => {
+    if (!optimizationResults) return false;
+    return currentPanelHash !== optimizedPanelHash;
+  }, [optimizationResults, currentPanelHash, optimizedPanelHash]);
+
+  // Calculate how many panels are missing from optimization
+  const missingPanelInfo = useMemo(() => {
+    if (!optimizationResults || !panelsChanged) return null;
+    
+    const addedCount = currentPanelCount - optimizedPanelCount;
+    if (addedCount > 0) {
+      return { type: 'added', count: addedCount };
+    } else if (addedCount < 0) {
+      return { type: 'removed', count: Math.abs(addedCount) };
+    }
+    return { type: 'modified', count: 0 };
+  }, [optimizationResults, panelsChanged, currentPanelCount, optimizedPanelCount]);
 
   const runOptimization = useCallback(() => {
     setIsOptimizing(true);
@@ -860,10 +1209,22 @@ const CuttingOptimizerPanel = ({ rawData, materialMapping, stockSheets, kerf }) 
     setTimeout(() => {
       const optimizer = new CuttingOptimizer(stockSheets, kerf);
       const results = optimizer.optimize(rawData, materialMapping);
-      setOptimizationResults(results);
+      
+      // Also run the new optimization engine for the report
+      const newResults = optimizePanelLayout(rawData, stockSheets, kerf);
+      
+      // Update the lifted state in parent component
+      setOptimizationState({
+        results: results,
+        newResults: newResults,
+        panelCount: rawData.length,
+        panelHash: generatePanelHash(rawData),
+        timestamp: new Date()
+      });
+      
       setIsOptimizing(false);
     }, 100);
-  }, [rawData, materialMapping, stockSheets, kerf]);
+  }, [rawData, materialMapping, stockSheets, kerf, generatePanelHash, setOptimizationState]);
 
   const totalStats = useMemo(() => {
     if (!optimizationResults) return null;
@@ -911,6 +1272,46 @@ const CuttingOptimizerPanel = ({ rawData, materialMapping, stockSheets, kerf }) 
 
   return (
     <div className="space-y-6">
+      {/* Panel Change Warning Banner */}
+      {panelsChanged && missingPanelInfo && (
+        <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-300 rounded-lg">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="text-amber-600" size={24} />
+            <div>
+              <p className="font-medium text-amber-800">
+                {missingPanelInfo.type === 'added' && `${missingPanelInfo.count} panel${missingPanelInfo.count > 1 ? 's' : ''} added since last optimization`}
+                {missingPanelInfo.type === 'removed' && `${missingPanelInfo.count} panel${missingPanelInfo.count > 1 ? 's' : ''} removed since last optimization`}
+                {missingPanelInfo.type === 'modified' && 'Panel data has been modified since last optimization'}
+              </p>
+              <p className="text-sm text-amber-600">
+                The current optimization results may be outdated. Run optimization again to include all panels.
+                {optimizationTimestamp && (
+                  <span className="ml-2 text-amber-500">
+                    (Last run: {optimizationTimestamp.toLocaleTimeString()})
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={runOptimization}
+            disabled={isOptimizing}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-colors"
+          >
+            <RefreshCw size={16} className={isOptimizing ? 'animate-spin' : ''} />
+            Re-run Optimization
+          </button>
+        </div>
+      )}
+
+      {/* Optimization Timestamp */}
+      {optimizationResults && !panelsChanged && optimizationTimestamp && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+          <CheckCircle size={16} />
+          <span>Optimization up to date • Last run: {optimizationTimestamp.toLocaleString()} • {optimizedPanelCount} panels optimized</span>
+        </div>
+      )}
+
       {/* Controls */}
       <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
         <div className="flex items-center gap-4">
@@ -924,13 +1325,22 @@ const CuttingOptimizerPanel = ({ rawData, materialMapping, stockSheets, kerf }) 
           </button>
 
           {optimizationResults && (
-            <button
-              onClick={copyResults}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Download size={18} />
-              Copy Results
-            </button>
+            <>
+              <button
+                onClick={copyResults}
+                className="flex items-center gap-2 px-4 py-2 bg-boysenberry text-white rounded-lg hover:bg-boysenberry-dark transition-colors"
+              >
+                <Download size={18} />
+                Copy Results
+              </button>
+              <button
+                onClick={() => setShowReport(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-teal text-white rounded-lg hover:bg-teal-dark transition-colors"
+              >
+                <FileText size={18} />
+                View Report
+              </button>
+            </>
           )}
         </div>
 
@@ -955,9 +1365,9 @@ const CuttingOptimizerPanel = ({ rawData, materialMapping, stockSheets, kerf }) 
       {/* Summary Statistics */}
       {totalStats && (
         <div className="grid grid-cols-5 gap-4">
-          <div className="p-4 bg-blue-50 rounded-lg text-center">
-            <div className="text-3xl font-bold text-blue-700">{totalStats.totalSheets}</div>
-            <div className="text-sm text-blue-600">Total Sheets</div>
+          <div className="p-4 bg-seaform/20 rounded-lg text-center">
+            <div className="text-3xl font-bold text-teal">{totalStats.totalSheets}</div>
+            <div className="text-sm text-teal-dark">Total Sheets</div>
           </div>
           <div className="p-4 bg-green-50 rounded-lg text-center">
             <div className="text-3xl font-bold text-green-700">{totalStats.totalParts}</div>
@@ -1048,6 +1458,16 @@ const CuttingOptimizerPanel = ({ rawData, materialMapping, stockSheets, kerf }) 
           <AlertCircle className="mx-auto mb-4" size={48} />
           <p>No data loaded. Go to Data Input tab to load cutting list data.</p>
         </div>
+      )}
+
+      {/* Optimization Report Modal */}
+      {showReport && newOptimizationResults && (
+        <OptimizationReport
+          sheetLayouts={newOptimizationResults}
+          projectCode={projectCode || 'UNKNOWN'}
+          onClose={() => setShowReport(false)}
+          onExportPDF={exportOptimizationPDF}
+        />
       )}
     </div>
   );
@@ -1165,7 +1585,7 @@ const CutlistOptOutput = ({ data, materialMapping }) => {
         <h3 className="font-medium">CutlistOptimizer Format Output</h3>
         <button
           onClick={copyToClipboard}
-          className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
+          className="flex items-center gap-2 px-3 py-1.5 bg-teal text-white rounded-lg hover:bg-teal-dark text-sm"
         >
           <Download size={16} />
           Copy TSV
@@ -1175,7 +1595,7 @@ const CutlistOptOutput = ({ data, materialMapping }) => {
       <div className="overflow-x-auto">
         <table className="w-full text-sm border border-gray-200">
           <thead>
-            <tr className="bg-purple-50">
+            <tr className="bg-seaform/20">
               <th className="px-2 py-2 text-right border-b">Length</th>
               <th className="px-2 py-2 text-right border-b">Width</th>
               <th className="px-2 py-2 text-right border-b">Qty</th>
@@ -1425,12 +1845,249 @@ const TimberBOMOutput = ({ data, millingConfig }) => {
 // ==================== MAIN APPLICATION ====================
 
 export default function CutlistProcessorApp() {
+  const { user } = useAuth();
+  const { 
+    config, 
+    materialMapping: configMaterialMapping, 
+    stockSheets: configStockSheets,
+    millingConfig: configMillingConfig,
+    bladeKerf: configKerf,
+    updateConfig 
+  } = useConfig();
+  const { availableCount } = useOffcuts();
+  const { 
+    currentInstance, 
+    saveInstance, 
+    createNewInstance, 
+    addExportedFile, 
+    setInstanceStatus,
+    scheduleAutoSave 
+  } = useWorkInstance();
+  const { saveToProject, convertToCsv } = useDriveService();
+  
   const [activeTab, setActiveTab] = useState('input');
   const [rawData, setRawData] = useState([]);
-  const [materialMapping, setMaterialMapping] = useState(DEFAULT_MATERIAL_MAPPING);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [offcutsOpen, setOffcutsOpen] = useState(false);
+  const [showMaterialMappingV2, setShowMaterialMappingV2] = useState(false);
+  const [showStockManager, setShowStockManager] = useState(false);
+  const [pendingImportMaterials, setPendingImportMaterials] = useState([]);
+  
+  // Use config values with local state fallback for backwards compatibility
+  const [materialMapping, setMaterialMapping] = useState(configMaterialMapping || DEFAULT_MATERIAL_MAPPING);
   const [stockSheets, setStockSheets] = useState(DEFAULT_STOCK_SHEETS);
-  const [millingConfig, setMillingConfig] = useState(DEFAULT_MILLING_CONFIG);
-  const [kerf, setKerf] = useState(DEFAULT_KERF);
+  const [millingConfig, setMillingConfig] = useState(configMillingConfig || DEFAULT_MILLING_CONFIG);
+  const [kerf, setKerf] = useState(configKerf || DEFAULT_KERF);
+  
+  // Sync with config context
+  useEffect(() => {
+    if (configMaterialMapping) setMaterialMapping(configMaterialMapping);
+  }, [configMaterialMapping]);
+  
+  useEffect(() => {
+    if (configMillingConfig) setMillingConfig(configMillingConfig);
+  }, [configMillingConfig]);
+  
+  useEffect(() => {
+    if (configKerf) setKerf(configKerf);
+  }, [configKerf]);
+  
+  // New integration state
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveResults, setSaveResults] = useState([]);
+  
+  // Optimization state - lifted to parent to persist across tab changes
+  const [optimizationState, setOptimizationState] = useState({
+    results: null,
+    newResults: null,
+    panelCount: 0,
+    panelHash: '',
+    timestamp: null
+  });
+
+  // Handle project selection
+  const handleProjectSelect = ({ customer, project }) => {
+    setSelectedCustomer(customer);
+    setSelectedProject(project);
+    setSaveResults([]); // Clear previous save results
+  };
+
+  // Handle loading a work instance
+  const handleLoadInstance = (instance) => {
+    // Load panel data
+    if (instance.panelData && instance.panelData.length > 0) {
+      setRawData(instance.panelData);
+    } else if (instance.rawData && instance.rawData.length > 0) {
+      setRawData(instance.rawData);
+    }
+    
+    // Load configuration
+    if (instance.configuration) {
+      if (instance.configuration.materialMapping) {
+        setMaterialMapping(instance.configuration.materialMapping);
+      }
+      if (instance.configuration.stockSheets) {
+        setStockSheets(instance.configuration.stockSheets);
+      }
+      if (instance.configuration.millingConfig) {
+        setMillingConfig(instance.configuration.millingConfig);
+      }
+      if (instance.configuration.bladeKerf) {
+        setKerf(instance.configuration.bladeKerf);
+      }
+    }
+    
+    // Set project/customer if available
+    if (instance.projectId && instance.projectCode) {
+      setSelectedProject({
+        id: instance.projectId,
+        projectCode: instance.projectCode,
+        name: instance.projectName,
+      });
+    }
+    if (instance.customerId && instance.customerName) {
+      setSelectedCustomer({
+        id: instance.customerId,
+        name: instance.customerName,
+      });
+    }
+    
+    // Switch to input tab to show loaded data
+    setActiveTab('input');
+  };
+
+  // Handle file upload from new FileUpload component
+  const handleFileUpload = (data, fileName) => {
+    // Extract unique materials for two-stage mapping
+    const importedMaterials = [...new Set(data.map(r => r.material).filter(Boolean))];
+    
+    // Check if any materials are unknown (not in current mapping)
+    const unknownMaterials = importedMaterials.filter(m => !materialMapping[m]);
+    
+    if (unknownMaterials.length > 0) {
+      // Show material mapping panel for unknown materials
+      setPendingImportMaterials(importedMaterials);
+      setShowMaterialMappingV2(true);
+    }
+
+    console.log('File upload handler called with:', { data, fileName, dataLength: data.length });
+    console.log('Sample data row:', data[0]);
+    setRawData(data);
+    // Switch to input tab to show the loaded data
+    setActiveTab('input');
+  };
+
+  // Auto-save outputs to Google Drive
+  const handleAutoSave = async () => {
+    if (!selectedProject || !user || !rawData.length) return;
+
+    const projectCode = selectedProject.projectCode || 'UNKNOWN';
+    const folderUrl = selectedProject.driveFolderUrl;
+
+    if (!folderUrl) {
+      alert('No Google Drive folder URL found for this project. Please add a folder URL in Notion.');
+      return;
+    }
+
+    setSaving(true);
+    setSaveResults([]);
+
+    try {
+      // Generate all output formats
+      const outputs = [
+        {
+          type: 'pgbison',
+          data: generatePGBisonData(rawData, materialMapping),
+          headers: ['Material', 'Thickness', 'Length', 'Width', 'Quantity', 'Label', 'Cabinet']
+        },
+        {
+          type: 'cutlistopt',
+          data: generateCutlistOptData(rawData, materialMapping),
+          headers: ['Name', 'Length', 'Width', 'Quantity', 'Material', 'Grain']
+        },
+        {
+          type: 'katana',
+          data: generateKatanaBOMData(rawData, materialMapping),
+          headers: ['Component', 'Material', 'Quantity', 'Unit', 'Length', 'Width', 'Thickness']
+        }
+      ];
+
+      const results = await saveToProject(outputs, projectCode, folderUrl);
+      setSaveResults(results);
+
+      // Log activity to Notion (optional)
+      if (results.some(r => r.success)) {
+        try {
+          await fetch('/api/notion/log-activity', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${await user.getIdToken()}`
+            },
+            body: JSON.stringify({
+              projectId: selectedProject.id,
+              activity: 'Cutlist processing completed',
+              files: results.filter(r => r.success).map(r => ({
+                name: r.fileName,
+                type: r.type
+              }))
+            })
+          });
+        } catch (logError) {
+          console.warn('Failed to log activity to Notion:', logError);
+        }
+      }
+
+    } catch (error) {
+      console.error('Auto-save error:', error);
+      setSaveResults([{
+        success: false,
+        error: error.message,
+        message: `Auto-save failed: ${error.message}`
+      }]);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Helper functions to generate output data (simplified versions)
+  const generatePGBisonData = (data, mapping) => {
+    return data.map(item => ({
+      Material: mapping[item.material] || item.material,
+      Thickness: item.thickness,
+      Length: item.length,
+      Width: item.width,
+      Quantity: item.quantity,
+      Label: item.label,
+      Cabinet: item.cabinet
+    }));
+  };
+
+  const generateCutlistOptData = (data, mapping) => {
+    return data.map(item => ({
+      Name: item.label,
+      Length: item.length,
+      Width: item.width,
+      Quantity: item.quantity,
+      Material: mapping[item.material] || item.material,
+      Grain: item.grain
+    }));
+  };
+
+  const generateKatanaBOMData = (data, mapping) => {
+    return data.map(item => ({
+      Component: item.label,
+      Material: mapping[item.material] || item.material,
+      Quantity: item.quantity,
+      Unit: 'pcs',
+      Length: item.length,
+      Width: item.width,
+      Thickness: item.thickness
+    }));
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1438,23 +2095,96 @@ export default function CutlistProcessorApp() {
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-boysenberry rounded-lg flex items-center justify-center">
               <Scissors className="text-white" size={24} />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Dawin Cutlist Processor</h1>
+              <h1 className="text-xl font-bold text-gray-900 font-outfit">Dawin Cutlist Processor</h1>
               <p className="text-sm text-gray-500">Design → Optimize → BOM → Production</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
             {rawData.length > 0 && (
               <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
                 {rawData.length} components loaded
               </span>
             )}
+            {selectedProject && autoSaveEnabled && rawData.length > 0 && (
+              <button
+                onClick={handleAutoSave}
+                disabled={saving}
+                className="flex items-center space-x-2 px-4 py-2 bg-boysenberry text-white rounded-lg hover:bg-boysenberry-dark disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    <span>Save to Drive</span>
+                  </>
+                )}
+              </button>
+            )}
+            <button
+              onClick={() => setOffcutsOpen(true)}
+              className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+              title="Offcut Inventory"
+            >
+              <Archive size={20} />
+              {availableCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 text-white text-xs rounded-full flex items-center justify-center">
+                  {availableCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+              title="Settings"
+            >
+              <Settings size={20} />
+            </button>
+            <AuthButton />
+            <div className="ml-4 pl-4 border-l border-gray-200">
+              <DFLogo size={36} />
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Settings Panel */}
+      
+      {/* Two-Stage Material Mapping Modal */}
+      {showMaterialMappingV2 && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden">
+            <MaterialMappingPanelV2
+              importedMaterials={pendingImportMaterials}
+              onMappingComplete={(mappings) => {
+                // Merge new mappings with existing
+                setMaterialMapping(prev => ({ ...prev, ...mappings }));
+                setShowMaterialMappingV2(false);
+                setPendingImportMaterials([]);
+              }}
+              onCancel={() => {
+                setShowMaterialMappingV2(false);
+                setPendingImportMaterials([]);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      <SettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      
+      {/* Stock Materials Manager */}
+      <StockMaterialsManager isOpen={showStockManager} onClose={() => setShowStockManager(false)} />
+      
+      {/* Offcut Manager */}
+      <OffcutManager isOpen={offcutsOpen} onClose={() => setOffcutsOpen(false)} />
 
       {/* Tab Navigation */}
       <div className="bg-white border-b border-gray-200 px-6 py-3">
@@ -1479,6 +2209,9 @@ export default function CutlistProcessorApp() {
           </TabButton>
           <TabButton active={activeTab === 'timber'} onClick={() => setActiveTab('timber')} icon={Calculator}>
             Timber BOM
+            {rawData.length > 0 && !analyzeMaterials(rawData).timberBOMApplicable && (
+              <span className="ml-1 text-xs text-gray-400">(N/A)</span>
+            )}
           </TabButton>
         </div>
       </div>
@@ -1486,7 +2219,97 @@ export default function CutlistProcessorApp() {
       {/* Main Content */}
       <div className="p-6 max-w-7xl mx-auto">
         {activeTab === 'input' && (
-          <DataInputPanel rawData={rawData} setRawData={setRawData} />
+          <div className="space-y-6">
+            {/* Customer and Project Selection */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Project Selection</h2>
+              <CustomerProjectSelector
+                onProjectSelect={handleProjectSelect}
+                selectedCustomer={selectedCustomer}
+                selectedProject={selectedProject}
+              />
+            </div>
+
+            {/* Work Instance Panel */}
+            <WorkInstancePanel
+              selectedProject={selectedProject}
+              selectedCustomer={selectedCustomer}
+              panelData={rawData}
+              configuration={{
+                bladeKerf: kerf,
+                stockSheets: stockSheets,
+                materialMapping: materialMapping,
+                millingConfig: millingConfig,
+              }}
+              outputs={{}}
+              optimization={{}}
+              onLoadInstance={handleLoadInstance}
+            />
+
+            {/* File Upload */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Upload Cutlist Data</h2>
+                <button
+                  onClick={() => handleFileUpload(SAMPLE_DATA, 'sample-data.csv')}
+                  className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                >
+                  Load Sample Data
+                </button>
+              </div>
+              <FileUpload
+                onFileUpload={handleFileUpload}
+                disabled={false}
+              />
+            </div>
+
+            {/* Save Results Display */}
+            {saveResults.length > 0 && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Save Results</h3>
+                <div className="space-y-2">
+                  {saveResults.map((result, index) => (
+                    <div
+                      key={index}
+                      className={`p-3 rounded-lg border ${
+                        result.success
+                          ? 'bg-green-50 border-green-200 text-green-800'
+                          : 'bg-red-50 border-red-200 text-red-800'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2">
+                        {result.success ? (
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4 text-red-600" />
+                        )}
+                        <span className="font-medium">{result.type?.toUpperCase()}</span>
+                      </div>
+                      <p className="text-sm mt-1">{result.message}</p>
+                      {result.success && result.webViewLink && (
+                        <a
+                          href={result.webViewLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:underline mt-1 inline-block"
+                        >
+                          View in Google Drive
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Data Input Panel - Always visible for manual entry */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                {rawData.length > 0 ? 'Cutlist Data' : 'Manual Panel Entry'}
+              </h2>
+              <DataInputPanel rawData={rawData} setRawData={setRawData} />
+            </div>
+          </div>
         )}
 
         {activeTab === 'config' && (
@@ -1536,6 +2359,9 @@ export default function CutlistProcessorApp() {
             materialMapping={materialMapping}
             stockSheets={stockSheets}
             kerf={kerf}
+            projectCode={selectedProject?.projectCode}
+            optimizationState={optimizationState}
+            setOptimizationState={setOptimizationState}
           />
         )}
 
@@ -1578,9 +2404,45 @@ export default function CutlistProcessorApp() {
               <AlertCircle className="mx-auto mb-4" size={48} />
               <p>No data loaded. Go to Data Input tab to load cutting list data.</p>
             </div>
-          ) : (
-            <TimberBOMOutput data={rawData} millingConfig={millingConfig} />
-          )
+          ) : (() => {
+            const materialAnalysis = analyzeMaterials(rawData);
+            if (!materialAnalysis.timberBOMApplicable) {
+              return (
+                <div className="text-center py-12">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+                    <Info className="text-blue-600" size={32} />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Timber BOM Not Applicable</h3>
+                  <p className="text-gray-500 max-w-md mx-auto">
+                    All materials in your cutlist are sheet materials (plywood, MDF, blockboard, etc.).
+                    Timber BOM is only generated for lumber materials that require milling from raw timber.
+                  </p>
+                  <div className="mt-4 p-4 bg-gray-50 rounded-lg inline-block">
+                    <p className="text-sm text-gray-600">
+                      <strong>Materials detected:</strong> {materialAnalysis.uniqueMaterials.join(', ')}
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div>
+                {materialAnalysis.hasSheetMaterials && (
+                  <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+                    <Info className="text-amber-600 flex-shrink-0 mt-0.5" size={20} />
+                    <div>
+                      <p className="text-amber-800 font-medium">Mixed Materials Detected</p>
+                      <p className="text-amber-700 text-sm">
+                        {materialAnalysis.lumberPanels.length} lumber panel(s) included in Timber BOM. 
+                        {materialAnalysis.sheetPanels.length} sheet material panel(s) excluded.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <TimberBOMOutput data={materialAnalysis.lumberPanels} millingConfig={millingConfig} />
+              </div>
+            );
+          })()
         )}
       </div>
     </div>
