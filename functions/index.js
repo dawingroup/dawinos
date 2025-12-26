@@ -1170,8 +1170,8 @@ exports.onCustomerCreated = onDocumentCreated({
       }
     }
 
-    // Update Firestore with Katana ID
-    await event.data.ref.update({
+    // Update Firestore with Katana ID using Admin SDK (bypasses security rules)
+    await db.collection('customers').doc(customerId).update({
       'externalIds.katanaId': katanaId,
       'syncStatus.katana': 'synced',
       'syncStatus.katanaLastSync': admin.firestore.FieldValue.serverTimestamp(),
@@ -1181,11 +1181,15 @@ exports.onCustomerCreated = onDocumentCreated({
 
   } catch (error) {
     console.error(`Failed to sync customer ${customerId} to Katana:`, error);
-    await event.data.ref.update({
-      'syncStatus.katana': 'failed',
-      'syncStatus.katanaError': error.message,
-      'syncStatus.katanaLastAttempt': admin.firestore.FieldValue.serverTimestamp(),
-    });
+    try {
+      await db.collection('customers').doc(customerId).update({
+        'syncStatus.katana': 'failed',
+        'syncStatus.katanaError': error.message,
+        'syncStatus.katanaLastAttempt': admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (updateError) {
+      console.error('Failed to update sync status:', updateError.message);
+    }
   }
 });
 
