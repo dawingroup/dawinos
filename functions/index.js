@@ -1111,11 +1111,11 @@ exports.onCustomerCreated = onDocumentCreated({
       return;
     }
 
-    // Build Katana customer data - only include defined fields
+    // Build Katana customer data - only include fields Katana accepts
+    // Note: Katana API does NOT accept 'code' field - it's auto-generated
     const katanaCustomerData = {
       name: customer.name || 'Unnamed Customer',
     };
-    if (customer.code) katanaCustomerData.code = customer.code;
     if (customer.email) katanaCustomerData.email = customer.email;
     if (customer.phone) katanaCustomerData.phone = customer.phone;
 
