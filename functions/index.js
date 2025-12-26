@@ -703,31 +703,59 @@ async function getKatanaMaterials(req, res) {
   try {
     console.log('Fetching materials from Katana');
 
-    // Try real Katana API - use /products endpoint to get products with names
-    const katanaResponse = await katanaRequest('/products?per_page=100');
+    // Fetch all products with pagination
+    let allItems = [];
+    let page = 1;
+    const perPage = 100;
+    let hasMore = true;
     
-    if (!katanaResponse.simulated && !katanaResponse.error) {
+    while (hasMore) {
+      const katanaResponse = await katanaRequest(`/products?per_page=${perPage}&page=${page}`);
+      
+      if (katanaResponse.simulated || katanaResponse.error) {
+        break;
+      }
+      
       const items = katanaResponse.data || katanaResponse;
       
       if (Array.isArray(items) && items.length > 0) {
-        // Map Katana product fields
-        const materials = items.map(m => ({
-          id: m.id,
-          name: m.name || `Product #${m.id}`,
-          sku: m.default_variant?.sku || m.internal_barcode || '',
-          type: m.category_name || m.type || 'material',
-          thickness: 0,
-          inStock: m.in_stock_total || 0,
-          barcode: m.internal_barcode,
-        }));
-        
-        return res.json({ 
-          success: true, 
-          materials,
-          source: 'katana-api',
-          count: materials.length,
-        });
+        allItems = allItems.concat(items);
+        // If we got less than perPage, we've reached the end
+        if (items.length < perPage) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      } else {
+        hasMore = false;
       }
+      
+      // Safety limit to prevent infinite loops (max 20 pages = 2000 items)
+      if (page > 20) {
+        console.log('Reached pagination limit of 20 pages');
+        hasMore = false;
+      }
+    }
+    
+    if (allItems.length > 0) {
+      // Map Katana product fields
+      const materials = allItems.map(m => ({
+        id: m.id,
+        name: m.name || `Product #${m.id}`,
+        sku: m.default_variant?.sku || m.internal_barcode || '',
+        type: m.category_name || m.type || 'material',
+        thickness: 0,
+        inStock: m.in_stock_total || 0,
+        barcode: m.internal_barcode,
+      }));
+      
+      return res.json({ 
+        success: true, 
+        materials,
+        source: 'katana-api',
+        count: materials.length,
+        pages: page,
+      });
     }
 
     // Fallback to sample materials for development
