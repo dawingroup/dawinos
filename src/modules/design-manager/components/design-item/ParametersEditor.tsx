@@ -3,8 +3,8 @@
  * Comprehensive form for editing design item parameters
  */
 
-import { useState, useEffect } from 'react';
-import { Save, Plus, Trash2, ChevronDown, ChevronUp, RefreshCw, Database } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Save, Plus, Trash2, ChevronDown, ChevronUp, RefreshCw, Database, Search } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import type { 
   DesignParameters, 
@@ -97,6 +97,18 @@ export function ParametersEditor({
   const [katanaMaterials, setKatanaMaterials] = useState<KatanaMaterial[]>([]);
   const [loadingKatana, setLoadingKatana] = useState(false);
   const [katanaError, setKatanaError] = useState<string | null>(null);
+  const [katanaSearch, setKatanaSearch] = useState('');
+
+  // Filter Katana materials based on search
+  const filteredKatanaMaterials = useMemo(() => {
+    if (!katanaSearch.trim()) return katanaMaterials;
+    const search = katanaSearch.toLowerCase();
+    return katanaMaterials.filter(m => 
+      m.name.toLowerCase().includes(search) ||
+      m.sku.toLowerCase().includes(search) ||
+      m.type.toLowerCase().includes(search)
+    );
+  }, [katanaMaterials, katanaSearch]);
 
   // Fetch Katana materials on mount
   useEffect(() => {
@@ -650,6 +662,18 @@ export function ParametersEditor({
               </button>
             </div>
             
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={katanaSearch}
+                onChange={(e) => setKatanaSearch(e.target.value)}
+                placeholder="Search materials by name, SKU, or type..."
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              />
+            </div>
+            
             {katanaError && (
               <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">
                 {katanaError}
@@ -661,8 +685,8 @@ export function ParametersEditor({
                 <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
               </div>
             ) : (
-              <div className="grid gap-2">
-                {katanaMaterials.map(material => (
+              <div className="grid gap-2 max-h-64 overflow-y-auto">
+                {filteredKatanaMaterials.map(material => (
                   <button
                     key={material.id}
                     onClick={() => !isReadOnly && selectKatanaMaterial(material)}
@@ -690,9 +714,9 @@ export function ParametersEditor({
                   </button>
                 ))}
                 
-                {katanaMaterials.length === 0 && !katanaError && (
+                {filteredKatanaMaterials.length === 0 && !katanaError && (
                   <p className="text-center py-4 text-gray-500 text-sm">
-                    No materials found. Click Refresh to load from Katana.
+                    {katanaSearch ? `No materials matching "${katanaSearch}"` : 'No materials found. Click Refresh to load from Katana.'}
                   </p>
                 )}
               </div>
