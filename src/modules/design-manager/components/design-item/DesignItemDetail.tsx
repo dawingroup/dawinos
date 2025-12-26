@@ -40,6 +40,9 @@ const BriefAnalyzer = lazy(() =>
 const DfMChecker = lazy(() => 
   import('../ai/DfMChecker').then(m => ({ default: m.DfMChecker }))
 );
+const DesignChat = lazy(() => 
+  import('../design-ai/DesignChat').then(m => ({ default: m.DesignChat }))
+);
 
 type Tab = 'overview' | 'rag' | 'parameters' | 'parts' | 'files' | 'approvals' | 'history' | 'ai';
 
@@ -771,6 +774,16 @@ function AITab({ item, projectId }: AITabProps) {
           )}
         </Suspense>
       </div>
+
+      {/* Design AI Chat - Floating button */}
+      <Suspense fallback={null}>
+        <DesignChat
+          designItemId={itemId || ''}
+          projectId={projectId || ''}
+          designItemName={item?.name}
+          userId={user?.uid}
+        />
+      </Suspense>
     </AIErrorBoundary>
   );
 }
