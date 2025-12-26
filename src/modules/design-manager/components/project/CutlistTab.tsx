@@ -97,14 +97,22 @@ function MaterialGroupCard({ group, defaultExpanded = false }: { group: Material
 export function CutlistTab({ project }: CutlistTabProps) {
   const { user } = useAuth();
   const { regenerate, loading, error } = useCutlistAggregation(project.id);
-  const cutlist = (project as any).consolidatedCutlist as ConsolidatedCutlist | undefined;
+  
+  // Local state to hold cutlist (updated after regeneration)
+  const [localCutlist, setLocalCutlist] = useState<ConsolidatedCutlist | null>(null);
+  
+  // Use local cutlist if available, otherwise use project's cutlist
+  const projectCutlist = (project as any).consolidatedCutlist as ConsolidatedCutlist | undefined;
+  const cutlist = localCutlist || projectCutlist;
 
   const handleRegenerate = async () => {
     if (!user?.email) return;
     try {
-      await regenerate(user.email);
+      const result = await regenerate(user.email);
+      setLocalCutlist(result);
     } catch (err) {
       // Error handled by hook
+      console.error('Failed to regenerate cutlist:', err);
     }
   };
 
