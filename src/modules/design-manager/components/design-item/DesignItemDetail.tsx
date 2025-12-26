@@ -247,7 +247,7 @@ export default function DesignItemDetail() {
         )}
         
         {activeTab === 'ai' && (
-          <AITab item={item} projectId={projectId!} />
+          <AITab item={item} projectId={projectId!} itemId={itemId!} userId={user?.uid} />
         )}
       </div>
 
@@ -694,9 +694,11 @@ function ParametersTab({ item, projectId }: ParametersTabProps) {
 interface AITabProps {
   item: DesignItem;
   projectId: string;
+  itemId: string;
+  userId?: string;
 }
 
-function AITab({ item, projectId }: AITabProps) {
+function AITab({ item, projectId, itemId, userId }: AITabProps) {
   const [activeAITool, setActiveAITool] = useState<'brief' | 'dfm'>('dfm');
 
   const handleAnalysisComplete = (results: BriefAnalysisResult) => {
@@ -778,10 +780,10 @@ function AITab({ item, projectId }: AITabProps) {
       {/* Design AI Chat - Floating button */}
       <Suspense fallback={null}>
         <DesignChat
-          designItemId={itemId || ''}
-          projectId={projectId || ''}
+          designItemId={itemId}
+          projectId={projectId}
           designItemName={item?.name}
-          userId={user?.uid}
+          userId={userId}
         />
       </Suspense>
     </AIErrorBoundary>
