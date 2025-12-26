@@ -614,3 +614,175 @@ export interface GateCriteriaSet {
   shouldMeet: GateCriterion[];
   minimumReadiness: number;
 }
+
+// ============================================
+// Parts Management Types (Phase 3)
+// ============================================
+
+/**
+ * Edge banding specification for parts
+ */
+export interface PartEdgeBanding {
+  top: boolean;
+  bottom: boolean;
+  left: boolean;
+  right: boolean;
+  material?: string;
+  thickness?: number;
+}
+
+/**
+ * Grain direction for wood panels
+ */
+export type GrainDirection = 'length' | 'width' | 'none';
+
+/**
+ * Part source (how it was added)
+ */
+export type PartSource = 'manual' | 'csv-import' | 'polyboard' | 'sketchup';
+
+/**
+ * Individual part entry within a design item
+ */
+export interface PartEntry {
+  id: string;
+  
+  // Identification
+  partNumber: string;        // Part identifier within item (e.g., "P001")
+  name: string;              // Descriptive name (e.g., "Left Side Panel")
+  
+  // Dimensions (always stored in mm internally)
+  length: number;            // Length in mm
+  width: number;             // Width in mm  
+  thickness: number;         // Thickness in mm
+  
+  // Material
+  materialId?: string;       // Reference to material library
+  materialName: string;      // Denormalized material name
+  materialCode?: string;     // Material code for ordering
+  
+  // Quantity
+  quantity: number;
+  
+  // Processing
+  grainDirection: GrainDirection;
+  edgeBanding: PartEdgeBanding;
+  
+  // CNC/Machining
+  hasCNCOperations: boolean;
+  cncProgramRef?: string;
+  
+  // Notes
+  notes?: string;
+  
+  // Metadata
+  source: PartSource;
+  importedFrom?: string;     // Original filename if imported
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+/**
+ * Parts summary for a design item
+ */
+export interface PartsSummary {
+  totalParts: number;
+  uniqueMaterials: number;
+  totalArea: number;          // Square meters
+  lastUpdated: Timestamp;
+  isComplete: boolean;        // All parts have materials assigned
+}
+
+/**
+ * Extended DesignItem with parts
+ */
+export interface DesignItemWithParts extends DesignItem {
+  parts: PartEntry[];
+  partsSummary?: PartsSummary;
+}
+
+// ============================================
+// Consolidated Cutlist Types (Phase 4)
+// ============================================
+
+/**
+ * Aggregated part in consolidated cutlist
+ */
+export interface AggregatedPart {
+  partId: string;
+  designItemId: string;
+  designItemName: string;
+  partNumber: string;
+  partName: string;
+  length: number;
+  width: number;
+  quantity: number;
+  grainDirection: GrainDirection;
+  edgeBanding: PartEdgeBanding;
+}
+
+/**
+ * Material group in consolidated cutlist
+ */
+export interface MaterialGroup {
+  materialId: string;
+  materialCode: string;
+  materialName: string;
+  thickness: number;
+  sheetSize?: { length: number; width: number };
+  parts: AggregatedPart[];
+  totalParts: number;
+  totalArea: number;        // sq meters
+  estimatedSheets: number;
+}
+
+/**
+ * Consolidated cutlist at project level
+ */
+export interface ConsolidatedCutlist {
+  generatedAt: Timestamp;
+  generatedBy: string;
+  isStale: boolean;
+  staleReason?: string;
+  materialGroups: MaterialGroup[];
+  totalParts: number;
+  totalUniquePartsCount: number;
+  totalMaterials: number;
+  totalArea: number;
+  estimatedTotalSheets: number;
+  lastDesignItemUpdate: Timestamp;
+  lastExportedAt?: Timestamp;
+  lastExportFormat?: 'csv' | 'pdf' | 'opticut';
+}
+
+/**
+ * Line item in estimate
+ */
+export interface EstimateLineItem {
+  id: string;
+  description: string;
+  category: 'material' | 'hardware' | 'labor' | 'finishing' | 'other';
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  totalPrice: number;
+  notes?: string;
+  linkedMaterialId?: string;
+}
+
+/**
+ * Consolidated estimate at project level
+ */
+export interface ConsolidatedEstimate {
+  generatedAt: Timestamp;
+  generatedBy: string;
+  isStale: boolean;
+  lineItems: EstimateLineItem[];
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  total: number;
+  currency: string;
+  quickbooksInvoiceId?: string;
+  quickbooksInvoiceNumber?: string;
+}

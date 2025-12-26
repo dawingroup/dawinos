@@ -5,7 +5,7 @@
 
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, FileText, Activity, CheckSquare, History, Sparkles, Settings } from 'lucide-react';
+import { ArrowLeft, FileText, Activity, CheckSquare, History, Sparkles, Settings, Package } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useDesignItem, useProject, useRAGUpdate } from '../../hooks';
 import { StageBadge } from './StageBadge';
@@ -17,6 +17,7 @@ import { AIErrorBoundary } from '../ai/AIErrorBoundary';
 import { ParametersEditor } from './ParametersEditor';
 import { DeliverablesManager } from './DeliverablesManager';
 import { ApprovalWorkflow } from '../approvals/ApprovalWorkflow';
+import { PartsTab } from './PartsTab';
 import { CATEGORY_LABELS, formatDateTime } from '../../utils/formatting';
 import { getNextStage } from '../../utils/stage-gate';
 import { 
@@ -40,7 +41,7 @@ const DfMChecker = lazy(() =>
   import('../ai/DfMChecker').then(m => ({ default: m.DfMChecker }))
 );
 
-type Tab = 'overview' | 'rag' | 'parameters' | 'files' | 'approvals' | 'history' | 'ai';
+type Tab = 'overview' | 'rag' | 'parameters' | 'parts' | 'files' | 'approvals' | 'history' | 'ai';
 
 // Aspect labels for display
 const ASPECT_LABELS: Record<string, string> = {
@@ -129,6 +130,7 @@ export default function DesignItemDetail() {
   const tabs = [
     { id: 'overview' as Tab, label: 'Overview', icon: FileText },
     { id: 'parameters' as Tab, label: 'Parameters', icon: Settings },
+    { id: 'parts' as Tab, label: 'Parts', icon: Package },
     { id: 'rag' as Tab, label: 'RAG Status', icon: Activity },
     { id: 'files' as Tab, label: 'Files', icon: FileText },
     { id: 'approvals' as Tab, label: 'Approvals', icon: CheckSquare },
@@ -223,6 +225,10 @@ export default function DesignItemDetail() {
         
         {activeTab === 'parameters' && (
           <ParametersTab item={item} projectId={projectId!} />
+        )}
+        
+        {activeTab === 'parts' && (
+          <PartsTab item={item} projectId={projectId!} />
         )}
         
         {activeTab === 'files' && (

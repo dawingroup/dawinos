@@ -7,7 +7,8 @@ import { ConfigProvider } from './contexts/ConfigContext.jsx'
 import { OffcutProvider } from './contexts/OffcutContext.jsx'
 import { WorkInstanceProvider } from './contexts/WorkInstanceContext.jsx'
 import DesignManagerModule from './modules/design-manager/DesignManagerModule'
-import { Scissors, FolderOpen, User, LogOut } from 'lucide-react'
+import CustomerHubModule from './modules/customer-hub/CustomerHubModule'
+import { Scissors, FolderOpen, User, LogOut, Users } from 'lucide-react'
 import './index.css'
 
 /**
@@ -19,7 +20,8 @@ function GlobalHeader() {
   const location = useLocation()
   const navigate = useNavigate()
   
-  const currentModule = location.pathname.startsWith('/design') ? 'design' : 'cutlist'
+  const currentModule = location.pathname.startsWith('/design') ? 'design' : 
+    location.pathname.startsWith('/customers') ? 'customers' : 'cutlist'
 
   return (
     <header className="sticky top-0 z-50 h-14 border-b border-gray-200 bg-white/95 backdrop-blur px-4 sm:px-6 lg:px-8 flex items-center justify-between">
@@ -63,6 +65,18 @@ function GlobalHeader() {
           <FolderOpen className="h-4 w-4" />
           <span className="hidden sm:inline">Design Manager</span>
           <span className="sm:hidden">Designs</span>
+        </button>
+        <button
+          onClick={() => navigate('/customers')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            currentModule === 'customers'
+              ? 'bg-[#1d1d1f] text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Users className="h-4 w-4" />
+          <span className="hidden sm:inline">Customers</span>
+          <span className="sm:hidden">CRM</span>
         </button>
       </div>
 
@@ -139,6 +153,7 @@ function MainApp() {
               <AppLayout>
                 <Routes>
                   <Route path="/design/*" element={<DesignManagerModule />} />
+                  <Route path="/customers/*" element={<CustomerHubModule />} />
                   <Route path="/*" element={<App />} />
                 </Routes>
               </AppLayout>
