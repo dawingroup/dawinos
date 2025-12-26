@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Plus, LayoutGrid, List, FolderOpen, Calendar, User, Clock, CheckCircle, AlertTriangle, Package, Edit2, Scissors } from 'lucide-react';
+import { ArrowLeft, Plus, LayoutGrid, List, FolderOpen, Calendar, User, Clock, CheckCircle, AlertTriangle, Package, Edit2, Scissors, Sparkles } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/hooks';
 import { useProject, useDesignItems } from '../../hooks';
@@ -116,6 +116,13 @@ export default function ProjectView() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Link
+            to={`/design/project/${projectId}/strategy`}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:opacity-90 transition-opacity"
+          >
+            <Sparkles className="w-4 h-4" />
+            AI Strategy
+          </Link>
           <button
             onClick={() => setShowEditProject(true)}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
