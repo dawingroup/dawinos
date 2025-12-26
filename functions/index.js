@@ -3,6 +3,7 @@ const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { defineString, defineSecret } = require('firebase-functions/params');
 const { Client } = require('@notionhq/client');
 const AnthropicModule = require('@anthropic-ai/sdk');
+const { VertexAI } = require('@google-cloud/vertexai');
 const admin = require('firebase-admin');
 
 // Initialize Firebase Admin
@@ -43,6 +44,120 @@ function getAnthropicClient() {
   console.log('Anthropic API key length:', apiKey ? apiKey.length : 0);
   const Anthropic = AnthropicModule.default || AnthropicModule;
   return new Anthropic({ apiKey });
+}
+
+// ============================================
+// Gemini AI Configuration
+// ============================================
+
+const GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || 'dawin-cutlist-processor';
+const GCLOUD_LOCATION = 'us-central1';
+
+// Initialize Vertex AI client
+let vertexAI = null;
+function getVertexAI() {
+  if (!vertexAI) {
+    vertexAI = new VertexAI({
+      project: GCLOUD_PROJECT,
+      location: GCLOUD_LOCATION,
+    });
+  }
+  return vertexAI;
+}
+
+// Get Gemini model for design chat (Flash for speed/cost)
+function getGeminiFlash() {
+  return getVertexAI().getGenerativeModel({
+    model: 'gemini-1.5-flash-002',
+    generationConfig: {
+      maxOutputTokens: 4096,
+      temperature: 0.7,
+    },
+  });
+}
+
+// Get Gemini model for strategy research (Pro for complex reasoning)
+function getGeminiPro() {
+  return getVertexAI().getGenerativeModel({
+    model: 'gemini-1.5-pro-002',
+    generationConfig: {
+      maxOutputTokens: 8192,
+      temperature: 0.4,
+    },
+  });
+}
+
+// System prompts for AI assistants
+const SYSTEM_PROMPTS = {
+  designChat: `You are an expert furniture and millwork design consultant for Dawin Group, a custom manufacturing company in Uganda specializing in luxury hospitality, residential, and commercial projects.
+
+CONTEXT:
+- You assist designers in developing detailed specifications for custom furniture and millwork
+- You have access to Dawin's Feature Library containing manufacturing capabilities
+- You understand East African wood species, finishes, and hardware suppliers
+- You follow AWI (Architectural Woodwork Institute) quality standards
+
+CAPABILITIES:
+1. Analyze reference images to extract design elements, materials, and proportions
+2. Recommend features from the Feature Library based on client needs
+3. Suggest materials appropriate for the project budget tier
+4. Identify manufacturing considerations and potential challenges
+5. Help document design decisions with clear rationale
+
+When analyzing images, structure your response as:
+- Style Elements: [list identified design styles]
+- Materials Detected: [list visible or inferred materials]
+- Color Palette: [hex codes or descriptions]
+- Suggested Features: [Feature Library recommendations]
+- Manufacturing Notes: [any production considerations]`,
+
+  strategyResearch: `You are a strategic research assistant for Dawin Group, helping project managers and designers develop comprehensive project strategies for custom furniture and millwork projects.
+
+RESEARCH CAPABILITIES:
+1. Web Search: Search for current design trends, hospitality benchmarks, and industry standards
+2. Space Planning: Calculate capacity ranges based on area and project type
+3. Budget Analysis: Map features to budget tiers based on market positioning
+4. Internal Search: Query Dawin's Feature Library for manufacturing capabilities
+
+ALWAYS:
+- Cite sources when presenting web research findings
+- Provide confidence levels for recommendations
+- Consider East African market context
+- Reference manufacturing capabilities when discussing feasibility
+
+SPACE PLANNING STANDARDS:
+- Fine Dining: 15-20 sqft per seat
+- Casual Dining: 12-15 sqft per seat
+- Fast Casual: 10-12 sqft per seat
+- Hotel Lobby: 25-35 sqft per seat`,
+};
+
+// Rate limiting helper using Firestore
+async function checkRateLimit(userId, limitPerMinute = 10) {
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 minute window
+  const windowStart = now - windowMs;
+  
+  const rateLimitRef = db.collection('rateLimits').doc(userId);
+  const doc = await rateLimitRef.get();
+  
+  if (!doc.exists) {
+    await rateLimitRef.set({ requests: [now] });
+    return { allowed: true, remaining: limitPerMinute - 1 };
+  }
+  
+  const data = doc.data();
+  const recentRequests = (data.requests || []).filter(t => t > windowStart);
+  
+  if (recentRequests.length >= limitPerMinute) {
+    const oldestRequest = Math.min(...recentRequests);
+    const retryAfter = Math.ceil((oldestRequest + windowMs - now) / 1000);
+    return { allowed: false, retryAfter, remaining: 0 };
+  }
+  
+  recentRequests.push(now);
+  await rateLimitRef.set({ requests: recentRequests });
+  return { allowed: true, remaining: limitPerMinute - recentRequests.length };
 }
 
 // Main API handler - Gen 2 with public access
@@ -126,8 +241,29 @@ exports.api = onRequest({
           res.status(405).json({ error: 'Method not allowed' });
         }
         break;
+      case '/ai/design-chat':
+        if (req.method === 'POST') {
+          await handleDesignChat(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/ai/strategy-research':
+        if (req.method === 'POST') {
+          await handleStrategyResearch(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/ai/analyze-image':
+        if (req.method === 'POST') {
+          await handleImageAnalysis(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
       default:
-        res.json({ status: 'ok', message: 'API proxy is running', path, availableEndpoints: ['/customers', '/projects', '/log-activity', '/ai/analyze-brief', '/ai/dfm-check', '/katana/sync-product', '/katana/get-materials', '/notion/sync-milestone'] });
+        res.json({ status: 'ok', message: 'API proxy is running', path, availableEndpoints: ['/customers', '/projects', '/log-activity', '/ai/analyze-brief', '/ai/dfm-check', '/ai/design-chat', '/ai/strategy-research', '/ai/analyze-image', '/katana/sync-product', '/katana/get-materials', '/notion/sync-milestone'] });
     }
   } catch (error) {
     console.error('API Error:', error);
@@ -1588,4 +1724,388 @@ async function syncCustomerToQuickBooks(req, res) {
     console.error('Error syncing to QuickBooks:', error);
     res.status(500).json({ error: error.message });
   }
+}
+
+// ============================================
+// Gemini AI Handlers
+// ============================================
+
+/**
+ * Handle Design Chat - Conversational AI for design consultation
+ * Uses Gemini Flash for speed and cost efficiency
+ */
+async function handleDesignChat(req, res) {
+  try {
+    const { 
+      designItemId, 
+      projectId,
+      message, 
+      imageData, 
+      conversationHistory = [],
+      userId 
+    } = req.body;
+
+    if (!message && !imageData) {
+      return res.status(400).json({ error: 'Message or imageData is required' });
+    }
+
+    // Rate limiting
+    if (userId) {
+      const rateCheck = await checkRateLimit(userId, 20);
+      if (!rateCheck.allowed) {
+        return res.status(429).json({ 
+          error: 'Rate limit exceeded', 
+          retryAfter: rateCheck.retryAfter,
+          message: `Too many requests. Please wait ${rateCheck.retryAfter} seconds.`
+        });
+      }
+    }
+
+    console.log('Design Chat request:', { designItemId, projectId, hasImage: !!imageData });
+
+    const model = getGeminiFlash();
+
+    // Build conversation parts
+    const parts = [];
+    
+    // Add system instruction
+    parts.push({ text: SYSTEM_PROMPTS.designChat });
+
+    // Add conversation history (last 10 messages)
+    const recentHistory = conversationHistory.slice(-10);
+    for (const msg of recentHistory) {
+      parts.push({ text: `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}` });
+    }
+
+    // Add current message
+    if (message) {
+      parts.push({ text: `User: ${message}` });
+    }
+
+    // Add image if provided (base64)
+    if (imageData) {
+      const imageMatch = imageData.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (imageMatch) {
+        parts.push({
+          inlineData: {
+            mimeType: `image/${imageMatch[1]}`,
+            data: imageMatch[2],
+          },
+        });
+        if (!message) {
+          parts.push({ text: 'User: Please analyze this image for furniture/millwork design.' });
+        }
+      }
+    }
+
+    // Generate response
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts }],
+    });
+
+    const response = result.response;
+    const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const usageMetadata = response.usageMetadata || {};
+
+    // Parse image analysis if present
+    let imageAnalysis = null;
+    if (imageData && responseText.includes('Style Elements:')) {
+      imageAnalysis = parseImageAnalysis(responseText);
+    }
+
+    // Extract feature recommendations
+    const featureRecommendations = extractFeatureRecommendations(responseText);
+
+    // Save conversation to Firestore if designItemId provided
+    if (designItemId && projectId) {
+      try {
+        const conversationRef = db.collection('designItemConversations').doc(designItemId);
+        const conversationDoc = await conversationRef.get();
+        
+        const newMessages = [
+          { role: 'user', content: message || '[Image uploaded]', timestamp: admin.firestore.FieldValue.serverTimestamp() },
+          { role: 'assistant', content: responseText, timestamp: admin.firestore.FieldValue.serverTimestamp(), metadata: { imageAnalysis, featureRecommendations, modelUsed: 'gemini-1.5-flash-002' } },
+        ];
+
+        if (conversationDoc.exists) {
+          await conversationRef.update({
+            messages: admin.firestore.FieldValue.arrayUnion(...newMessages),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } else {
+          await conversationRef.set({
+            designItemId,
+            projectId,
+            messages: newMessages,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      } catch (saveError) {
+        console.error('Error saving conversation:', saveError);
+      }
+    }
+
+    res.json({
+      success: true,
+      text: responseText,
+      imageAnalysis,
+      featureRecommendations,
+      usageMetadata: {
+        inputTokens: usageMetadata.promptTokenCount || 0,
+        outputTokens: usageMetadata.candidatesTokenCount || 0,
+        modelUsed: 'gemini-1.5-flash-002',
+      },
+    });
+
+  } catch (error) {
+    console.error('Design Chat error:', error);
+    res.status(500).json({ 
+      error: 'AI processing failed',
+      details: error.message,
+    });
+  }
+}
+
+/**
+ * Handle Strategy Research - AI for project strategy with web search
+ * Uses Gemini Pro for complex reasoning
+ */
+async function handleStrategyResearch(req, res) {
+  try {
+    const { 
+      query, 
+      projectId,
+      projectContext,
+      enableWebSearch = false,
+      userId 
+    } = req.body;
+
+    if (!query) {
+      return res.status(400).json({ error: 'Query is required' });
+    }
+
+    // Rate limiting (stricter for Pro model)
+    if (userId) {
+      const rateCheck = await checkRateLimit(userId, 10);
+      if (!rateCheck.allowed) {
+        return res.status(429).json({ 
+          error: 'Rate limit exceeded', 
+          retryAfter: rateCheck.retryAfter,
+        });
+      }
+    }
+
+    console.log('Strategy Research request:', { projectId, enableWebSearch });
+
+    const model = getGeminiPro();
+
+    // Build prompt with context
+    let fullPrompt = SYSTEM_PROMPTS.strategyResearch + '\n\n';
+    
+    if (projectContext) {
+      fullPrompt += `PROJECT CONTEXT:\n${JSON.stringify(projectContext, null, 2)}\n\n`;
+    }
+    
+    fullPrompt += `USER QUERY: ${query}`;
+
+    // Generate response
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+    });
+
+    const response = result.response;
+    const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const usageMetadata = response.usageMetadata || {};
+
+    // Save research to Firestore if projectId provided
+    if (projectId) {
+      try {
+        await db.collection('projectStrategy').doc(projectId).collection('research').add({
+          query,
+          response: responseText,
+          enableWebSearch,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          usageMetadata: {
+            inputTokens: usageMetadata.promptTokenCount || 0,
+            outputTokens: usageMetadata.candidatesTokenCount || 0,
+          },
+        });
+      } catch (saveError) {
+        console.error('Error saving research:', saveError);
+      }
+    }
+
+    res.json({
+      success: true,
+      text: responseText,
+      sources: [], // Web search grounding would populate this
+      usageMetadata: {
+        inputTokens: usageMetadata.promptTokenCount || 0,
+        outputTokens: usageMetadata.candidatesTokenCount || 0,
+        groundedPrompt: enableWebSearch,
+        modelUsed: 'gemini-1.5-pro-002',
+      },
+    });
+
+  } catch (error) {
+    console.error('Strategy Research error:', error);
+    res.status(500).json({ 
+      error: 'AI processing failed',
+      details: error.message,
+    });
+  }
+}
+
+/**
+ * Handle Image Analysis - Multimodal analysis for reference images
+ * Uses Gemini Flash for image processing
+ */
+async function handleImageAnalysis(req, res) {
+  try {
+    const { imageData, analysisType = 'design', userId } = req.body;
+
+    if (!imageData) {
+      return res.status(400).json({ error: 'imageData is required' });
+    }
+
+    // Rate limiting
+    if (userId) {
+      const rateCheck = await checkRateLimit(userId, 15);
+      if (!rateCheck.allowed) {
+        return res.status(429).json({ 
+          error: 'Rate limit exceeded', 
+          retryAfter: rateCheck.retryAfter,
+        });
+      }
+    }
+
+    console.log('Image Analysis request:', { analysisType });
+
+    const model = getGeminiFlash();
+
+    // Parse base64 image
+    const imageMatch = imageData.match(/^data:image\/(\w+);base64,(.+)$/);
+    if (!imageMatch) {
+      return res.status(400).json({ error: 'Invalid image format. Expected base64 data URL.' });
+    }
+
+    const prompt = analysisType === 'design' 
+      ? `Analyze this furniture or interior design image. Provide:
+1. Style Elements: Identify design styles (modern, traditional, etc.)
+2. Materials Detected: List visible materials (wood species, metals, fabrics)
+3. Color Palette: Extract dominant colors with hex codes
+4. Construction Details: Note joinery, hardware, finishes visible
+5. Manufacturing Notes: Considerations for reproducing this design
+6. Suggested Features: What Dawin manufacturing capabilities would be needed`
+      : `Analyze this reference image for design inspiration. Describe what you see in detail.`;
+
+    const result = await model.generateContent({
+      contents: [{
+        role: 'user',
+        parts: [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType: `image/${imageMatch[1]}`,
+              data: imageMatch[2],
+            },
+          },
+        ],
+      }],
+    });
+
+    const response = result.response;
+    const responseText = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const usageMetadata = response.usageMetadata || {};
+
+    // Parse structured analysis
+    const analysis = parseImageAnalysis(responseText);
+
+    res.json({
+      success: true,
+      text: responseText,
+      analysis,
+      usageMetadata: {
+        inputTokens: usageMetadata.promptTokenCount || 0,
+        outputTokens: usageMetadata.candidatesTokenCount || 0,
+        modelUsed: 'gemini-1.5-flash-002',
+      },
+    });
+
+  } catch (error) {
+    console.error('Image Analysis error:', error);
+    res.status(500).json({ 
+      error: 'Image analysis failed',
+      details: error.message,
+    });
+  }
+}
+
+/**
+ * Parse image analysis response into structured format
+ */
+function parseImageAnalysis(text) {
+  const analysis = {
+    styleElements: [],
+    detectedMaterials: [],
+    colorPalette: [],
+    constructionDetails: [],
+    suggestedFeatures: [],
+  };
+
+  // Extract style elements
+  const styleMatch = text.match(/Style Elements?:([^\n]+(?:\n(?!Materials|Color|Construction|Manufacturing|Suggested)[^\n]+)*)/i);
+  if (styleMatch) {
+    analysis.styleElements = styleMatch[1].split(/[,\n]/).map(s => s.trim()).filter(s => s && s !== '-');
+  }
+
+  // Extract materials
+  const materialsMatch = text.match(/Materials? (?:Detected|Visible)?:([^\n]+(?:\n(?!Color|Construction|Manufacturing|Suggested|Style)[^\n]+)*)/i);
+  if (materialsMatch) {
+    analysis.detectedMaterials = materialsMatch[1].split(/[,\n]/).map(s => s.trim()).filter(s => s && s !== '-');
+  }
+
+  // Extract color palette
+  const colorMatch = text.match(/Color Palette:([^\n]+(?:\n(?!Construction|Manufacturing|Suggested|Style|Materials)[^\n]+)*)/i);
+  if (colorMatch) {
+    const colors = colorMatch[1].match(/#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3}/g);
+    if (colors) {
+      analysis.colorPalette = colors;
+    }
+  }
+
+  // Extract suggested features
+  const featuresMatch = text.match(/Suggested Features?:([^\n]+(?:\n(?!Style|Materials|Color|Construction|Manufacturing)[^\n]+)*)/i);
+  if (featuresMatch) {
+    analysis.suggestedFeatures = featuresMatch[1].split(/[,\n]/).map(s => s.trim()).filter(s => s && s !== '-');
+  }
+
+  return analysis;
+}
+
+/**
+ * Extract feature recommendations from AI response
+ */
+function extractFeatureRecommendations(text) {
+  const recommendations = [];
+  
+  // Look for Feature Library references
+  const featurePatterns = [
+    /recommend(?:ed|s)?[:\s]+([^.]+)/gi,
+    /suggest(?:ed|s)?[:\s]+([^.]+)/gi,
+    /consider[:\s]+([^.]+)/gi,
+  ];
+
+  for (const pattern of featurePatterns) {
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const rec = match[1].trim();
+      if (rec.length > 5 && rec.length < 100 && !recommendations.includes(rec)) {
+        recommendations.push(rec);
+      }
+    }
+  }
+
+  return recommendations.slice(0, 5);
 }
