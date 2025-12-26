@@ -98,6 +98,8 @@ export function ParametersEditor({
   const [loadingKatana, setLoadingKatana] = useState(false);
   const [katanaError, setKatanaError] = useState<string | null>(null);
   const [katanaSearch, setKatanaSearch] = useState('');
+  const [katanaPage, setKatanaPage] = useState(1);
+  const KATANA_PAGE_SIZE = 10;
 
   // Filter Katana materials based on search
   const filteredKatanaMaterials = useMemo(() => {
@@ -109,6 +111,19 @@ export function ParametersEditor({
       m.type.toLowerCase().includes(search)
     );
   }, [katanaMaterials, katanaSearch]);
+
+  // Paginated Katana materials
+  const paginatedKatanaMaterials = useMemo(() => {
+    const startIndex = (katanaPage - 1) * KATANA_PAGE_SIZE;
+    return filteredKatanaMaterials.slice(startIndex, startIndex + KATANA_PAGE_SIZE);
+  }, [filteredKatanaMaterials, katanaPage]);
+
+  const totalKatanaPages = Math.ceil(filteredKatanaMaterials.length / KATANA_PAGE_SIZE);
+
+  // Reset page when search changes
+  useEffect(() => {
+    setKatanaPage(1);
+  }, [katanaSearch]);
 
   // Fetch Katana materials on mount
   useEffect(() => {
@@ -685,39 +700,70 @@ export function ParametersEditor({
                 <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
               </div>
             ) : (
-              <div className="grid gap-2 max-h-64 overflow-y-auto">
-                {filteredKatanaMaterials.map(material => (
-                  <button
-                    key={material.id}
-                    onClick={() => !isReadOnly && selectKatanaMaterial(material)}
-                    disabled={isReadOnly}
-                    className={cn(
-                      'flex items-center justify-between p-3 rounded-lg border text-left transition-colors',
-                      params.primaryMaterial?.katanaMaterialId === material.id
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 bg-white hover:border-blue-300',
-                      isReadOnly && 'opacity-60 cursor-not-allowed'
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Database className="w-5 h-5 text-blue-500" />
-                      <div>
-                        <p className="font-medium text-gray-900">{material.name}</p>
-                        <p className="text-xs text-gray-500">
-                          SKU: {material.sku} • {material.thickness}mm • {material.type}
-                        </p>
+              <div className="space-y-3">
+                {/* Materials List */}
+                <div className="grid gap-2">
+                  {paginatedKatanaMaterials.map(material => (
+                    <button
+                      key={material.id}
+                      onClick={() => !isReadOnly && selectKatanaMaterial(material)}
+                      disabled={isReadOnly}
+                      className={cn(
+                        'flex items-center justify-between p-3 rounded-lg border text-left transition-colors',
+                        params.primaryMaterial?.katanaMaterialId === material.id
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 bg-white hover:border-blue-300',
+                        isReadOnly && 'opacity-60 cursor-not-allowed'
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Database className="w-5 h-5 text-blue-500" />
+                        <div>
+                          <p className="font-medium text-gray-900">{material.name}</p>
+                          <p className="text-xs text-gray-500">
+                            SKU: {material.sku} • {material.thickness}mm • {material.type}
+                          </p>
+                        </div>
                       </div>
+                      {params.primaryMaterial?.katanaMaterialId === material.id && (
+                        <span className="px-2 py-1 text-xs bg-blue-500 text-white rounded">Selected</span>
+                      )}
+                    </button>
+                  ))}
+                  
+                  {filteredKatanaMaterials.length === 0 && !katanaError && (
+                    <p className="text-center py-4 text-gray-500 text-sm">
+                      {katanaSearch ? `No materials matching "${katanaSearch}"` : 'No materials found. Click Refresh to load from Katana.'}
+                    </p>
+                  )}
+                </div>
+
+                {/* Pagination Controls */}
+                {totalKatanaPages > 1 && (
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                    <p className="text-sm text-gray-500">
+                      Showing {((katanaPage - 1) * KATANA_PAGE_SIZE) + 1}-{Math.min(katanaPage * KATANA_PAGE_SIZE, filteredKatanaMaterials.length)} of {filteredKatanaMaterials.length}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setKatanaPage(p => Math.max(1, p - 1))}
+                        disabled={katanaPage === 1}
+                        className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-sm text-gray-600">
+                        Page {katanaPage} of {totalKatanaPages}
+                      </span>
+                      <button
+                        onClick={() => setKatanaPage(p => Math.min(totalKatanaPages, p + 1))}
+                        disabled={katanaPage === totalKatanaPages}
+                        className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
                     </div>
-                    {params.primaryMaterial?.katanaMaterialId === material.id && (
-                      <span className="px-2 py-1 text-xs bg-blue-500 text-white rounded">Selected</span>
-                    )}
-                  </button>
-                ))}
-                
-                {filteredKatanaMaterials.length === 0 && !katanaError && (
-                  <p className="text-center py-4 text-gray-500 text-sm">
-                    {katanaSearch ? `No materials matching "${katanaSearch}"` : 'No materials found. Click Refresh to load from Katana.'}
-                  </p>
+                  </div>
                 )}
               </div>
             )}
