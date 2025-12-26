@@ -110,11 +110,10 @@ export async function aggregateCutlist(
 
   const materialGroups = Array.from(materialMap.values());
 
-  // Build consolidated cutlist
-  const cutlist: Omit<ConsolidatedCutlist, 'generatedAt'> = {
+  // Build consolidated cutlist (omit staleReason when not stale - Firestore doesn't accept undefined)
+  const cutlist = {
     generatedBy: userId,
     isStale: false,
-    staleReason: undefined,
     lastDesignItemUpdate: Timestamp.fromDate(lastUpdate),
     materialGroups,
     totalParts: materialGroups.reduce((sum, g) => sum + g.totalParts, 0),
