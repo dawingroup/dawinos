@@ -13,6 +13,7 @@ const DesignItemDetail = lazy(() => import('./components/design-item/DesignItemD
 const MaterialsPage = lazy(() => import('./pages/MaterialsPage'));
 const FeatureLibraryPage = lazy(() => import('./components/feature-library/FeatureLibraryPage'));
 const StrategyCanvasPage = lazy(() => import('./pages/StrategyCanvasPage'));
+const RoadmapPage = lazy(() => import('./components/roadmap/RoadmapPage'));
 
 /**
  * Loading fallback
@@ -35,6 +36,7 @@ export default function DesignManagerModule() {
         <Route index element={<DesignManagerPageNew />} />
         <Route path="materials" element={<MaterialsPage />} />
         <Route path="features" element={<FeatureLibraryPage />} />
+        <Route path="roadmap" element={<RoadmapPage />} />
         <Route path="project/:projectId" element={<ProjectView />} />
         <Route path="project/:projectId/strategy" element={<StrategyCanvasPage />} />
         <Route path="project/:projectId/item/:itemId" element={<DesignItemDetail />} />
