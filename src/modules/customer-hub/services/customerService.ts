@@ -12,7 +12,6 @@ import {
   getDoc,
   query,
   where,
-  orderBy,
   onSnapshot,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -27,26 +26,38 @@ const customersRef = collection(db, 'customers');
  */
 export function subscribeToCustomers(
   callback: (customers: CustomerListItem[]) => void,
+  onError?: (error: Error) => void,
   options?: { status?: CustomerStatus }
 ): () => void {
-  let q = query(customersRef, orderBy('name', 'asc'));
+  // Simple query without compound index requirement
+  const q = query(customersRef);
   
-  if (options?.status) {
-    q = query(customersRef, where('status', '==', options.status), orderBy('name', 'asc'));
-  }
-  
-  return onSnapshot(q, (snapshot) => {
-    const customers = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      code: doc.data().code,
-      name: doc.data().name,
-      type: doc.data().type,
-      status: doc.data().status,
-      email: doc.data().email,
-      phone: doc.data().phone,
-    })) as CustomerListItem[];
-    callback(customers);
-  });
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      let customers = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        code: doc.data().code || '',
+        name: doc.data().name || '',
+        type: doc.data().type || 'residential',
+        status: doc.data().status || 'active',
+        email: doc.data().email,
+        phone: doc.data().phone,
+      })) as CustomerListItem[];
+      
+      // Client-side filtering and sorting
+      if (options?.status) {
+        customers = customers.filter(c => c.status === options.status);
+      }
+      customers.sort((a, b) => a.name.localeCompare(b.name));
+      
+      callback(customers);
+    },
+    (error) => {
+      console.error('Firestore subscription error:', error);
+      onError?.(error);
+    }
+  );
 }
 
 /**

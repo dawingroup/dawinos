@@ -31,21 +31,19 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
     setLoading(true);
     setError(null);
 
-    try {
-      const unsubscribe = subscribeToCustomers(
-        (data) => {
-          setCustomers(data);
-          setLoading(false);
-        },
-        { status }
-      );
+    const unsubscribe = subscribeToCustomers(
+      (data) => {
+        setCustomers(data);
+        setLoading(false);
+      },
+      (err) => {
+        setError(err instanceof Error ? err : new Error('Failed to load customers'));
+        setLoading(false);
+      },
+      { status }
+    );
 
-      return () => unsubscribe();
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to load customers'));
-      setLoading(false);
-      return () => {};
-    }
+    return () => unsubscribe();
   }, [status]);
 
   // Client-side filtering for type and search
