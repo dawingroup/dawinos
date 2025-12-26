@@ -15,6 +15,14 @@ const db = admin.firestore();
 const NOTION_API_KEY = defineString('NOTION_API_KEY');
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const KATANA_API_KEY = defineSecret('KATANA_API_KEY');
+const QUICKBOOKS_CLIENT_ID = defineSecret('QUICKBOOKS_CLIENT_ID');
+const QUICKBOOKS_CLIENT_SECRET = defineSecret('QUICKBOOKS_CLIENT_SECRET');
+
+// QuickBooks OAuth URLs
+const QBO_AUTH_URL = 'https://appcenter.intuit.com/connect/oauth2';
+const QBO_TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
+const QBO_API_BASE = 'https://quickbooks.api.intuit.com/v3/company';
+const QBO_REDIRECT_URI = 'https://us-central1-dawin-cutlist-processor.cloudfunctions.net/api/quickbooks/callback';
 
 // Notion Database IDs
 const CLIENTS_DATABASE_ID = '128a6be2745681ce8294f4b8d3a2e069';
@@ -94,6 +102,22 @@ exports.api = onRequest({
         break;
       case '/katana/get-customers':
         await getKatanaCustomers(req, res);
+        break;
+      case '/quickbooks/auth-url':
+        await getQuickBooksAuthUrl(req, res);
+        break;
+      case '/quickbooks/callback':
+        await handleQuickBooksCallback(req, res);
+        break;
+      case '/quickbooks/status':
+        await getQuickBooksStatus(req, res);
+        break;
+      case '/quickbooks/sync-customer':
+        if (req.method === 'POST') {
+          await syncCustomerToQuickBooks(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
         break;
       case '/notion/sync-milestone':
         if (req.method === 'POST') {
@@ -1261,3 +1285,279 @@ exports.onCustomerUpdated = onDocumentUpdated({
     });
   }
 });
+
+// ============================================
+// QuickBooks Integration
+// ============================================
+
+/**
+ * Get QuickBooks OAuth authorization URL
+ */
+async function getQuickBooksAuthUrl(req, res) {
+  try {
+    const clientId = QUICKBOOKS_CLIENT_ID.value();
+    if (!clientId) {
+      return res.status(500).json({ error: 'QuickBooks not configured' });
+    }
+
+    const state = Buffer.from(JSON.stringify({
+      timestamp: Date.now(),
+    })).toString('base64');
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      response_type: 'code',
+      scope: 'com.intuit.quickbooks.accounting',
+      redirect_uri: QBO_REDIRECT_URI,
+      state,
+    });
+
+    res.json({ url: `${QBO_AUTH_URL}?${params.toString()}` });
+  } catch (error) {
+    console.error('Error generating QuickBooks auth URL:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Handle QuickBooks OAuth callback
+ */
+async function handleQuickBooksCallback(req, res) {
+  const { code, state, realmId, error } = req.query;
+
+  if (error) {
+    console.error('QuickBooks OAuth error:', error);
+    return res.redirect('/customers?qb_error=auth_failed');
+  }
+
+  if (!code || !realmId) {
+    return res.redirect('/customers?qb_error=missing_params');
+  }
+
+  try {
+    const clientId = QUICKBOOKS_CLIENT_ID.value();
+    const clientSecret = QUICKBOOKS_CLIENT_SECRET.value();
+
+    // Exchange code for tokens
+    const tokenResponse = await fetch(QBO_TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: code,
+        redirect_uri: QBO_REDIRECT_URI,
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      throw new Error(`Token exchange failed: ${errorText}`);
+    }
+
+    const tokens = await tokenResponse.json();
+
+    // Store tokens in Firestore
+    await db.collection('integrations').doc('quickbooks').set({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_in: tokens.expires_in,
+      x_refresh_token_expires_in: tokens.x_refresh_token_expires_in,
+      realm_id: realmId,
+      created_at: Date.now(),
+      connected_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log('QuickBooks connected successfully');
+    res.redirect('/customers?qb_success=true');
+  } catch (err) {
+    console.error('QuickBooks callback error:', err);
+    res.redirect('/customers?qb_error=token_exchange');
+  }
+}
+
+/**
+ * Get QuickBooks connection status
+ */
+async function getQuickBooksStatus(req, res) {
+  try {
+    const doc = await db.collection('integrations').doc('quickbooks').get();
+    if (!doc.exists) {
+      return res.json({ connected: false });
+    }
+
+    const data = doc.data();
+    const refreshExpiresAt = data.created_at + (data.x_refresh_token_expires_in * 1000);
+
+    res.json({
+      connected: true,
+      realmId: data.realm_id,
+      refreshTokenValid: Date.now() < refreshExpiresAt,
+    });
+  } catch (error) {
+    console.error('Error checking QuickBooks status:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Refresh QuickBooks tokens if needed
+ */
+async function refreshQuickBooksTokens() {
+  const doc = await db.collection('integrations').doc('quickbooks').get();
+  if (!doc.exists) {
+    throw new Error('QuickBooks not connected');
+  }
+
+  const tokens = doc.data();
+  const expiresAt = tokens.created_at + (tokens.expires_in * 1000);
+
+  // Return existing tokens if still valid (with 5 min buffer)
+  if (Date.now() < expiresAt - 5 * 60 * 1000) {
+    return tokens;
+  }
+
+  // Refresh the token
+  const clientId = QUICKBOOKS_CLIENT_ID.value();
+  const clientSecret = QUICKBOOKS_CLIENT_SECRET.value();
+
+  const response = await fetch(QBO_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+    },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: tokens.refresh_token,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Token refresh failed: ${errorText}`);
+  }
+
+  const newTokens = await response.json();
+
+  const updatedTokens = {
+    access_token: newTokens.access_token,
+    refresh_token: newTokens.refresh_token,
+    expires_in: newTokens.expires_in,
+    x_refresh_token_expires_in: newTokens.x_refresh_token_expires_in,
+    realm_id: tokens.realm_id,
+    created_at: Date.now(),
+  };
+
+  await db.collection('integrations').doc('quickbooks').update(updatedTokens);
+
+  return updatedTokens;
+}
+
+/**
+ * Make authenticated request to QuickBooks API
+ */
+async function qboRequest(endpoint, options = {}) {
+  const tokens = await refreshQuickBooksTokens();
+
+  const response = await fetch(
+    `${QBO_API_BASE}/${tokens.realm_id}${endpoint}`,
+    {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${tokens.access_token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...options.headers,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`QuickBooks API error (${response.status}): ${errorText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Sync customer to QuickBooks
+ */
+async function syncCustomerToQuickBooks(req, res) {
+  try {
+    const { customerId } = req.body;
+    if (!customerId) {
+      return res.status(400).json({ error: 'customerId is required' });
+    }
+
+    const customerDoc = await db.collection('customers').doc(customerId).get();
+    if (!customerDoc.exists) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const customer = customerDoc.data();
+
+    // Build QuickBooks customer data
+    const qboCustomer = {
+      DisplayName: `${customer.name} (${customer.code})`,
+      CompanyName: customer.name,
+    };
+
+    if (customer.email) {
+      qboCustomer.PrimaryEmailAddr = { Address: customer.email };
+    }
+
+    if (customer.phone) {
+      qboCustomer.PrimaryPhone = { FreeFormNumber: customer.phone };
+    }
+
+    let qboId = customer.externalIds?.quickbooksId;
+
+    if (qboId) {
+      // Update existing customer
+      const existing = await qboRequest(`/customer/${qboId}`);
+      const updateData = {
+        ...qboCustomer,
+        Id: qboId,
+        SyncToken: existing.Customer.SyncToken,
+        sparse: true,
+      };
+      await qboRequest('/customer', {
+        method: 'POST',
+        body: JSON.stringify(updateData),
+      });
+    } else {
+      // Search for existing or create new
+      const query = encodeURIComponent(`SELECT * FROM Customer WHERE DisplayName = '${qboCustomer.DisplayName.replace(/'/g, "\\'")}'`);
+      const searchResult = await qboRequest(`/query?query=${query}`);
+      const existing = searchResult.QueryResponse?.Customer?.[0];
+
+      if (existing) {
+        qboId = existing.Id;
+      } else {
+        const created = await qboRequest('/customer', {
+          method: 'POST',
+          body: JSON.stringify(qboCustomer),
+        });
+        qboId = created.Customer.Id;
+      }
+
+      await db.collection('customers').doc(customerId).update({
+        'externalIds.quickbooksId': qboId,
+      });
+    }
+
+    await db.collection('customers').doc(customerId).update({
+      'syncStatus.quickbooks': 'synced',
+      'syncStatus.quickbooksLastSync': admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true, quickbooksId: qboId });
+  } catch (error) {
+    console.error('Error syncing to QuickBooks:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
