@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Plus, LayoutGrid, List, FolderOpen, Calendar, User, Clock, CheckCircle, AlertTriangle, Package, Edit2 } from 'lucide-react';
+import { ArrowLeft, Plus, LayoutGrid, List, FolderOpen, Calendar, User, Clock, CheckCircle, AlertTriangle, Package, Edit2, Scissors } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/hooks';
 import { useProject, useDesignItems } from '../../hooks';
@@ -16,8 +16,10 @@ import { STAGE_ORDER } from '../../utils/stage-gate';
 import { DesignItemCard } from '../design-item/DesignItemCard';
 import { NewDesignItemDialog } from '../design-item/NewDesignItemDialog';
 import { StageKanban } from '../dashboard/StageKanban';
+import { CutlistTab } from './CutlistTab';
 
 type ViewMode = 'kanban' | 'list';
+type ProjectTab = 'items' | 'cutlist';
 
 export default function ProjectView() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -28,6 +30,7 @@ export default function ProjectView() {
   const [categoryFilter, setCategoryFilter] = useState<DesignCategory | 'all'>('all');
   const [showNewItem, setShowNewItem] = useState(false);
   const [showEditProject, setShowEditProject] = useState(false);
+  const [activeTab, setActiveTab] = useState<ProjectTab>('items');
 
   const { items, loading: itemsLoading } = useDesignItems(projectId, {
     stage: stageFilter === 'all' ? undefined : stageFilter,
@@ -209,11 +212,43 @@ export default function ProjectView() {
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center justify-between bg-white rounded-lg shadow-sm border border-gray-200 p-3">
-        <div className="flex items-center gap-4">
-          {/* Stage Filter */}
-          <select
+      {/* Project Tabs */}
+      <div className="border-b border-gray-200">
+        <div className="flex gap-1">
+          <button
+            onClick={() => setActiveTab('items')}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              activeTab === 'items'
+                ? 'border-[#1d1d1f] text-[#1d1d1f]'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            )}
+          >
+            <Package className="w-4 h-4" />
+            Design Items
+          </button>
+          <button
+            onClick={() => setActiveTab('cutlist')}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              activeTab === 'cutlist'
+                ? 'border-[#1d1d1f] text-[#1d1d1f]'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            )}
+          >
+            <Scissors className="w-4 h-4" />
+            Cutlist
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'items' && (
+        <>
+          {/* Toolbar */}
+          <div className="flex items-center justify-between bg-white rounded-lg shadow-sm border border-gray-200 p-3">
+            <div className="flex items-center gap-4">
+              {/* Stage Filter */}
+              <select
             value={stageFilter}
             onChange={(e) => setStageFilter(e.target.value as DesignStage | 'all')}
             className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
@@ -284,15 +319,21 @@ export default function ProjectView() {
           </button>
         </div>
       ) : viewMode === 'kanban' ? (
-        <StageKanban items={items} projectId={projectId!} />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.map((item) => (
-            <Link key={item.id} to={`item/${item.id}`}>
-              <DesignItemCard item={item} />
-            </Link>
-          ))}
-        </div>
+            <StageKanban items={items} projectId={projectId!} />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {items.map((item) => (
+                <Link key={item.id} to={`item/${item.id}`}>
+                  <DesignItemCard item={item} />
+                </Link>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === 'cutlist' && (
+        <CutlistTab project={project} />
       )}
 
       {/* New Item Dialog */}
