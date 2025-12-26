@@ -58,6 +58,7 @@ export function CustomerForm({ customer, onClose, onSuccess }: CustomerFormProps
         externalIds: customer.externalIds,
         notes: customer.notes,
         tags: customer.tags,
+        driveFolderLink: customer.driveFolderLink || '',
       });
     }
   }, [customer]);
@@ -277,8 +278,8 @@ export function CustomerForm({ customer, onClose, onSuccess }: CustomerFormProps
             />
           </div>
 
-          {/* Google Drive Folder Option - only for new customers */}
-          {!isEditing && (
+          {/* Google Drive Folder - different UI for new vs edit */}
+          {!isEditing ? (
             <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
               <input
                 type="checkbox"
@@ -291,6 +292,19 @@ export function CustomerForm({ customer, onClose, onSuccess }: CustomerFormProps
                 <FolderPlus className="h-4 w-4 text-blue-600" />
                 Create Google Drive folder for this customer
               </label>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Google Drive Folder Link
+              </label>
+              <input
+                type="url"
+                value={formData.driveFolderLink || ''}
+                onChange={(e) => setFormData((prev) => ({ ...prev, driveFolderLink: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                placeholder="https://drive.google.com/drive/folders/..."
+              />
             </div>
           )}
 

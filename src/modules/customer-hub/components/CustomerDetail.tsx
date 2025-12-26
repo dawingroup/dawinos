@@ -16,9 +16,12 @@ import {
   FolderOpen,
   Plus,
   ExternalLink,
+  FolderPlus,
+  Loader2,
 } from 'lucide-react';
 import { useCustomer, useCustomerMutations } from '../hooks';
 import { useAuth } from '@/shared/hooks';
+import { useDriveService } from '@/services/driveService';
 import { CustomerForm } from './CustomerForm';
 import type { CustomerStatus, CustomerType } from '../types';
 
@@ -40,9 +43,32 @@ export function CustomerDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { customer, loading, error } = useCustomer(customerId);
-  const { remove, deleteState } = useCustomerMutations();
+  const { remove, update, deleteState } = useCustomerMutations();
+  const { createCustomerFolder } = useDriveService();
   const [showEditForm, setShowEditForm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [folderError, setFolderError] = useState<string | null>(null);
+
+  const handleCreateDriveFolder = async () => {
+    if (!customer || !user?.email || !customerId) return;
+    
+    setCreatingFolder(true);
+    setFolderError(null);
+    
+    try {
+      const result = await createCustomerFolder(customer.name, customer.code);
+      if (result.success) {
+        await update(customerId, { driveFolderLink: result.customerFolderLink }, user.email);
+      } else {
+        setFolderError(result.error || 'Failed to create folder');
+      }
+    } catch (err: any) {
+      setFolderError(err.message || 'Failed to create folder');
+    } finally {
+      setCreatingFolder(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!customerId || !user?.email) return;
@@ -200,9 +226,28 @@ export function CustomerDetail() {
                   <ExternalLink className="h-3 w-3" />
                 </a>
               ) : (
-                <span className="text-gray-400">Not linked</span>
+                <button
+                  onClick={handleCreateDriveFolder}
+                  disabled={creatingFolder}
+                  className="flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
+                >
+                  {creatingFolder ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <FolderPlus className="h-3 w-3" />
+                      Create Folder
+                    </>
+                  )}
+                </button>
               )}
             </div>
+            {folderError && (
+              <p className="text-xs text-red-600 mt-1">{folderError}</p>
+            )}
           </div>
         </div>
 
