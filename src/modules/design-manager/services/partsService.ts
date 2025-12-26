@@ -74,14 +74,31 @@ export function createPartEntry(
   data: Omit<PartEntry, 'id' | 'createdAt' | 'updatedAt'>,
   existingParts: PartEntry[] = []
 ): PartEntry {
-  return {
-    ...data,
+  const part: PartEntry = {
     id: generatePartId(),
     partNumber: data.partNumber || generatePartNumber(existingParts),
+    name: data.name || '',
+    length: data.length || 0,
+    width: data.width || 0,
+    thickness: data.thickness || 18,
+    quantity: data.quantity || 1,
+    materialName: data.materialName || '',
+    grainDirection: data.grainDirection || 'none',
     edgeBanding: data.edgeBanding || DEFAULT_EDGE_BANDING,
+    hasCNCOperations: data.hasCNCOperations || false,
+    source: data.source || 'manual',
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   };
+  
+  // Add optional fields only if they have values
+  if (data.materialId) part.materialId = data.materialId;
+  if (data.materialCode) part.materialCode = data.materialCode;
+  if (data.cncProgramRef) part.cncProgramRef = data.cncProgramRef;
+  if (data.notes) part.notes = data.notes;
+  if (data.importedFrom) part.importedFrom = data.importedFrom;
+  
+  return part;
 }
 
 /**
