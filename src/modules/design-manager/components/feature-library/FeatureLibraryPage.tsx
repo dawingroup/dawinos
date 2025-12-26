@@ -9,6 +9,7 @@ import { useFeatureLibrary } from '../../hooks/useFeatureLibrary';
 import { FeatureCard } from './FeatureCard';
 import { FeatureForm } from './FeatureForm';
 import { FeatureDetailModal } from './FeatureDetailModal';
+import { FeatureCacheStatus } from './FeatureCacheStatus';
 import type { FeatureLibraryItem, FeatureCategory, FeatureFormData } from '../../types/featureLibrary';
 import { CATEGORY_LABELS, QUALITY_GRADE_LABELS, STATUS_LABELS } from '../../types/featureLibrary';
 
@@ -193,6 +194,11 @@ export function FeatureLibraryPage() {
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* AI Cache Status - Admin Panel */}
+        <div className="mb-6">
+          <FeatureCacheStatus />
+        </div>
+        
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>

@@ -262,8 +262,20 @@ exports.api = onRequest({
           res.status(405).json({ error: 'Method not allowed' });
         }
         break;
+      case '/ai/feature-cache':
+        if (req.method === 'GET') {
+          await getFeatureCacheStatus(req, res);
+        } else if (req.method === 'POST') {
+          await refreshFeatureCache(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/ai/feature-context':
+        await getFeatureContextForAI(req, res);
+        break;
       default:
-        res.json({ status: 'ok', message: 'API proxy is running', path, availableEndpoints: ['/customers', '/projects', '/log-activity', '/ai/analyze-brief', '/ai/dfm-check', '/ai/design-chat', '/ai/strategy-research', '/ai/analyze-image', '/katana/sync-product', '/katana/get-materials', '/notion/sync-milestone'] });
+        res.json({ status: 'ok', message: 'API proxy is running', path, availableEndpoints: ['/customers', '/projects', '/log-activity', '/ai/analyze-brief', '/ai/dfm-check', '/ai/design-chat', '/ai/strategy-research', '/ai/analyze-image', '/ai/feature-cache', '/ai/feature-context', '/katana/sync-product', '/katana/get-materials', '/notion/sync-milestone'] });
     }
   } catch (error) {
     console.error('API Error:', error);
@@ -1765,11 +1777,19 @@ async function handleDesignChat(req, res) {
 
     const model = getGeminiFlash();
 
+    // Get cached Feature Library context
+    const featureContext = await getCachedFeatureContext();
+
     // Build conversation parts
     const parts = [];
     
     // Add system instruction
     parts.push({ text: SYSTEM_PROMPTS.designChat });
+    
+    // Add Feature Library context if available
+    if (featureContext) {
+      parts.push({ text: `\n\nDAWIN FEATURE LIBRARY (use for recommendations):\n${featureContext}` });
+    }
 
     // Add conversation history (last 10 messages)
     const recentHistory = conversationHistory.slice(-10);
@@ -1900,8 +1920,16 @@ async function handleStrategyResearch(req, res) {
 
     const model = getGeminiPro();
 
+    // Get cached Feature Library context
+    const featureContext = await getCachedFeatureContext();
+
     // Build prompt with context
     let fullPrompt = SYSTEM_PROMPTS.strategyResearch + '\n\n';
+    
+    // Add Feature Library context if available
+    if (featureContext) {
+      fullPrompt += `DAWIN FEATURE LIBRARY (reference for feasibility):\n${featureContext}\n\n`;
+    }
     
     if (projectContext) {
       fullPrompt += `PROJECT CONTEXT:\n${JSON.stringify(projectContext, null, 2)}\n\n`;
@@ -2108,4 +2136,222 @@ function extractFeatureRecommendations(text) {
   }
 
   return recommendations.slice(0, 5);
+}
+
+// ============================================
+// Feature Library Context Cache
+// ============================================
+
+const CACHE_TTL_HOURS = 8;
+const CACHE_CONFIG_DOC = 'systemConfig/featureLibraryCache';
+
+/**
+ * Get Feature Library cache status
+ */
+async function getFeatureCacheStatus(req, res) {
+  try {
+    const cacheDoc = await db.doc(CACHE_CONFIG_DOC).get();
+    
+    if (!cacheDoc.exists) {
+      return res.json({
+        status: 'not-initialized',
+        message: 'Feature Library cache has not been created yet',
+        canRefresh: true,
+      });
+    }
+    
+    const cache = cacheDoc.data();
+    const now = Date.now();
+    const expiresAt = cache.expiresAt?.toMillis() || 0;
+    const isExpired = now > expiresAt;
+    
+    res.json({
+      status: isExpired ? 'expired' : 'active',
+      featureCount: cache.featureCount || 0,
+      tokenCount: cache.tokenCount || 0,
+      createdAt: cache.createdAt?.toDate().toISOString(),
+      expiresAt: cache.expiresAt?.toDate().toISOString(),
+      lastRefreshTrigger: cache.lastRefreshTrigger,
+      isExpired,
+      hoursRemaining: isExpired ? 0 : Math.round((expiresAt - now) / (1000 * 60 * 60)),
+      estimatedSavings: `${Math.round((cache.tokenCount || 0) * 0.75 / 1000)}K tokens saved per call`,
+    });
+  } catch (error) {
+    console.error('Error getting cache status:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Refresh Feature Library cache
+ */
+async function refreshFeatureCache(req, res) {
+  try {
+    const { trigger = 'manual' } = req.body;
+    
+    console.log('Refreshing Feature Library cache, trigger:', trigger);
+    
+    // Get all active features from Firestore
+    const featuresSnapshot = await db.collection('featureLibrary')
+      .where('status', '==', 'active')
+      .get();
+    
+    const features = [];
+    featuresSnapshot.forEach(doc => {
+      const data = doc.data();
+      features.push({
+        code: data.code,
+        name: data.name,
+        category: data.category,
+        subcategory: data.subcategory || null,
+        qualityGrade: data.qualityGrade,
+        estimatedHours: data.estimatedTime?.typical || 0,
+        requiredEquipment: data.requiredEquipment || [],
+        skillLevel: data.costFactors?.skillLevel || 'journeyman',
+        tags: data.tags || [],
+        description: data.description?.substring(0, 200) || '',
+      });
+    });
+    
+    // Build optimized context for AI
+    const featureContext = {
+      featureLibrary: {
+        lastUpdated: new Date().toISOString(),
+        totalFeatures: features.length,
+        categories: [...new Set(features.map(f => f.category))],
+        features: features,
+      },
+    };
+    
+    // Estimate token count (rough estimate: ~4 chars per token)
+    const contextJson = JSON.stringify(featureContext);
+    const estimatedTokens = Math.ceil(contextJson.length / 4);
+    
+    // Store cache metadata
+    const now = admin.firestore.Timestamp.now();
+    const expiresAt = admin.firestore.Timestamp.fromMillis(
+      now.toMillis() + (CACHE_TTL_HOURS * 60 * 60 * 1000)
+    );
+    
+    await db.doc(CACHE_CONFIG_DOC).set({
+      featureCount: features.length,
+      tokenCount: estimatedTokens,
+      createdAt: now,
+      expiresAt: expiresAt,
+      lastRefreshTrigger: trigger,
+      contextSnapshot: contextJson, // Store the actual context
+    });
+    
+    console.log(`Cache refreshed: ${features.length} features, ~${estimatedTokens} tokens`);
+    
+    res.json({
+      success: true,
+      featureCount: features.length,
+      tokenCount: estimatedTokens,
+      expiresAt: expiresAt.toDate().toISOString(),
+      message: `Cache refreshed with ${features.length} features`,
+    });
+  } catch (error) {
+    console.error('Error refreshing cache:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Get Feature Library context for AI (used by AI handlers)
+ */
+async function getFeatureContextForAI(req, res) {
+  try {
+    const cacheDoc = await db.doc(CACHE_CONFIG_DOC).get();
+    
+    if (!cacheDoc.exists) {
+      // No cache, return empty context
+      return res.json({
+        cached: false,
+        context: null,
+        message: 'No cache available. Call POST /ai/feature-cache to create one.',
+      });
+    }
+    
+    const cache = cacheDoc.data();
+    const now = Date.now();
+    const expiresAt = cache.expiresAt?.toMillis() || 0;
+    const isExpired = now > expiresAt;
+    
+    if (isExpired) {
+      // Auto-refresh if expired
+      console.log('Cache expired, auto-refreshing...');
+      const featuresSnapshot = await db.collection('featureLibrary')
+        .where('status', '==', 'active')
+        .get();
+      
+      const features = [];
+      featuresSnapshot.forEach(doc => {
+        const data = doc.data();
+        features.push({
+          code: data.code,
+          name: data.name,
+          category: data.category,
+          qualityGrade: data.qualityGrade,
+          estimatedHours: data.estimatedTime?.typical || 0,
+          requiredEquipment: data.requiredEquipment || [],
+          skillLevel: data.costFactors?.skillLevel || 'journeyman',
+          tags: data.tags || [],
+        });
+      });
+      
+      const featureContext = {
+        featureLibrary: {
+          lastUpdated: new Date().toISOString(),
+          totalFeatures: features.length,
+          categories: [...new Set(features.map(f => f.category))],
+          features: features,
+        },
+      };
+      
+      return res.json({
+        cached: false,
+        context: featureContext,
+        message: 'Cache was expired, returning fresh context',
+      });
+    }
+    
+    // Return cached context
+    res.json({
+      cached: true,
+      context: JSON.parse(cache.contextSnapshot),
+      tokenCount: cache.tokenCount,
+      expiresIn: Math.round((expiresAt - now) / (1000 * 60 * 60)) + ' hours',
+    });
+  } catch (error) {
+    console.error('Error getting feature context:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Get cached Feature Library context (internal helper)
+ * Returns the context string to inject into AI prompts
+ */
+async function getCachedFeatureContext() {
+  try {
+    const cacheDoc = await db.doc(CACHE_CONFIG_DOC).get();
+    
+    if (!cacheDoc.exists) {
+      return null;
+    }
+    
+    const cache = cacheDoc.data();
+    const now = Date.now();
+    const expiresAt = cache.expiresAt?.toMillis() || 0;
+    
+    if (now > expiresAt) {
+      return null; // Expired
+    }
+    
+    return cache.contextSnapshot;
+  } catch (error) {
+    console.error('Error getting cached context:', error);
+    return null;
+  }
 }
