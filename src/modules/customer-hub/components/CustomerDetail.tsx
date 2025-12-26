@@ -167,9 +167,19 @@ export function CustomerDetail() {
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-gray-600">Katana MRP</span>
-              <span className={customer.externalIds?.katanaId ? 'text-green-600' : 'text-gray-400'}>
-                {customer.externalIds?.katanaId || 'Not linked'}
-              </span>
+              {customer.externalIds?.katanaId ? (
+                <a
+                  href={`https://app.katanamrp.com/customers/${customer.externalIds.katanaId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline flex items-center gap-1"
+                >
+                  {customer.externalIds.katanaId}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              ) : (
+                <span className="text-gray-400">Not linked</span>
+              )}
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-600">QuickBooks</span>
