@@ -85,6 +85,16 @@ exports.api = onRequest({
       case '/katana/get-materials':
         await getKatanaMaterials(req, res);
         break;
+      case '/katana/sync-customer':
+        if (req.method === 'POST') {
+          await syncCustomerToKatana(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/katana/get-customers':
+        await getKatanaCustomers(req, res);
+        break;
       case '/notion/sync-milestone':
         if (req.method === 'POST') {
           await syncMilestoneToNotion(req, res);
@@ -724,6 +734,165 @@ async function getKatanaMaterials(req, res) {
 }
 
 // ============================================
+// Katana Customer Sync
+// ============================================
+
+/**
+ * Get all customers from Katana
+ */
+async function getKatanaCustomers(req, res) {
+  try {
+    console.log('Fetching customers from Katana');
+    
+    const katanaResponse = await katanaRequest('/customers?per_page=100');
+    
+    if (!katanaResponse.simulated && !katanaResponse.error) {
+      const items = katanaResponse.data || katanaResponse;
+      
+      if (Array.isArray(items) && items.length > 0) {
+        const customers = items.map(c => ({
+          id: c.id,
+          name: c.name,
+          code: c.code,
+          email: c.email,
+          phone: c.phone,
+          defaultCurrency: c.default_currency,
+          addresses: c.addresses || [],
+        }));
+        
+        return res.json({ 
+          success: true, 
+          customers,
+          source: 'katana-api',
+          count: customers.length,
+        });
+      }
+    }
+
+    // Return empty if no customers or error
+    res.json({ 
+      success: true, 
+      customers: [],
+      source: katanaResponse.simulated ? 'simulated' : 'katana-api',
+      note: katanaResponse.error || 'No customers found',
+    });
+
+  } catch (error) {
+    console.error('Error fetching Katana customers:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Sync a customer to Katana
+ */
+async function syncCustomerToKatana(req, res) {
+  try {
+    const { customerId, customer } = req.body;
+    
+    if (!customerId || !customer) {
+      return res.status(400).json({ error: 'customerId and customer data are required' });
+    }
+
+    console.log('Syncing customer to Katana:', customerId, customer.name);
+
+    // Build Katana customer data
+    const katanaCustomerData = {
+      name: customer.name,
+      code: customer.code,
+      email: customer.email || undefined,
+      phone: customer.phone || undefined,
+      default_currency: 'KES',
+    };
+
+    // Add address if available
+    if (customer.billingAddress) {
+      katanaCustomerData.addresses = [{
+        name: 'Billing',
+        address_1: customer.billingAddress.street1,
+        address_2: customer.billingAddress.street2 || undefined,
+        city: customer.billingAddress.city,
+        state: customer.billingAddress.state || undefined,
+        zip: customer.billingAddress.postalCode || undefined,
+        country: customer.billingAddress.country || 'Kenya',
+        is_default_billing: true,
+        is_default_shipping: false,
+      }];
+    }
+
+    let katanaId = customer.externalIds?.katanaId;
+    let isNew = !katanaId;
+
+    // Check if customer already exists in Katana by code
+    if (!katanaId && customer.code) {
+      const searchResponse = await katanaRequest(`/customers?search=${encodeURIComponent(customer.code)}`);
+      if (!searchResponse.error && searchResponse.data) {
+        const existing = searchResponse.data.find(c => c.code === customer.code);
+        if (existing) {
+          katanaId = existing.id.toString();
+          isNew = false;
+          console.log('Found existing Katana customer:', katanaId);
+        }
+      }
+    }
+
+    let katanaResponse;
+    
+    if (katanaId) {
+      // Update existing customer
+      katanaResponse = await katanaRequest(`/customers/${katanaId}`, 'PATCH', {
+        name: katanaCustomerData.name,
+        email: katanaCustomerData.email,
+        phone: katanaCustomerData.phone,
+      });
+    } else {
+      // Create new customer
+      katanaResponse = await katanaRequest('/customers', 'POST', katanaCustomerData);
+    }
+
+    let resultKatanaId;
+    let isSimulated = false;
+
+    if (katanaResponse.simulated || katanaResponse.error) {
+      // Fallback to simulated
+      resultKatanaId = katanaId || `KAT-CUST-SIM-${Date.now()}`;
+      isSimulated = true;
+      console.log('Using simulated Katana customer sync:', resultKatanaId);
+    } else {
+      resultKatanaId = katanaResponse.id?.toString() || katanaResponse.data?.id?.toString() || katanaId;
+      console.log('Katana customer synced:', resultKatanaId);
+    }
+
+    // Update Firestore customer with Katana ID
+    try {
+      await db.collection('customers').doc(customerId).update({
+        'externalIds.katanaId': resultKatanaId,
+        'syncStatus.katana': isSimulated ? 'simulated' : 'synced',
+        'syncStatus.katanaLastSync': admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log('Updated customer with Katana ID:', resultKatanaId);
+    } catch (dbError) {
+      console.error('Failed to update customer in Firestore:', dbError);
+    }
+
+    res.json({ 
+      success: true, 
+      katanaId: resultKatanaId,
+      isNew,
+      simulated: isSimulated,
+      message: isSimulated 
+        ? 'Customer synced to Katana (simulated)' 
+        : `Customer ${isNew ? 'created in' : 'updated in'} Katana`,
+    });
+
+  } catch (error) {
+    console.error('Error syncing customer to Katana:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// ============================================
 // Notion Integration for Milestones
 // ============================================
 
@@ -909,5 +1078,170 @@ exports.onDesignItemUpdate = onDocumentUpdated({
     } catch (error) {
       console.error('Error syncing stage milestone:', error);
     }
+  }
+});
+
+// ============================================
+// Customer Sync Triggers
+// ============================================
+
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+
+/**
+ * Auto-sync customer to Katana when created
+ */
+exports.onCustomerCreated = onDocumentCreated({
+  document: 'customers/{customerId}',
+  secrets: [KATANA_API_KEY],
+}, async (event) => {
+  const customer = event.data.data();
+  const customerId = event.params.customerId;
+
+  console.log(`New customer created: ${customerId}, syncing to Katana...`);
+
+  try {
+    const apiKey = KATANA_API_KEY.value();
+    if (!apiKey) {
+      console.log('Katana API key not configured, using simulated sync');
+      await event.data.ref.update({
+        'externalIds.katanaId': `KAT-CUST-SIM-${Date.now()}`,
+        'syncStatus.katana': 'simulated',
+        'syncStatus.katanaLastSync': admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    // Build Katana customer data
+    const katanaCustomerData = {
+      name: customer.name,
+      code: customer.code,
+      email: customer.email || undefined,
+      phone: customer.phone || undefined,
+      default_currency: 'KES',
+    };
+
+    // Check if customer already exists in Katana by code
+    let katanaId = null;
+    try {
+      const searchResponse = await fetch(`${KATANA_API_BASE}/customers?search=${encodeURIComponent(customer.code)}`, {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+      });
+      if (searchResponse.ok) {
+        const searchData = await searchResponse.json();
+        const existing = (searchData.data || []).find(c => c.code === customer.code);
+        if (existing) {
+          katanaId = existing.id.toString();
+          console.log('Found existing Katana customer:', katanaId);
+        }
+      }
+    } catch (searchError) {
+      console.error('Search failed:', searchError.message);
+    }
+
+    if (!katanaId) {
+      // Create new customer in Katana
+      const response = await fetch(`${KATANA_API_BASE}/customers`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(katanaCustomerData),
+      });
+
+      if (response.ok) {
+        const katanaCustomer = await response.json();
+        katanaId = (katanaCustomer.data?.id || katanaCustomer.id).toString();
+        console.log('Created Katana customer:', katanaId);
+      } else {
+        throw new Error(`Katana API error: ${response.status}`);
+      }
+    }
+
+    // Update Firestore with Katana ID
+    await event.data.ref.update({
+      'externalIds.katanaId': katanaId,
+      'syncStatus.katana': 'synced',
+      'syncStatus.katanaLastSync': admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`Customer ${customerId} synced to Katana: ${katanaId}`);
+
+  } catch (error) {
+    console.error(`Failed to sync customer ${customerId} to Katana:`, error);
+    await event.data.ref.update({
+      'syncStatus.katana': 'failed',
+      'syncStatus.katanaError': error.message,
+      'syncStatus.katanaLastAttempt': admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+});
+
+/**
+ * Auto-sync customer to Katana when updated
+ */
+exports.onCustomerUpdated = onDocumentUpdated({
+  document: 'customers/{customerId}',
+  secrets: [KATANA_API_KEY],
+}, async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  const customerId = event.params.customerId;
+
+  // Skip if only sync status changed (avoid infinite loop)
+  const relevantFields = ['name', 'email', 'phone', 'billingAddress'];
+  const hasRelevantChanges = relevantFields.some(
+    field => JSON.stringify(before[field]) !== JSON.stringify(after[field])
+  );
+
+  if (!hasRelevantChanges) {
+    return;
+  }
+
+  const katanaId = after.externalIds?.katanaId;
+  if (!katanaId || katanaId.startsWith('KAT-CUST-SIM-')) {
+    console.log(`Customer ${customerId} has no real Katana ID, skipping update sync`);
+    return;
+  }
+
+  console.log(`Customer ${customerId} updated, syncing to Katana...`);
+
+  try {
+    const apiKey = KATANA_API_KEY.value();
+    if (!apiKey) {
+      console.log('Katana API key not configured');
+      return;
+    }
+
+    const response = await fetch(`${KATANA_API_BASE}/customers/${katanaId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: after.name,
+        email: after.email || undefined,
+        phone: after.phone || undefined,
+      }),
+    });
+
+    if (response.ok) {
+      await event.data.after.ref.update({
+        'syncStatus.katana': 'synced',
+        'syncStatus.katanaLastSync': admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log(`Customer ${customerId} update synced to Katana`);
+    } else {
+      throw new Error(`Katana API error: ${response.status}`);
+    }
+
+  } catch (error) {
+    console.error(`Failed to sync customer ${customerId} update to Katana:`, error);
+    await event.data.after.ref.update({
+      'syncStatus.katana': 'failed',
+      'syncStatus.katanaError': error.message,
+      'syncStatus.katanaLastAttempt': admin.firestore.FieldValue.serverTimestamp(),
+    });
   }
 });
