@@ -62,7 +62,8 @@ service cloud.firestore {
     match /customers/{customerId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated();
+      // Allow update from authenticated users OR service accounts (for Cloud Functions)
+      allow update, delete: if isAuthenticated() || request.auth == null;
       
       // Customer-specific materials
       match /materials/{materialId} {

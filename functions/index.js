@@ -1111,31 +1111,34 @@ exports.onCustomerCreated = onDocumentCreated({
       return;
     }
 
-    // Build Katana customer data
+    // Build Katana customer data - only include defined fields
     const katanaCustomerData = {
-      name: customer.name,
-      code: customer.code,
-      email: customer.email || undefined,
-      phone: customer.phone || undefined,
-      default_currency: 'KES',
+      name: customer.name || 'Unnamed Customer',
     };
+    if (customer.code) katanaCustomerData.code = customer.code;
+    if (customer.email) katanaCustomerData.email = customer.email;
+    if (customer.phone) katanaCustomerData.phone = customer.phone;
+
+    console.log('Katana customer data:', JSON.stringify(katanaCustomerData));
 
     // Check if customer already exists in Katana by code
     let katanaId = null;
-    try {
-      const searchResponse = await fetch(`${KATANA_API_BASE}/customers?search=${encodeURIComponent(customer.code)}`, {
-        headers: { 'Authorization': `Bearer ${apiKey}` },
-      });
-      if (searchResponse.ok) {
-        const searchData = await searchResponse.json();
-        const existing = (searchData.data || []).find(c => c.code === customer.code);
-        if (existing) {
-          katanaId = existing.id.toString();
-          console.log('Found existing Katana customer:', katanaId);
+    if (customer.code) {
+      try {
+        const searchResponse = await fetch(`${KATANA_API_BASE}/customers?search=${encodeURIComponent(customer.code)}`, {
+          headers: { 'Authorization': `Bearer ${apiKey}` },
+        });
+        if (searchResponse.ok) {
+          const searchData = await searchResponse.json();
+          const existing = (searchData.data || []).find(c => c.code === customer.code);
+          if (existing) {
+            katanaId = existing.id.toString();
+            console.log('Found existing Katana customer:', katanaId);
+          }
         }
+      } catch (searchError) {
+        console.error('Search failed:', searchError.message);
       }
-    } catch (searchError) {
-      console.error('Search failed:', searchError.message);
     }
 
     if (!katanaId) {
