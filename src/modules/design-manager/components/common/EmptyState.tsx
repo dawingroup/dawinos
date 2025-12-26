@@ -33,7 +33,7 @@ export function EmptyState({
       {actionLabel && onAction && (
         <button
           onClick={onAction}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-[#0A7C8E] text-white rounded-lg hover:bg-[#086a7a] transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-[#1d1d1f] text-white rounded-lg hover:bg-[#424245] transition-colors"
         >
           {actionLabel}
         </button>

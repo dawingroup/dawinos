@@ -273,7 +273,7 @@ export function ParametersEditor({
                     value={params.dimensions.width ?? ''}
                     onChange={e => updateDimensions('width', e.target.value)}
                     disabled={isReadOnly}
-                    className="flex-1 px-3 py-2 border rounded-l-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                    className="flex-1 px-3 py-2 border rounded-l-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                     placeholder="0"
                   />
                   <span className="px-3 py-2 bg-gray-100 border border-l-0 rounded-r-lg text-gray-600">
@@ -289,7 +289,7 @@ export function ParametersEditor({
                     value={params.dimensions.height ?? ''}
                     onChange={e => updateDimensions('height', e.target.value)}
                     disabled={isReadOnly}
-                    className="flex-1 px-3 py-2 border rounded-l-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                    className="flex-1 px-3 py-2 border rounded-l-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                     placeholder="0"
                   />
                   <span className="px-3 py-2 bg-gray-100 border border-l-0 rounded-r-lg text-gray-600">
@@ -305,7 +305,7 @@ export function ParametersEditor({
                     value={params.dimensions.depth ?? ''}
                     onChange={e => updateDimensions('depth', e.target.value)}
                     disabled={isReadOnly}
-                    className="flex-1 px-3 py-2 border rounded-l-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                    className="flex-1 px-3 py-2 border rounded-l-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                     placeholder="0"
                   />
                   <span className="px-3 py-2 bg-gray-100 border border-l-0 rounded-r-lg text-gray-600">
@@ -320,7 +320,7 @@ export function ParametersEditor({
                 value={params.dimensions.unit}
                 onChange={e => setParams(prev => ({ ...prev, dimensions: { ...prev.dimensions, unit: e.target.value as 'mm' | 'inches' } }))}
                 disabled={isReadOnly}
-                className="w-32 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                className="w-32 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
               >
                 <option value="mm">mm</option>
                 <option value="inches">inches</option>
@@ -344,7 +344,7 @@ export function ParametersEditor({
                   value={params.primaryMaterial?.name ?? ''}
                   onChange={e => updatePrimaryMaterial('name', e.target.value)}
                   disabled={isReadOnly}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                   placeholder="e.g., 3/4 Baltic Birch Plywood"
                 />
               </div>
@@ -354,7 +354,7 @@ export function ParametersEditor({
                   value={params.primaryMaterial?.type ?? 'sheet'}
                   onChange={e => updatePrimaryMaterial('type', e.target.value)}
                   disabled={isReadOnly}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                 >
                   {MATERIAL_TYPES.map(type => (
                     <option key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</option>
@@ -368,7 +368,7 @@ export function ParametersEditor({
                   value={params.primaryMaterial?.thickness ?? ''}
                   onChange={e => updatePrimaryMaterial('thickness', parseFloat(e.target.value) || 0)}
                   disabled={isReadOnly}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                   placeholder="18"
                 />
               </div>
@@ -379,7 +379,7 @@ export function ParametersEditor({
                   value={params.primaryMaterial?.supplier ?? ''}
                   onChange={e => updatePrimaryMaterial('supplier', e.target.value || null)}
                   disabled={isReadOnly}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                   placeholder="Supplier name"
                 />
               </div>
@@ -391,7 +391,7 @@ export function ParametersEditor({
                 checked={params.primaryMaterial?.grainDirection ?? false}
                 onChange={e => updatePrimaryMaterial('grainDirection', e.target.checked)}
                 disabled={isReadOnly}
-                className="w-4 h-4 text-[#0A7C8E] rounded focus:ring-[#0A7C8E]"
+                className="w-4 h-4 text-[#1d1d1f] rounded focus:ring-[#1d1d1f]"
               />
               <label htmlFor="grainDirection" className="text-sm text-gray-700">Grain direction matters</label>
             </div>
@@ -423,14 +423,14 @@ export function ParametersEditor({
                     value={hw.name}
                     onChange={e => updateHardware(index, 'name', e.target.value)}
                     disabled={isReadOnly}
-                    className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                    className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                     placeholder="Hardware name"
                   />
                   <select
                     value={hw.category}
                     onChange={e => updateHardware(index, 'category', e.target.value)}
                     disabled={isReadOnly}
-                    className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                    className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                   >
                     {HARDWARE_CATEGORIES.map(cat => (
                       <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
@@ -441,7 +441,7 @@ export function ParametersEditor({
                     value={hw.quantity}
                     onChange={e => updateHardware(index, 'quantity', parseInt(e.target.value) || 1)}
                     disabled={isReadOnly}
-                    className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                    className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                     placeholder="Qty"
                     min="1"
                   />
@@ -450,7 +450,7 @@ export function ParametersEditor({
                     value={hw.sku ?? ''}
                     onChange={e => updateHardware(index, 'sku', e.target.value || null)}
                     disabled={isReadOnly}
-                    className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                    className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                     placeholder="SKU"
                   />
                 </div>
@@ -459,7 +459,7 @@ export function ParametersEditor({
             {!isReadOnly && (
               <button
                 onClick={addHardware}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#0A7C8E] border border-[#0A7C8E] rounded-lg hover:bg-[#0A7C8E]/10"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#1d1d1f] border border-[#1d1d1f] rounded-lg hover:bg-[#1d1d1f]/10"
               >
                 <Plus className="w-4 h-4" />
                 Add Hardware
@@ -481,7 +481,7 @@ export function ParametersEditor({
                   value={params.finish?.type ?? 'none'}
                   onChange={e => updateFinish('type', e.target.value)}
                   disabled={isReadOnly}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                 >
                   {FINISH_TYPES.map(type => (
                     <option key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</option>
@@ -495,7 +495,7 @@ export function ParametersEditor({
                   value={params.finish?.color ?? ''}
                   onChange={e => updateFinish('color', e.target.value || null)}
                   disabled={isReadOnly}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                   placeholder="e.g., Benjamin Moore OC-17"
                 />
               </div>
@@ -505,7 +505,7 @@ export function ParametersEditor({
                   value={params.finish?.sheen ?? 'satin'}
                   onChange={e => updateFinish('sheen', e.target.value)}
                   disabled={isReadOnly}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                 >
                   {SHEEN_OPTIONS.map(sheen => (
                     <option key={sheen} value={sheen}>{sheen.charAt(0).toUpperCase() + sheen.slice(1).replace('-', ' ')}</option>
@@ -519,7 +519,7 @@ export function ParametersEditor({
                   value={params.finish?.coats ?? ''}
                   onChange={e => updateFinish('coats', parseInt(e.target.value) || null)}
                   disabled={isReadOnly}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
                   placeholder="2"
                   min="1"
                 />
@@ -540,7 +540,7 @@ export function ParametersEditor({
                 value={params.constructionMethod}
                 onChange={e => setParams(prev => ({ ...prev, constructionMethod: e.target.value as ConstructionMethod }))}
                 disabled={isReadOnly}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent disabled:bg-gray-100"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent disabled:bg-gray-100"
               >
                 {CONSTRUCTION_METHODS.map(method => (
                   <option key={method.value} value={method.value}>{method.label}</option>
@@ -558,8 +558,8 @@ export function ParametersEditor({
                     className={cn(
                       'px-3 py-1.5 text-sm rounded-full border transition-colors',
                       params.joineryTypes.includes(joinery.value)
-                        ? 'bg-[#0A7C8E] text-white border-[#0A7C8E]'
-                        : 'bg-white text-gray-700 border-gray-300 hover:border-[#0A7C8E]',
+                        ? 'bg-[#1d1d1f] text-white border-[#1d1d1f]'
+                        : 'bg-white text-gray-700 border-gray-300 hover:border-[#1d1d1f]',
                       isReadOnly && 'opacity-60 cursor-not-allowed'
                     )}
                   >
@@ -580,7 +580,7 @@ export function ParametersEditor({
                       checked={params.awiGrade === grade.value}
                       onChange={e => setParams(prev => ({ ...prev, awiGrade: e.target.value as 'economy' | 'custom' | 'premium' }))}
                       disabled={isReadOnly}
-                      className="w-4 h-4 text-[#0A7C8E] focus:ring-[#0A7C8E]"
+                      className="w-4 h-4 text-[#1d1d1f] focus:ring-[#1d1d1f]"
                     />
                     <span className="text-sm text-gray-700">{grade.label}</span>
                   </label>
@@ -616,7 +616,7 @@ export function ParametersEditor({
                   value={newRequirement}
                   onChange={e => setNewRequirement(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && addRequirement()}
-                  className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+                  className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent"
                   placeholder="Add a special requirement..."
                 />
                 <button
@@ -707,7 +707,7 @@ export function ParametersEditor({
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="flex items-center gap-2 px-6 py-2.5 bg-[#0A7C8E] text-white font-medium rounded-lg hover:bg-[#0A7C8E]/90 disabled:opacity-50"
+            className="flex items-center gap-2 px-6 py-2.5 bg-[#1d1d1f] text-white font-medium rounded-lg hover:bg-[#1d1d1f]/90 disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
             {isSaving ? 'Saving...' : 'Save Parameters'}

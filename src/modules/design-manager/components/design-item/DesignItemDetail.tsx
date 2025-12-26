@@ -30,7 +30,6 @@ import {
 } from '../../services/firestore';
 import { uploadDeliverableFile, validateDeliverableFile, deleteDeliverableFile } from '../../services/storage';
 import { useAuth } from '@/shared/hooks';
-import { logUIError } from '../../utils/error-logger';
 import type { RAGStatus, RAGValue, RAGStatusValue, DesignItem, BriefAnalysisResult, DfMIssue } from '../../types';
 
 // Lazy load AI components to prevent blocking main bundle
@@ -85,7 +84,7 @@ export default function DesignItemDetail() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0A7C8E]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
       </div>
     );
   }
@@ -97,7 +96,7 @@ export default function DesignItemDetail() {
         <h2 className="text-lg font-medium text-gray-900">Item not found</h2>
         <Link 
           to={`/design/project/${projectId}`} 
-          className="text-[#0A7C8E] hover:underline mt-2 inline-block"
+          className="text-[#1d1d1f] hover:underline mt-2 inline-block"
         >
           Back to Project
         </Link>
@@ -129,8 +128,8 @@ export default function DesignItemDetail() {
 
   const tabs = [
     { id: 'overview' as Tab, label: 'Overview', icon: FileText },
-    { id: 'rag' as Tab, label: 'RAG Status', icon: Activity },
     { id: 'parameters' as Tab, label: 'Parameters', icon: Settings },
+    { id: 'rag' as Tab, label: 'RAG Status', icon: Activity },
     { id: 'files' as Tab, label: 'Files', icon: FileText },
     { id: 'approvals' as Tab, label: 'Approvals', icon: CheckSquare },
     { id: 'history' as Tab, label: 'History', icon: History },
@@ -173,7 +172,7 @@ export default function DesignItemDetail() {
           {nextStage && (
             <button
               onClick={() => setShowGateCheck(true)}
-              className="px-4 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#086a7a] text-sm font-medium"
+              className="px-4 py-2 bg-[#1d1d1f] text-white rounded-lg hover:bg-[#424245] text-sm font-medium"
             >
               Advance Stage
             </button>
@@ -193,7 +192,7 @@ export default function DesignItemDetail() {
                 className={cn(
                   'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
                   activeTab === tab.id
-                    ? 'border-[#0A7C8E] text-[#0A7C8E]'
+                    ? 'border-[#1d1d1f] text-[#1d1d1f]'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 )}
               >
@@ -283,38 +282,128 @@ export default function DesignItemDetail() {
 
 // Tab Components
 function OverviewTab({ item }: { item: NonNullable<ReturnType<typeof useDesignItem>['item']> }) {
+  const params = (item as any).parameters || {};
+  const dimensions = params.dimensions || {};
+  const hasDimensions = dimensions.width || dimensions.height || dimensions.depth;
+  
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-sm font-medium text-gray-500 mb-2">Description</h3>
+      {/* Description */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">Description</h3>
         <p className="text-gray-900">{item.description || 'No description provided.'}</p>
       </div>
       
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <h3 className="text-sm font-medium text-gray-500 mb-2">Priority</h3>
-          <p className="text-gray-900 capitalize">{item.priority || 'Not set'}</p>
+      {/* Key Info Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Priority</h3>
+          <p className="text-lg font-semibold text-gray-900 capitalize">{item.priority || 'Not set'}</p>
         </div>
-        <div>
-          <h3 className="text-sm font-medium text-gray-500 mb-2">Due Date</h3>
-          <p className="text-gray-900">
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Due Date</h3>
+          <p className="text-lg font-semibold text-gray-900">
             {item.dueDate 
               ? new Date(item.dueDate.seconds * 1000).toLocaleDateString() 
               : 'Not set'}
           </p>
         </div>
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Category</h3>
+          <p className="text-lg font-semibold text-gray-900">{CATEGORY_LABELS[item.category]}</p>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Readiness</h3>
+          <p className="text-lg font-semibold text-gray-900">{item.overallReadiness}%</p>
+        </div>
+      </div>
+
+      {/* Key Parameters Summary */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">Key Parameters</h3>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Dimensions */}
+          <div>
+            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Dimensions</h4>
+            {hasDimensions ? (
+              <p className="text-sm text-gray-900">
+                {dimensions.width || '-'} × {dimensions.height || '-'} × {dimensions.depth || '-'} {dimensions.unit || 'mm'}
+              </p>
+            ) : (
+              <p className="text-sm text-gray-400 italic">Not specified</p>
+            )}
+          </div>
+          
+          {/* Primary Material */}
+          <div>
+            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Primary Material</h4>
+            <p className="text-sm text-gray-900">
+              {params.primaryMaterial || <span className="text-gray-400 italic">Not specified</span>}
+            </p>
+          </div>
+          
+          {/* Finish */}
+          <div>
+            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Finish</h4>
+            <p className="text-sm text-gray-900">
+              {params.finish || <span className="text-gray-400 italic">Not specified</span>}
+            </p>
+          </div>
+          
+          {/* Construction Method */}
+          <div>
+            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Construction</h4>
+            <p className="text-sm text-gray-900 capitalize">
+              {params.constructionMethod || <span className="text-gray-400 italic">Not specified</span>}
+            </p>
+          </div>
+          
+          {/* AWI Grade */}
+          <div>
+            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">AWI Grade</h4>
+            <p className="text-sm text-gray-900 uppercase">
+              {params.awiGrade || <span className="text-gray-400 italic">Not specified</span>}
+            </p>
+          </div>
+          
+          {/* Hardware Count */}
+          <div>
+            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Hardware Items</h4>
+            <p className="text-sm text-gray-900">
+              {params.hardware?.length > 0 
+                ? `${params.hardware.length} item${params.hardware.length !== 1 ? 's' : ''}`
+                : <span className="text-gray-400 italic">None specified</span>
+              }
+            </p>
+          </div>
+        </div>
+        
+        {/* Special Requirements */}
+        {params.specialRequirements?.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Special Requirements</h4>
+            <div className="flex flex-wrap gap-2">
+              {params.specialRequirements.map((req: string, index: number) => (
+                <span key={index} className="px-2 py-1 bg-amber-50 text-amber-700 text-xs rounded-full">
+                  {req}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <h3 className="text-sm font-medium text-gray-500 mb-2">Created</h3>
-          <p className="text-gray-900">{formatDateTime(item.createdAt)}</p>
-          <p className="text-sm text-gray-500">by {item.createdBy}</p>
+      {/* Metadata */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Created</h3>
+          <p className="text-sm font-medium text-gray-900">{formatDateTime(item.createdAt)}</p>
+          <p className="text-xs text-gray-500">by {item.createdBy}</p>
         </div>
-        <div>
-          <h3 className="text-sm font-medium text-gray-500 mb-2">Last Updated</h3>
-          <p className="text-gray-900">{formatDateTime(item.updatedAt)}</p>
-          <p className="text-sm text-gray-500">by {item.updatedBy}</p>
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Last Updated</h3>
+          <p className="text-sm font-medium text-gray-900">{formatDateTime(item.updatedAt)}</p>
+          <p className="text-xs text-gray-500">by {item.updatedBy}</p>
         </div>
       </div>
     </div>
@@ -532,7 +621,7 @@ function HistoryTab({ item }: { item: NonNullable<ReturnType<typeof useDesignIte
     <div className="space-y-4">
       {item.stageHistory.map((transition, index) => (
         <div key={index} className="flex items-start gap-4">
-          <div className="w-2 h-2 bg-[#0A7C8E] rounded-full mt-2" />
+          <div className="w-2 h-2 bg-[#1d1d1f] rounded-full mt-2" />
           <div>
             <p className="font-medium text-gray-900">
               {transition.fromStage} → {transition.toStage}
@@ -612,7 +701,7 @@ function AITab({ item, projectId }: AITabProps) {
   const LoadingFallback = () => (
     <div className="flex items-center justify-center py-12">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0A7C8E] mx-auto"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f] mx-auto"></div>
         <p className="mt-3 text-sm text-gray-500">Loading AI tools...</p>
       </div>
     </div>
@@ -638,7 +727,7 @@ function AITab({ item, projectId }: AITabProps) {
             className={cn(
               'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
               activeAITool === 'dfm'
-                ? 'bg-[#0A7C8E] text-white'
+                ? 'bg-[#1d1d1f] text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             )}
           >
@@ -649,7 +738,7 @@ function AITab({ item, projectId }: AITabProps) {
             className={cn(
               'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
               activeAITool === 'brief'
-                ? 'bg-[#0A7C8E] text-white'
+                ? 'bg-[#1d1d1f] text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             )}
           >

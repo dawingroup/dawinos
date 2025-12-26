@@ -21,7 +21,7 @@ const modules = [
     description: 'Track design workflow with traffic light status, stage gates, and approvals.',
     icon: Palette,
     href: ROUTES.DESIGN,
-    color: 'bg-[#0A7C8E]',
+    color: 'bg-[#1d1d1f]',
     available: true,
   },
   {

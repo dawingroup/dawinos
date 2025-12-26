@@ -26,7 +26,7 @@ export function LoadingState({
     <div className={cn('flex flex-col items-center justify-center py-12', className)}>
       <div 
         className={cn(
-          'animate-spin rounded-full border-b-2 border-[#0A7C8E]',
+          'animate-spin rounded-full border-b-2 border-[#1d1d1f]',
           sizeClasses[size]
         )} 
       />

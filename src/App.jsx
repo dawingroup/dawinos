@@ -3,14 +3,12 @@ import { Upload, Settings, FileSpreadsheet, Calculator, Download, ChevronDown, C
 import { useAuth } from './contexts/AuthContext';
 import { useConfig } from './contexts/ConfigContext';
 import { useOffcuts } from './contexts/OffcutContext';
-import AuthButton from './components/AuthButton';
 import CustomerProjectSelector from './components/CustomerProjectSelector';
 import FileUpload from './components/FileUpload';
 import SettingsPanel from './components/SettingsPanel';
 import OffcutManager from './components/OffcutManager';
 import OptimizationReport from './components/OptimizationReport';
 import WorkInstancePanel from './components/WorkInstancePanel';
-import DFLogo from './components/DFLogo';
 import { useWorkInstance } from './contexts/WorkInstanceContext';
 import { useDriveService } from './services/driveService';
 import { analyzeMaterials, getMaterialSummary } from './utils/materialUtils';
@@ -2090,20 +2088,15 @@ export default function CutlistProcessorApp() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+    <div className="bg-background">
+      {/* Secondary Toolbar */}
+      <div className="bg-card border-b border-border px-6 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-boysenberry rounded-lg flex items-center justify-center">
-              <Scissors className="text-white" size={24} />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 font-outfit">Dawin Cutlist Processor</h1>
-              <p className="text-sm text-gray-500">Design → Optimize → BOM → Production</p>
-            </div>
+            <h2 className="text-lg font-semibold text-foreground">Cutlist Processor</h2>
+            <p className="text-sm text-muted-foreground">Design → Optimize → BOM → Production</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {rawData.length > 0 && (
               <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
                 {rawData.length} components loaded
@@ -2113,7 +2106,7 @@ export default function CutlistProcessorApp() {
               <button
                 onClick={handleAutoSave}
                 disabled={saving}
-                className="flex items-center space-x-2 px-4 py-2 bg-boysenberry text-white rounded-lg hover:bg-boysenberry-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center space-x-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-teal-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {saving ? (
                   <>
@@ -2130,27 +2123,23 @@ export default function CutlistProcessorApp() {
             )}
             <button
               onClick={() => setOffcutsOpen(true)}
-              className="relative p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+              className="relative p-2 text-muted-foreground hover:bg-accent rounded-lg transition-colors"
               title="Offcut Inventory"
             >
               <Archive size={20} />
               {availableCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 text-white text-xs rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-rag-green text-white text-xs rounded-full flex items-center justify-center">
                   {availableCount}
                 </span>
               )}
             </button>
             <button
               onClick={() => setSettingsOpen(true)}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+              className="p-2 text-muted-foreground hover:bg-accent rounded-lg transition-colors"
               title="Settings"
             >
               <Settings size={20} />
             </button>
-            <AuthButton />
-            <div className="ml-4 pl-4 border-l border-gray-200">
-              <DFLogo size={36} />
-            </div>
           </div>
         </div>
       </div>

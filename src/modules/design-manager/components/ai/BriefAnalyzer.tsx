@@ -106,7 +106,7 @@ export function BriefAnalyzer({
 Example:
 The client requires a reception desk for their hotel lobby. The desk should be approximately 3m wide x 1.2m deep x 1.1m high. They prefer a walnut veneer finish with a white Corian countertop. Include cable management and a lockable storage cabinet."
           rows={8}
-          className="w-full border rounded-lg px-4 py-3 text-sm resize-none focus:ring-2 focus:ring-[#0A7C8E] focus:border-[#0A7C8E]"
+          className="w-full border rounded-lg px-4 py-3 text-sm resize-none focus:ring-2 focus:ring-[#1d1d1f] focus:border-[#1d1d1f]"
           disabled={isAnalyzing}
         />
 
@@ -118,7 +118,7 @@ The client requires a reception desk for their hotel lobby. The desk should be a
               'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
               isAnalyzing || !briefText.trim()
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-[#0A7C8E] text-white hover:bg-[#086a7a]'
+                : 'bg-[#1d1d1f] text-white hover:bg-[#424245]'
             )}
           >
             {isAnalyzing ? (
@@ -220,7 +220,7 @@ The client requires a reception desk for their hotel lobby. The desk should be a
                       {onApplyItem && (
                         <button
                           onClick={() => onApplyItem(item)}
-                          className="mt-2 px-3 py-1 text-xs font-medium text-[#0A7C8E] border border-[#0A7C8E] rounded hover:bg-[#0A7C8E]/10"
+                          className="mt-2 px-3 py-1 text-xs font-medium text-[#1d1d1f] border border-[#1d1d1f] rounded hover:bg-[#1d1d1f]/10"
                         >
                           Create Item
                         </button>

@@ -1,26 +1,67 @@
 /**
  * Header Component
- * Top header with user menu and branding
+ * Top header with module switcher, branding, and user menu
+ * Updated with Apple-inspired black theme (#1d1d1f)
  */
 
 import { useAuth } from '@/shared/hooks';
-import { LogOut, User } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { LogOut, User, Scissors, FolderOpen } from 'lucide-react';
 
 export interface HeaderProps {
   title?: string;
 }
 
-export function Header({ title = 'Dawin Design-to-Production' }: HeaderProps) {
+export function Header({ title = 'Dawin Finishes' }: HeaderProps) {
   const { user, isAuthenticated, signInWithGoogle, signOut } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const currentModule = location.pathname.startsWith('/design') ? 'design' : 'cutlist';
 
   return (
-    <header className="h-14 border-b border-gray-200 bg-white px-4 flex items-center justify-between">
-      {/* Left: Logo and Title */}
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 bg-[#872E5C] rounded-md flex items-center justify-center">
-          <span className="text-white font-bold text-sm">DF</span>
+    <header className="sticky top-0 z-50 h-14 border-b border-gray-200 bg-white/95 backdrop-blur px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+      {/* Left: Logo and Brand */}
+      <div className="flex items-center gap-2">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#872E5C] to-[#E18425]">
+          {currentModule === 'cutlist' ? (
+            <Scissors className="h-5 w-5 text-white" />
+          ) : (
+            <FolderOpen className="h-5 w-5 text-white" />
+          )}
         </div>
-        <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
+        <div className="hidden sm:block">
+          <h1 className="text-sm font-semibold text-gray-900">{title}</h1>
+          <p className="text-[10px] text-gray-500">Manufacturing Tools</p>
+        </div>
+      </div>
+
+      {/* Center: Module Switcher */}
+      <div className="flex items-center gap-1 border rounded-lg p-1 bg-gray-50">
+        <button
+          onClick={() => navigate('/cutlist')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors min-h-[36px] sm:min-h-auto ${
+            currentModule === 'cutlist'
+              ? 'bg-[#1d1d1f] text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Scissors className="h-4 w-4" />
+          <span className="hidden sm:inline">Cutlist Processor</span>
+          <span className="sm:hidden">Cutlist</span>
+        </button>
+        <button
+          onClick={() => navigate('/design')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors min-h-[36px] sm:min-h-auto ${
+            currentModule === 'design'
+              ? 'bg-[#1d1d1f] text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <FolderOpen className="h-4 w-4" />
+          <span className="hidden sm:inline">Design Manager</span>
+          <span className="sm:hidden">Designs</span>
+        </button>
       </div>
 
       {/* Right: User Menu */}
@@ -39,13 +80,13 @@ export function Header({ title = 'Dawin Design-to-Production' }: HeaderProps) {
                   <User className="w-4 h-4 text-gray-600" />
                 </div>
               )}
-              <span className="text-sm text-gray-700 hidden sm:block">
+              <span className="text-sm text-gray-700 hidden md:block">
                 {user.displayName || user.email}
               </span>
             </div>
             <button
               onClick={() => signOut()}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors min-h-[44px] min-w-[44px] sm:min-h-auto sm:min-w-auto flex items-center justify-center"
               title="Sign out"
             >
               <LogOut className="w-4 h-4" />
@@ -54,9 +95,10 @@ export function Header({ title = 'Dawin Design-to-Production' }: HeaderProps) {
         ) : (
           <button
             onClick={() => signInWithGoogle()}
-            className="px-4 py-2 bg-[#872E5C] text-white rounded-md text-sm font-medium hover:bg-[#6a2449] transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-[#1d1d1f] text-white rounded-md text-sm font-medium hover:bg-[#424245] transition-colors min-h-[44px] sm:min-h-auto"
           >
-            Sign in with Google
+            <User className="h-4 w-4 sm:hidden" />
+            <span className="hidden sm:inline">Sign In</span>
           </button>
         )}
       </div>

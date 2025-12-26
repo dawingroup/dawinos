@@ -107,7 +107,7 @@ export function NewDesignItemDialog({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent"
               placeholder="e.g., Kitchen Island Unit"
               autoFocus
             />
@@ -120,7 +120,7 @@ export function NewDesignItemDialog({
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value as DesignCategory)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent"
             >
               {categories.map((cat) => (
                 <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
@@ -135,7 +135,7 @@ export function NewDesignItemDialog({
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as typeof priority)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent"
             >
               {priorities.map((p) => (
                 <option key={p} value={p}>
@@ -153,7 +153,7 @@ export function NewDesignItemDialog({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent resize-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent resize-none"
               placeholder="Brief description of the design item..."
             />
           </div>
@@ -175,7 +175,7 @@ export function NewDesignItemDialog({
                 'px-4 py-2 text-sm font-medium text-white rounded-lg',
                 loading
                   ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-[#0A7C8E] hover:bg-[#086a7a]'
+                  : 'bg-[#1d1d1f] hover:bg-[#424245]'
               )}
             >
               {loading ? 'Creating...' : 'Create Item'}

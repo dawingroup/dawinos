@@ -125,27 +125,29 @@ export function DeliverablesManager({
   return (
     <div className={cn('space-y-6', className)}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-medium text-gray-900">Deliverables</h3>
-          <p className="text-sm text-gray-500">
-            {deliverables.length} file{deliverables.length !== 1 ? 's' : ''} uploaded
-          </p>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Deliverables</h3>
+            <p className="text-sm text-gray-500">
+              {deliverables.length} file{deliverables.length !== 1 ? 's' : ''} uploaded
+            </p>
+          </div>
+          {!isReadOnly && (
+            <button
+              onClick={() => setShowUpload(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 text-sm font-medium transition-colors"
+            >
+              <Upload className="w-4 h-4" />
+              Upload File
+            </button>
+          )}
         </div>
-        {!isReadOnly && (
-          <button
-            onClick={() => setShowUpload(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#0A7C8E]/90 text-sm font-medium"
-          >
-            <Upload className="w-4 h-4" />
-            Upload File
-          </button>
-        )}
       </div>
 
       {/* Missing Deliverables Alert */}
       {missingTypes.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 border-l-4 border-l-amber-500">
           <div className="flex items-center gap-2 text-amber-800 font-medium mb-2">
             <Clock className="w-5 h-5" />
             Recommended for {currentStage} stage
@@ -168,8 +170,8 @@ export function DeliverablesManager({
 
       {/* Upload Form */}
       {showUpload && (
-        <div className="border rounded-lg p-4 bg-gray-50 space-y-4">
-          <h4 className="font-medium text-gray-900">Upload Deliverable</h4>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-4">
+          <h4 className="font-semibold text-gray-900">Upload Deliverable</h4>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -177,7 +179,7 @@ export function DeliverablesManager({
               <select
                 value={uploadType}
                 onChange={e => setUploadType(e.target.value as DeliverableType)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               >
                 {DELIVERABLE_TYPES.map(type => (
                   <option key={type.value} value={type.value}>{type.label}</option>
@@ -191,7 +193,7 @@ export function DeliverablesManager({
                 type="text"
                 value={uploadName}
                 onChange={e => setUploadName(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 placeholder="e.g., Reception Desk - Shop Drawing v1"
               />
             </div>
@@ -202,7 +204,7 @@ export function DeliverablesManager({
                 type="text"
                 value={uploadDescription}
                 onChange={e => setUploadDescription(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 placeholder="Brief description of this deliverable..."
               />
             </div>
@@ -245,14 +247,14 @@ export function DeliverablesManager({
                 setShowUpload(false);
                 setSelectedFile(null);
               }}
-              className="px-4 py-2 text-gray-700 border rounded-lg hover:bg-gray-100"
+              className="px-4 py-2 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleUpload}
               disabled={!selectedFile || !uploadName.trim() || isUploading}
-              className="flex items-center gap-2 px-4 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#0A7C8E]/90 disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               <Upload className="w-4 h-4" />
               {isUploading ? 'Uploading...' : 'Upload'}
@@ -273,25 +275,25 @@ export function DeliverablesManager({
           <div 
             key={stage} 
             className={cn(
-              'border rounded-lg overflow-hidden',
-              isCurrentStage && 'border-[#0A7C8E]'
+              'bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden',
+              isCurrentStage && 'border-primary'
             )}
           >
             <button
               onClick={() => toggleStage(stage)}
               className={cn(
                 'w-full flex items-center justify-between p-4',
-                isCurrentStage ? 'bg-[#0A7C8E]/10' : 'bg-gray-50',
+                isCurrentStage ? 'bg-primary/5' : 'bg-gray-50',
                 'hover:bg-gray-100 transition-colors'
               )}
             >
               <div className="flex items-center gap-3">
                 <h4 className="font-medium text-gray-900 capitalize">{stage.replace('-', ' ')}</h4>
-                <span className="px-2 py-0.5 text-xs rounded-full bg-gray-200 text-gray-700">
+                <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">
                   {stageDeliverables.length} file{stageDeliverables.length !== 1 ? 's' : ''}
                 </span>
                 {isCurrentStage && (
-                  <span className="px-2 py-0.5 text-xs rounded-full bg-[#0A7C8E] text-white">
+                  <span className="px-2 py-0.5 text-xs rounded-full bg-primary text-white">
                     Current
                   </span>
                 )}
@@ -317,7 +319,7 @@ export function DeliverablesManager({
                     return (
                       <div 
                         key={deliverable.id}
-                        className="flex items-center justify-between p-3 bg-white border rounded-lg"
+                        className="flex items-center justify-between p-3 bg-gray-50 border border-gray-100 rounded-lg"
                       >
                         <div className="flex items-center gap-3">
                           <div className="p-2 bg-gray-100 rounded-lg">
@@ -392,10 +394,10 @@ export function DeliverablesManager({
 
       {/* Empty State */}
       {deliverables.length === 0 && !showUpload && (
-        <div className="text-center py-8 text-gray-500">
-          <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-          <p>No deliverables yet</p>
-          <p className="text-sm mt-1">Upload files to track design progress</p>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+          <FileText className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No deliverables yet</h3>
+          <p className="text-sm text-gray-500">Upload files to track design progress</p>
         </div>
       )}
     </div>

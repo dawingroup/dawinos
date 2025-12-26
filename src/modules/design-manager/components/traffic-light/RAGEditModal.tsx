@@ -94,7 +94,7 @@ export function RAGEditModal({
                   className={cn(
                     'w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors text-left',
                     status === option.value
-                      ? 'border-[#0A7C8E] bg-[#0A7C8E]/5'
+                      ? 'border-[#1d1d1f] bg-[#1d1d1f]/5'
                       : 'border-gray-200 hover:border-gray-300'
                   )}
                 >
@@ -119,7 +119,7 @@ export function RAGEditModal({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent resize-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent resize-none"
               placeholder="Add any relevant notes or comments..."
             />
           </div>
@@ -143,7 +143,7 @@ export function RAGEditModal({
               'px-4 py-2 text-sm font-medium text-white rounded-lg',
               saving
                 ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-[#0A7C8E] hover:bg-[#086a7a]'
+                : 'bg-[#1d1d1f] hover:bg-[#424245]'
             )}
           >
             {saving ? 'Saving...' : 'Save Changes'}

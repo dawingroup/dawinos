@@ -96,7 +96,7 @@ export function NewProjectDialog({ open, onClose, userId }: NewProjectDialogProp
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent"
               placeholder="e.g., Kitchen Renovation - Smith"
               autoFocus
             />
@@ -110,7 +110,7 @@ export function NewProjectDialog({ open, onClose, userId }: NewProjectDialogProp
               type="text"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent"
               placeholder="e.g., Smith Family"
             />
           </div>
@@ -123,7 +123,7 @@ export function NewProjectDialog({ open, onClose, userId }: NewProjectDialogProp
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent resize-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent resize-none"
               placeholder="Brief description of the project..."
             />
           </div>
@@ -145,7 +145,7 @@ export function NewProjectDialog({ open, onClose, userId }: NewProjectDialogProp
                 'px-4 py-2 text-sm font-medium text-white rounded-lg',
                 loading
                   ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-[#0A7C8E] hover:bg-[#086a7a]'
+                  : 'bg-[#1d1d1f] hover:bg-[#424245]'
               )}
             >
               {loading ? 'Creating...' : 'Create Project'}

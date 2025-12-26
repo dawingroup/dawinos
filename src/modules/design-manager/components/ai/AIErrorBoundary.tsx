@@ -40,7 +40,7 @@ export class AIErrorBoundary extends Component<Props, State> {
           </p>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="mt-4 px-4 py-2 text-sm font-medium text-[#0A7C8E] border border-[#0A7C8E] rounded-lg hover:bg-[#0A7C8E]/10"
+            className="mt-4 px-4 py-2 text-sm font-medium text-[#1d1d1f] border border-[#1d1d1f] rounded-lg hover:bg-[#1d1d1f]/10"
           >
             Try Again
           </button>

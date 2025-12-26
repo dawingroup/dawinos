@@ -13,7 +13,7 @@ import { materialHasGrain, getGrainDisplay, processEdgeData, calculateProjectEdg
 const COLORS = {
   header: '#872E5C',        // Boysenberry - primary brand color
   subheader: '#6a2449',     // Boysenberry dark
-  accent: '#0A7C8E',        // Teal - secondary accent
+  accent: '#1d1d1f',        // Teal - secondary accent
   text: '#212121',
   lightGray: '#f5f5f5',
   cashmere: '#E2CAA9',      // Cashmere - warm background

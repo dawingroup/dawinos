@@ -107,7 +107,7 @@ export function ApprovalWorkflow({
         </div>
         <button
           onClick={() => setShowNewRequest(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#0A7C8E]/90 text-sm font-medium"
+          className="flex items-center gap-2 px-4 py-2 bg-[#1d1d1f] text-white rounded-lg hover:bg-[#1d1d1f]/90 text-sm font-medium"
         >
           <Plus className="w-4 h-4" />
           Request Approval
@@ -135,7 +135,7 @@ export function ApprovalWorkflow({
               <select
                 value={newRequest.type}
                 onChange={e => setNewRequest(prev => ({ ...prev, type: e.target.value as ApprovalType }))}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent"
               >
                 {APPROVAL_TYPES.map(type => (
                   <option key={type.value} value={type.value}>{type.label}</option>
@@ -152,7 +152,7 @@ export function ApprovalWorkflow({
                 type="email"
                 value={newRequest.assignedTo}
                 onChange={e => setNewRequest(prev => ({ ...prev, assignedTo: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent"
                 placeholder="approver@company.com"
               />
             </div>
@@ -163,7 +163,7 @@ export function ApprovalWorkflow({
                 type="text"
                 value={newRequest.decision}
                 onChange={e => setNewRequest(prev => ({ ...prev, decision: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#1d1d1f] focus:border-transparent"
                 placeholder="Please review the latest drawings..."
               />
             </div>
@@ -179,7 +179,7 @@ export function ApprovalWorkflow({
             <button
               onClick={handleSubmitRequest}
               disabled={!newRequest.assignedTo.trim() || isSubmitting}
-              className="flex items-center gap-2 px-4 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#0A7C8E]/90 disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-[#1d1d1f] text-white rounded-lg hover:bg-[#1d1d1f]/90 disabled:opacity-50"
             >
               <Send className="w-4 h-4" />
               {isSubmitting ? 'Sending...' : 'Send Request'}
@@ -267,7 +267,7 @@ export function ApprovalWorkflow({
                       ) : (
                         <button
                           onClick={() => setRespondingTo(approval.id)}
-                          className="px-3 py-1.5 bg-[#0A7C8E] text-white text-sm rounded hover:bg-[#0A7C8E]/90"
+                          className="px-3 py-1.5 bg-[#1d1d1f] text-white text-sm rounded hover:bg-[#1d1d1f]/90"
                         >
                           Respond
                         </button>

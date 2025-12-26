@@ -98,6 +98,38 @@ export async function getProject(projectId: string): Promise<DesignProject | nul
 }
 
 /**
+ * Delete a project and all its design items
+ */
+export async function deleteProject(projectId: string): Promise<void> {
+  const batch = writeBatch(db);
+  
+  // Delete all design items in the project
+  const itemsRef = collection(db, PROJECTS_COLLECTION, projectId, ITEMS_SUBCOLLECTION);
+  const itemsSnapshot = await getDocs(itemsRef);
+  
+  for (const itemDoc of itemsSnapshot.docs) {
+    // Delete approvals subcollection
+    const approvalsRef = collection(itemDoc.ref, APPROVALS_SUBCOLLECTION);
+    const approvalsSnapshot = await getDocs(approvalsRef);
+    approvalsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+    
+    // Delete deliverables subcollection
+    const deliverablesRef = collection(itemDoc.ref, DELIVERABLES_SUBCOLLECTION);
+    const deliverablesSnapshot = await getDocs(deliverablesRef);
+    deliverablesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+    
+    // Delete the item itself
+    batch.delete(itemDoc.ref);
+  }
+  
+  // Delete the project
+  const projectRef = doc(db, PROJECTS_COLLECTION, projectId);
+  batch.delete(projectRef);
+  
+  await batch.commit();
+}
+
+/**
  * Get all projects
  */
 export async function getProjects(): Promise<DesignProject[]> {

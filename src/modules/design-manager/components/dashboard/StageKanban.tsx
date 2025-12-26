@@ -110,7 +110,7 @@ export function StageKanban({ items, projectId }: StageKanbanProps) {
             key={stage}
             className={cn(
               'flex-shrink-0 w-72 bg-gray-50 rounded-lg',
-              targetStage === stage && 'ring-2 ring-[#0A7C8E] ring-offset-2'
+              targetStage === stage && 'ring-2 ring-[#1d1d1f] ring-offset-2'
             )}
             onDragOver={(e) => handleDragOver(e, stage)}
             onDragLeave={handleDragLeave}

@@ -138,7 +138,7 @@ export function DfMChecker({
             'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
             isChecking
               ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              : 'bg-[#0A7C8E] text-white hover:bg-[#086a7a]'
+              : 'bg-[#1d1d1f] text-white hover:bg-[#424245]'
           )}
         >
           {isChecking ? (

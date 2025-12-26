@@ -48,7 +48,7 @@ export default function DesignDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0A7C8E]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
       </div>
     );
   }
@@ -65,7 +65,7 @@ export default function DesignDashboard() {
         </div>
         <button
           onClick={() => setShowNewProject(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#086a7a] transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-[#1d1d1f] text-white rounded-lg hover:bg-[#424245] transition-colors"
         >
           <Plus className="w-4 h-4" />
           New Project
@@ -122,7 +122,7 @@ export default function DesignDashboard() {
             <p className="text-gray-500">No projects yet</p>
             <button
               onClick={() => setShowNewProject(true)}
-              className="mt-4 text-[#0A7C8E] hover:underline"
+              className="mt-4 text-[#1d1d1f] font-medium hover:underline"
             >
               Create your first project
             </button>
@@ -200,7 +200,7 @@ function ProjectRow({ project }: ProjectRowProps) {
       className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
     >
       <div className="flex items-center gap-4">
-        <div className="w-10 h-10 bg-[#0A7C8E] rounded-lg flex items-center justify-center">
+        <div className="w-10 h-10 bg-[#1d1d1f] rounded-lg flex items-center justify-center">
           <FolderOpen className="w-5 h-5 text-white" />
         </div>
         <div>

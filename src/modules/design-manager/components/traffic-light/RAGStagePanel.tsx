@@ -116,7 +116,7 @@ function StageRequirements({
   return (
     <div className={cn(
       'border rounded-lg overflow-hidden',
-      isNextStage ? 'border-[#0A7C8E] ring-2 ring-[#0A7C8E]/20' :
+      isNextStage ? 'border-[#1d1d1f] ring-2 ring-[#1d1d1f]/20' :
       isPastStage ? 'border-green-200 bg-green-50/50' :
       'border-gray-200'
     )}>
@@ -125,7 +125,7 @@ function StageRequirements({
         onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
           'w-full flex items-center justify-between p-3 text-left',
-          isNextStage ? 'bg-[#0A7C8E]/5' :
+          isNextStage ? 'bg-[#1d1d1f]/5' :
           isPastStage ? 'bg-green-50' :
           'bg-gray-50'
         )}
@@ -138,7 +138,7 @@ function StageRequirements({
           )}
           <span className={cn(
             'font-medium',
-            isNextStage ? 'text-[#0A7C8E]' :
+            isNextStage ? 'text-[#1d1d1f]' :
             isPastStage ? 'text-green-700' :
             'text-gray-700'
           )}>
@@ -150,7 +150,7 @@ function StageRequirements({
             </span>
           )}
           {isNextStage && (
-            <span className="text-xs bg-[#0A7C8E]/10 text-[#0A7C8E] px-2 py-0.5 rounded-full">
+            <span className="text-xs bg-[#1d1d1f]/10 text-[#1d1d1f] px-2 py-0.5 rounded-full">
               Next
             </span>
           )}
