@@ -8,6 +8,7 @@ import { X, Trash2, AlertTriangle } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { createProject, updateProject, deleteProject } from '../../services/firestore';
 import { formatProjectCode } from '../../utils/formatting';
+import { useCustomers } from '@/modules/customer-hub/hooks';
 import type { DesignProject } from '../../types';
 
 export interface ProjectDialogProps {
@@ -19,7 +20,9 @@ export interface ProjectDialogProps {
 }
 
 export function ProjectDialog({ open, onClose, userId, project, onDeleted }: ProjectDialogProps) {
+  const { customers } = useCustomers({ status: 'active' });
   const [name, setName] = useState('');
+  const [customerId, setCustomerId] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'active' | 'on-hold' | 'completed' | 'cancelled'>('active');
@@ -33,11 +36,13 @@ export function ProjectDialog({ open, onClose, userId, project, onDeleted }: Pro
   useEffect(() => {
     if (project) {
       setName(project.name || '');
+      setCustomerId(project.customerId || '');
       setCustomerName(project.customerName || '');
       setDescription(project.description || '');
       setStatus(project.status || 'active');
     } else {
       setName('');
+      setCustomerId('');
       setCustomerName('');
       setDescription('');
       setStatus('active');
@@ -45,6 +50,17 @@ export function ProjectDialog({ open, onClose, userId, project, onDeleted }: Pro
     setError(null);
     setShowDeleteConfirm(false);
   }, [project, open]);
+
+  // Handle customer selection
+  const handleCustomerChange = (selectedId: string) => {
+    setCustomerId(selectedId);
+    if (selectedId) {
+      const selected = customers.find(c => c.id === selectedId);
+      setCustomerName(selected?.name || '');
+    } else {
+      setCustomerName('');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +79,7 @@ export function ProjectDialog({ open, onClose, userId, project, onDeleted }: Pro
         await updateProject(project.id, {
           name: name.trim(),
           description: description.trim(),
+          customerId: customerId || undefined,
           customerName: customerName.trim() || undefined,
           status,
         }, userId);
@@ -75,6 +92,7 @@ export function ProjectDialog({ open, onClose, userId, project, onDeleted }: Pro
           code: formatProjectCode(year, sequence),
           name: name.trim(),
           description: description.trim(),
+          customerId: customerId || undefined,
           customerName: customerName.trim() || undefined,
           status: 'active',
         }, userId);
@@ -199,15 +217,23 @@ export function ProjectDialog({ open, onClose, userId, project, onDeleted }: Pro
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Customer Name
+                Customer
               </label>
-              <input
-                type="text"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
+              <select
+                value={customerId}
+                onChange={(e) => handleCustomerChange(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                placeholder="e.g., Smith Family"
-              />
+              >
+                <option value="">Select a customer...</option>
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name} ({customer.code})
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                <a href="/customers" className="text-primary hover:underline">Manage customers</a>
+              </p>
             </div>
 
             <div>
