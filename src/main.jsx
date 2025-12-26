@@ -8,7 +8,7 @@ import { OffcutProvider } from './contexts/OffcutContext.jsx'
 import { WorkInstanceProvider } from './contexts/WorkInstanceContext.jsx'
 import DesignManagerModule from './modules/design-manager/DesignManagerModule'
 import CustomerHubModule from './modules/customer-hub/CustomerHubModule'
-import { Scissors, FolderOpen, User, LogOut, Users, Layers, Cog, Map } from 'lucide-react'
+import { Scissors, FolderOpen, User, LogOut, Users, Layers, Cog, Map, Store } from 'lucide-react'
 import './index.css'
 
 /**
@@ -23,6 +23,7 @@ function GlobalHeader() {
   const currentModule = location.pathname.startsWith('/design/materials') ? 'materials' :
     location.pathname.startsWith('/design/features') ? 'features' :
     location.pathname.startsWith('/design/roadmap') ? 'roadmap' :
+    location.pathname.startsWith('/design/shopify') ? 'shopify' :
     location.pathname.startsWith('/design') ? 'design' : 
     location.pathname.startsWith('/customers') ? 'customers' : 'cutlist'
 
@@ -116,6 +117,18 @@ function GlobalHeader() {
           <Map className="h-4 w-4" />
           <span className="hidden sm:inline">Roadmap</span>
           <span className="sm:hidden">Road</span>
+        </button>
+        <button
+          onClick={() => navigate('/design/shopify')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            currentModule === 'shopify'
+              ? 'bg-[#1d1d1f] text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Store className="h-4 w-4" />
+          <span className="hidden sm:inline">Shopify</span>
+          <span className="sm:hidden">Shop</span>
         </button>
       </div>
 

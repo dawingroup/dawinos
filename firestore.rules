@@ -185,6 +185,13 @@ service cloud.firestore {
       allow delete: if isAuthenticated();
     }
     
+    // Product Sync Mappings (Shopify)
+    match /productSyncMappings/{mappingId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+    
     // Rate Limiting (managed by Cloud Functions)
     match /rateLimits/{userId} {
       allow read, write: if true; // Cloud Functions manage this

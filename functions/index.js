@@ -269,6 +269,26 @@ exports.api = onRequest({
       case '/ai/feature-context':
         await getFeatureContextForAI(req, res);
         break;
+      case '/shopify/connect':
+        if (req.method === 'POST') {
+          await connectShopify(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/shopify/products':
+        await getShopifyProducts(req, res);
+        break;
+      case '/shopify/sync-product':
+        if (req.method === 'POST') {
+          await syncProductToShopify(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/shopify/status':
+        await getShopifyStatus(req, res);
+        break;
       default:
         res.json({ status: 'ok', message: 'API proxy is running', path, availableEndpoints: ['/customers', '/projects', '/log-activity', '/ai/analyze-brief', '/ai/dfm-check', '/ai/design-chat', '/ai/strategy-research', '/ai/analyze-image', '/ai/feature-cache', '/ai/feature-context', '/katana/sync-product', '/katana/get-materials', '/notion/sync-milestone'] });
     }
@@ -2348,5 +2368,213 @@ async function getCachedFeatureContext() {
   } catch (error) {
     console.error('Error getting cached context:', error);
     return null;
+  }
+}
+
+// ============================================
+// Shopify Integration Handlers
+// ============================================
+
+const SHOPIFY_CONFIG_DOC = 'systemConfig/shopifyConfig';
+
+/**
+ * Connect to Shopify store
+ */
+async function connectShopify(req, res) {
+  try {
+    const { shopDomain, accessToken } = req.body;
+    
+    if (!shopDomain || !accessToken) {
+      return res.status(400).json({ error: 'Shop domain and access token required' });
+    }
+    
+    // Clean shop domain
+    const cleanDomain = shopDomain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    
+    // Verify connection by fetching shop info
+    const shopResponse = await fetch(`https://${cleanDomain}/admin/api/2024-01/shop.json`, {
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!shopResponse.ok) {
+      const error = await shopResponse.text();
+      console.error('Shopify connection error:', error);
+      return res.status(400).json({ error: 'Invalid credentials or shop domain' });
+    }
+    
+    const shopData = await shopResponse.json();
+    
+    // Store configuration
+    await db.doc(SHOPIFY_CONFIG_DOC).set({
+      shopDomain: cleanDomain,
+      shopName: shopData.shop.name,
+      shopEmail: shopData.shop.email,
+      accessToken: accessToken, // In production, encrypt this
+      status: 'connected',
+      connectedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    
+    res.json({ 
+      success: true, 
+      shop: {
+        name: shopData.shop.name,
+        domain: cleanDomain,
+      }
+    });
+  } catch (error) {
+    console.error('Error connecting to Shopify:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Get Shopify connection status
+ */
+async function getShopifyStatus(req, res) {
+  try {
+    const configDoc = await db.doc(SHOPIFY_CONFIG_DOC).get();
+    
+    if (!configDoc.exists) {
+      return res.json({ 
+        connected: false,
+        status: 'disconnected',
+      });
+    }
+    
+    const config = configDoc.data();
+    
+    res.json({
+      connected: config.status === 'connected',
+      status: config.status,
+      shopName: config.shopName,
+      shopDomain: config.shopDomain,
+      connectedAt: config.connectedAt,
+      lastSync: config.lastSync,
+    });
+  } catch (error) {
+    console.error('Error getting Shopify status:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Get Shopify products
+ */
+async function getShopifyProducts(req, res) {
+  try {
+    const configDoc = await db.doc(SHOPIFY_CONFIG_DOC).get();
+    
+    if (!configDoc.exists || configDoc.data().status !== 'connected') {
+      return res.status(400).json({ error: 'Shopify not connected' });
+    }
+    
+    const config = configDoc.data();
+    
+    const response = await fetch(
+      `https://${config.shopDomain}/admin/api/2024-01/products.json?limit=50`,
+      {
+        headers: {
+          'X-Shopify-Access-Token': config.accessToken,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch products from Shopify');
+    }
+    
+    const data = await response.json();
+    
+    res.json({ 
+      products: data.products || [],
+      count: data.products?.length || 0,
+    });
+  } catch (error) {
+    console.error('Error fetching Shopify products:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Sync product to Shopify
+ */
+async function syncProductToShopify(req, res) {
+  try {
+    const { roadmapProductId, productData } = req.body;
+    
+    if (!roadmapProductId || !productData) {
+      return res.status(400).json({ error: 'Product ID and data required' });
+    }
+    
+    const configDoc = await db.doc(SHOPIFY_CONFIG_DOC).get();
+    
+    if (!configDoc.exists || configDoc.data().status !== 'connected') {
+      return res.status(400).json({ error: 'Shopify not connected' });
+    }
+    
+    const config = configDoc.data();
+    
+    // Check if product already exists in mapping
+    const mappingQuery = await db.collection('productSyncMappings')
+      .where('roadmapProductId', '==', roadmapProductId)
+      .get();
+    
+    let shopifyProductId = null;
+    let method = 'POST';
+    let url = `https://${config.shopDomain}/admin/api/2024-01/products.json`;
+    
+    if (!mappingQuery.empty) {
+      const mapping = mappingQuery.docs[0].data();
+      if (mapping.shopifyProductId) {
+        shopifyProductId = mapping.shopifyProductId;
+        method = 'PUT';
+        url = `https://${config.shopDomain}/admin/api/2024-01/products/${shopifyProductId}.json`;
+      }
+    }
+    
+    // Create/Update product in Shopify
+    const response = await fetch(url, {
+      method,
+      headers: {
+        'X-Shopify-Access-Token': config.accessToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ product: productData }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Shopify sync error:', error);
+      throw new Error('Failed to sync product to Shopify');
+    }
+    
+    const result = await response.json();
+    shopifyProductId = result.product.id;
+    
+    // Update mapping
+    const mappingRef = mappingQuery.empty 
+      ? db.collection('productSyncMappings').doc()
+      : mappingQuery.docs[0].ref;
+    
+    await mappingRef.set({
+      roadmapProductId,
+      shopifyProductId: String(shopifyProductId),
+      syncStatus: 'synced',
+      lastSynced: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    
+    res.json({ 
+      success: true, 
+      shopifyProductId: String(shopifyProductId),
+      action: method === 'POST' ? 'created' : 'updated',
+    });
+  } catch (error) {
+    console.error('Error syncing to Shopify:', error);
+    res.status(500).json({ error: error.message });
   }
 }
