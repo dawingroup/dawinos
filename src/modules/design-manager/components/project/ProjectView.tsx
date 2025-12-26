@@ -17,9 +17,11 @@ import { DesignItemCard } from '../design-item/DesignItemCard';
 import { NewDesignItemDialog } from '../design-item/NewDesignItemDialog';
 import { StageKanban } from '../dashboard/StageKanban';
 import { CutlistTab } from './CutlistTab';
+import { EstimateTab } from './EstimateTab';
+import { Calculator } from 'lucide-react';
 
 type ViewMode = 'kanban' | 'list';
-type ProjectTab = 'items' | 'cutlist';
+type ProjectTab = 'items' | 'cutlist' | 'estimate';
 
 export default function ProjectView() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -239,6 +241,18 @@ export default function ProjectView() {
             <Scissors className="w-4 h-4" />
             Cutlist
           </button>
+          <button
+            onClick={() => setActiveTab('estimate')}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              activeTab === 'estimate'
+                ? 'border-[#1d1d1f] text-[#1d1d1f]'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            )}
+          >
+            <Calculator className="w-4 h-4" />
+            Estimate
+          </button>
         </div>
       </div>
 
@@ -334,6 +348,10 @@ export default function ProjectView() {
 
       {activeTab === 'cutlist' && (
         <CutlistTab project={project} />
+      )}
+
+      {activeTab === 'estimate' && (
+        <EstimateTab project={project} />
       )}
 
       {/* New Item Dialog */}
