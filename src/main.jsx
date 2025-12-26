@@ -8,7 +8,7 @@ import { OffcutProvider } from './contexts/OffcutContext.jsx'
 import { WorkInstanceProvider } from './contexts/WorkInstanceContext.jsx'
 import DesignManagerModule from './modules/design-manager/DesignManagerModule'
 import CustomerHubModule from './modules/customer-hub/CustomerHubModule'
-import { Scissors, FolderOpen, User, LogOut, Users, Layers } from 'lucide-react'
+import { Scissors, FolderOpen, User, LogOut, Users, Layers, Cog } from 'lucide-react'
 import './index.css'
 
 /**
@@ -21,6 +21,7 @@ function GlobalHeader() {
   const navigate = useNavigate()
   
   const currentModule = location.pathname.startsWith('/design/materials') ? 'materials' :
+    location.pathname.startsWith('/design/features') ? 'features' :
     location.pathname.startsWith('/design') ? 'design' : 
     location.pathname.startsWith('/customers') ? 'customers' : 'cutlist'
 
@@ -90,6 +91,18 @@ function GlobalHeader() {
           <Layers className="h-4 w-4" />
           <span className="hidden sm:inline">Materials</span>
           <span className="sm:hidden">Mat</span>
+        </button>
+        <button
+          onClick={() => navigate('/design/features')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            currentModule === 'features'
+              ? 'bg-[#1d1d1f] text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Cog className="h-4 w-4" />
+          <span className="hidden sm:inline">Features</span>
+          <span className="sm:hidden">Feat</span>
         </button>
       </div>
 
