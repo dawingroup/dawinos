@@ -107,6 +107,7 @@ export const AuthProvider = ({ children }) => {
     accessToken,
     signInWithGoogle,
     logout,
+    signOut: logout, // Alias for compatibility
     getGoogleAccessToken,
     isAuthenticated: !!user
   };
