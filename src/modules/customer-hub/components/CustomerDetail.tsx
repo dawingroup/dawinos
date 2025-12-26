@@ -169,7 +169,7 @@ export function CustomerDetail() {
               <span className="text-gray-600">Katana MRP</span>
               {customer.externalIds?.katanaId ? (
                 <a
-                  href={`https://app.katanamrp.com/customers/${customer.externalIds.katanaId}`}
+                  href={`https://factory.katanamrp.com/customers/${customer.externalIds.katanaId}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline flex items-center gap-1"
