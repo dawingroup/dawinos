@@ -45,6 +45,22 @@ service cloud.firestore {
     }
     
     // ============================================
+    // Customer Hub Collections
+    // ============================================
+    
+    // Customers collection
+    match /customers/{customerId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated();
+      
+      // Customer Projects subcollection (future)
+      match /projects/{projectId} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+    
+    // ============================================
     // Design Manager Collections
     // ============================================
     
