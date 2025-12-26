@@ -4,9 +4,10 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, RefreshCw } from 'lucide-react';
+import { X, RefreshCw, FolderPlus } from 'lucide-react';
 import { useCustomerMutations } from '../hooks';
 import { useAuth } from '@/shared/hooks';
+import { useDriveService } from '@/services/driveService';
 import type { Customer, CustomerFormData, CustomerType, CustomerStatus } from '../types';
 
 interface CustomerFormProps {
@@ -31,8 +32,11 @@ const INITIAL_FORM_DATA: CustomerFormData = {
 export function CustomerForm({ customer, onClose, onSuccess }: CustomerFormProps) {
   const { user } = useAuth();
   const { create, update, generateCode, createState, updateState } = useCustomerMutations();
+  const { createCustomerFolder } = useDriveService();
   const [formData, setFormData] = useState<CustomerFormData>(INITIAL_FORM_DATA);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [createDriveFolder, setCreateDriveFolder] = useState(true);
+  const [folderStatus, setFolderStatus] = useState<string | null>(null);
 
   const isEditing = !!customer;
   const isLoading = createState.loading || updateState.loading;
@@ -93,6 +97,26 @@ export function CustomerForm({ customer, onClose, onSuccess }: CustomerFormProps
         onSuccess?.(customer.id);
       } else {
         const id = await create(formData, user.email);
+        
+        // Create Google Drive folder if option is selected
+        if (createDriveFolder) {
+          setFolderStatus('Creating Google Drive folder...');
+          try {
+            const folderResult = await createCustomerFolder(formData.name, formData.code);
+            if (folderResult.success) {
+              // Update customer with folder link
+              await update(id, { driveFolderLink: folderResult.customerFolderLink }, user.email);
+              setFolderStatus('Folder created successfully!');
+            } else {
+              console.error('Failed to create folder:', folderResult.error);
+              setFolderStatus(`Folder creation failed: ${folderResult.error}`);
+            }
+          } catch (folderErr) {
+            console.error('Drive folder error:', folderErr);
+            setFolderStatus('Could not create Drive folder (sign in may be required)');
+          }
+        }
+        
         onSuccess?.(id);
       }
       onClose();
@@ -252,6 +276,30 @@ export function CustomerForm({ customer, onClose, onSuccess }: CustomerFormProps
               placeholder="Additional notes about this customer..."
             />
           </div>
+
+          {/* Google Drive Folder Option - only for new customers */}
+          {!isEditing && (
+            <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+              <input
+                type="checkbox"
+                id="createDriveFolder"
+                checked={createDriveFolder}
+                onChange={(e) => setCreateDriveFolder(e.target.checked)}
+                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+              />
+              <label htmlFor="createDriveFolder" className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <FolderPlus className="h-4 w-4 text-blue-600" />
+                Create Google Drive folder for this customer
+              </label>
+            </div>
+          )}
+
+          {/* Folder Status */}
+          {folderStatus && (
+            <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
+              {folderStatus}
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
