@@ -29,7 +29,7 @@ export function MaterialForm({ material, onSubmit, onCancel, isSubmitting = fals
       supplier: material.pricing.supplier,
     } : {
       unitCost: 0,
-      currency: 'KES',
+      currency: 'UGX',
       unit: 'sheet',
     },
     grainPattern: material?.grainPattern || 'none',
@@ -188,10 +188,11 @@ export function MaterialForm({ material, onSubmit, onCancel, isSubmitting = fals
           <div>
             <label className="block text-xs text-gray-500 mb-1">Currency</label>
             <select
-              value={formData.pricing?.currency || 'KES'}
+              value={formData.pricing?.currency || 'UGX'}
               onChange={(e) => updatePricing('currency', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-primary focus:border-primary"
             >
+              <option value="UGX">UGX</option>
               <option value="KES">KES</option>
               <option value="USD">USD</option>
               <option value="EUR">EUR</option>

@@ -333,7 +333,7 @@ export function EstimateTab({ project }: EstimateTabProps) {
         <LineItemDialog
           onSubmit={handleAddItem}
           onCancel={() => setShowAddItem(false)}
-          currency={estimate?.currency || 'KES'}
+          currency={estimate?.currency || 'UGX'}
         />
       )}
 
@@ -343,7 +343,7 @@ export function EstimateTab({ project }: EstimateTabProps) {
           item={editingItem}
           onSubmit={(data) => handleUpdateItem(editingItem.id, data)}
           onCancel={() => setEditingItem(null)}
-          currency={estimate?.currency || 'KES'}
+          currency={estimate?.currency || 'UGX'}
         />
       )}
     </div>

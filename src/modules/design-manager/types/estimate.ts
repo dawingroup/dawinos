@@ -94,7 +94,7 @@ export const DEFAULT_ESTIMATE_CONFIG: EstimateConfig = {
   laborMinutesPerPart: 15, // 15 min per part average
   defaultTaxRate: 0.16, // 16% VAT
   defaultMarginPercent: 0.25, // 25% margin
-  currency: 'KES',
+  currency: 'UGX',
   overheadPercent: 0.10, // 10% overhead
 };
 
