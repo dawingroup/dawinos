@@ -10,6 +10,7 @@ import { Suspense, lazy } from 'react';
 const DesignManagerPageNew = lazy(() => import('./components/dashboard/DesignManagerPageNew'));
 const ProjectView = lazy(() => import('./components/project/ProjectView'));
 const DesignItemDetail = lazy(() => import('./components/design-item/DesignItemDetail'));
+const MaterialsPage = lazy(() => import('./pages/MaterialsPage'));
 
 /**
  * Loading fallback
@@ -30,6 +31,7 @@ export default function DesignManagerModule() {
     <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route index element={<DesignManagerPageNew />} />
+        <Route path="materials" element={<MaterialsPage />} />
         <Route path="project/:projectId" element={<ProjectView />} />
         <Route path="project/:projectId/item/:itemId" element={<DesignItemDetail />} />
       </Routes>

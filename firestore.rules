@@ -45,6 +45,16 @@ service cloud.firestore {
     }
     
     // ============================================
+    // Material Library Collections
+    // ============================================
+    
+    // Global materials (admin managed)
+    match /materials/{materialId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
+    }
+    
+    // ============================================
     // Customer Hub Collections
     // ============================================
     
@@ -53,6 +63,12 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
       allow update, delete: if isAuthenticated();
+      
+      // Customer-specific materials
+      match /materials/{materialId} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if isAuthenticated();
+      }
       
       // Customer Projects subcollection (future)
       match /projects/{projectId} {
@@ -69,6 +85,12 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
       allow update, delete: if isProjectMember(projectId);
+      
+      // Project-specific materials
+      match /materials/{materialId} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if isProjectMember(projectId);
+      }
       
       // Design Items (subcollection)
       match /designItems/{itemId} {
