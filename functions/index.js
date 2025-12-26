@@ -3,7 +3,7 @@ const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { defineString, defineSecret } = require('firebase-functions/params');
 const { Client } = require('@notionhq/client');
 const AnthropicModule = require('@anthropic-ai/sdk');
-const { VertexAI } = require('@google-cloud/vertexai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const admin = require('firebase-admin');
 
 // Initialize Firebase Admin
@@ -18,6 +18,7 @@ const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const KATANA_API_KEY = defineSecret('KATANA_API_KEY');
 const QUICKBOOKS_CLIENT_ID = defineSecret('QUICKBOOKS_CLIENT_ID');
 const QUICKBOOKS_CLIENT_SECRET = defineSecret('QUICKBOOKS_CLIENT_SECRET');
+const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 
 // QuickBooks OAuth URLs
 const QBO_AUTH_URL = 'https://appcenter.intuit.com/connect/oauth2';
@@ -50,25 +51,19 @@ function getAnthropicClient() {
 // Gemini AI Configuration
 // ============================================
 
-const GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || 'dawin-cutlist-processor';
-const GCLOUD_LOCATION = 'us-central1';
-
-// Initialize Vertex AI client
-let vertexAI = null;
-function getVertexAI() {
-  if (!vertexAI) {
-    vertexAI = new VertexAI({
-      project: GCLOUD_PROJECT,
-      location: GCLOUD_LOCATION,
-    });
+// Initialize Google Generative AI client
+let genAI = null;
+function getGenAI() {
+  if (!genAI) {
+    genAI = new GoogleGenerativeAI(GEMINI_API_KEY.value());
   }
-  return vertexAI;
+  return genAI;
 }
 
 // Get Gemini model for design chat (Flash for speed/cost)
 function getGeminiFlash() {
-  return getVertexAI().getGenerativeModel({
-    model: 'gemini-1.5-flash-002',
+  return getGenAI().getGenerativeModel({
+    model: 'gemini-2.0-flash',
     generationConfig: {
       maxOutputTokens: 4096,
       temperature: 0.7,
@@ -78,8 +73,8 @@ function getGeminiFlash() {
 
 // Get Gemini model for strategy research (Pro for complex reasoning)
 function getGeminiPro() {
-  return getVertexAI().getGenerativeModel({
-    model: 'gemini-1.5-pro-002',
+  return getGenAI().getGenerativeModel({
+    model: 'gemini-2.0-flash',
     generationConfig: {
       maxOutputTokens: 8192,
       temperature: 0.4,
@@ -164,7 +159,7 @@ async function checkRateLimit(userId, limitPerMinute = 10) {
 exports.api = onRequest({ 
   cors: true,
   invoker: 'public',
-  secrets: [ANTHROPIC_API_KEY, KATANA_API_KEY]
+  secrets: [ANTHROPIC_API_KEY, KATANA_API_KEY, GEMINI_API_KEY]
 }, async (req, res) => {
   const path = req.path.replace('/api', '');
   console.log('API Request:', req.method, path);
