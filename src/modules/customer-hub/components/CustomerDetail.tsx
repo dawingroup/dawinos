@@ -49,6 +49,8 @@ export function CustomerDetail() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [folderError, setFolderError] = useState<string | null>(null);
+  const [syncingQuickBooks, setSyncingQuickBooks] = useState(false);
+  const [qbError, setQbError] = useState<string | null>(null);
 
   const handleCreateDriveFolder = async () => {
     if (!customer || !user?.email || !customerId) return;
@@ -67,6 +69,37 @@ export function CustomerDetail() {
       setFolderError(err.message || 'Failed to create folder');
     } finally {
       setCreatingFolder(false);
+    }
+  };
+
+  const handleSyncQuickBooks = async () => {
+    if (!customerId) return;
+    
+    setSyncingQuickBooks(true);
+    setQbError(null);
+    
+    try {
+      const response = await fetch('https://api-okekivpl2a-uc.a.run.app/quickbooks/sync-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId }),
+      });
+      
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Sync failed');
+      }
+    } catch (err: any) {
+      if (err.message.includes('not connected')) {
+        // Redirect to connect QuickBooks
+        const authResponse = await fetch('https://api-okekivpl2a-uc.a.run.app/quickbooks/auth-url');
+        const { url } = await authResponse.json();
+        window.location.href = url;
+      } else {
+        setQbError(err.message || 'Failed to sync');
+      }
+    } finally {
+      setSyncingQuickBooks(false);
     }
   };
 
@@ -209,10 +242,28 @@ export function CustomerDetail() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-600">QuickBooks</span>
-              <span className={customer.externalIds?.quickbooksId ? 'text-green-600' : 'text-gray-400'}>
-                {customer.externalIds?.quickbooksId || 'Not linked'}
-              </span>
+              {customer.externalIds?.quickbooksId ? (
+                <span className="text-green-600">{customer.externalIds.quickbooksId}</span>
+              ) : (
+                <button
+                  onClick={handleSyncQuickBooks}
+                  disabled={syncingQuickBooks}
+                  className="flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
+                >
+                  {syncingQuickBooks ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    'Sync to QuickBooks'
+                  )}
+                </button>
+              )}
             </div>
+            {qbError && (
+              <p className="text-xs text-red-600 mt-1">{qbError}</p>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-gray-600">Google Drive</span>
               {customer.driveFolderLink ? (
