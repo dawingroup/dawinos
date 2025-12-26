@@ -152,5 +152,48 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow update, delete: if isAdmin();
     }
+    
+    // ============================================
+    // AI Features Collections
+    // ============================================
+    
+    // Project Strategy (Strategy Canvas)
+    match /projectStrategy/{projectId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+    
+    // Feature Library
+    match /featureLibrary/{featureId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+    
+    // Design Item AI Conversations
+    match /designItemConversations/{conversationId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+    
+    // Product Roadmap
+    match /roadmapProducts/{productId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+    
+    // Rate Limiting (managed by Cloud Functions)
+    match /rateLimits/{userId} {
+      allow read, write: if true; // Cloud Functions manage this
+    }
+    
+    // System Config (Feature Library cache, etc.)
+    match /systemConfig/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if true; // Cloud Functions manage this
+    }
   }
 }
