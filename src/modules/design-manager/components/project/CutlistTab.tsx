@@ -156,23 +156,23 @@ export function CutlistTab({ project }: CutlistTabProps) {
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-xs text-gray-500 uppercase">Total Parts</p>
-            <p className="text-2xl font-bold text-gray-900">{cutlist.totalParts}</p>
+            <p className="text-2xl font-bold text-gray-900">{cutlist.totalParts ?? 0}</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-xs text-gray-500 uppercase">Unique Parts</p>
-            <p className="text-2xl font-bold text-gray-900">{cutlist.totalUniquePartsCount}</p>
+            <p className="text-2xl font-bold text-gray-900">{cutlist.totalUniquePartsCount ?? 0}</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-xs text-gray-500 uppercase">Materials</p>
-            <p className="text-2xl font-bold text-gray-900">{cutlist.totalMaterials}</p>
+            <p className="text-2xl font-bold text-gray-900">{cutlist.totalMaterials ?? 0}</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-xs text-gray-500 uppercase">Total Area</p>
-            <p className="text-2xl font-bold text-gray-900">{cutlist.totalArea.toFixed(2)} m²</p>
+            <p className="text-2xl font-bold text-gray-900">{(cutlist.totalArea ?? 0).toFixed(2)} m²</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-xs text-gray-500 uppercase">Est. Sheets</p>
-            <p className="text-2xl font-bold text-gray-900">{cutlist.estimatedTotalSheets}</p>
+            <p className="text-2xl font-bold text-gray-900">{cutlist.estimatedTotalSheets ?? 0}</p>
           </div>
         </div>
       )}
@@ -228,7 +228,7 @@ export function CutlistTab({ project }: CutlistTabProps) {
           <h3 className="text-lg font-medium text-gray-900">No cutlist generated</h3>
           <p className="text-gray-500 mt-1">Click "Regenerate Cutlist" to aggregate parts from all design items</p>
         </div>
-      ) : cutlist.materialGroups.length === 0 ? (
+      ) : !cutlist.materialGroups || cutlist.materialGroups.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
           <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
           <h3 className="text-lg font-medium text-gray-900">No parts found</h3>

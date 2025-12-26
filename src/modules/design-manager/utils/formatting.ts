@@ -136,11 +136,35 @@ export function formatDate(timestamp: { seconds: number; nanoseconds: number }):
 
 /**
  * Format a datetime timestamp
- * @param timestamp - Firestore timestamp
+ * @param timestamp - Firestore timestamp or Date or any timestamp-like object
  * @returns Formatted datetime string
  */
-export function formatDateTime(timestamp: { seconds: number; nanoseconds: number }): string {
-  const date = new Date(timestamp.seconds * 1000);
+export function formatDateTime(timestamp: any): string {
+  if (!timestamp) return 'N/A';
+  
+  let date: Date;
+  
+  // Handle Firestore Timestamp with toDate() method
+  if (typeof timestamp.toDate === 'function') {
+    date = timestamp.toDate();
+  }
+  // Handle plain object with seconds
+  else if (timestamp.seconds !== undefined) {
+    date = new Date(timestamp.seconds * 1000);
+  }
+  // Handle Date object
+  else if (timestamp instanceof Date) {
+    date = timestamp;
+  }
+  // Handle number (milliseconds)
+  else if (typeof timestamp === 'number') {
+    date = new Date(timestamp);
+  }
+  // Fallback
+  else {
+    return 'N/A';
+  }
+  
   return date.toLocaleString('en-ZA', {
     year: 'numeric',
     month: 'short',
