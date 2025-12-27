@@ -893,9 +893,9 @@ async function getKatanaMaterials(req, res) {
         hasMore = false;
       }
       
-      // Safety limit to prevent infinite loops (max 20 pages = 2000 items)
-      if (page > 20) {
-        console.log('Reached pagination limit of 20 pages');
+      // Safety limit to prevent infinite loops (max 50 pages = 5000 items)
+      if (page > 50) {
+        console.log('Reached pagination limit of 50 pages');
         hasMore = false;
       }
     }
