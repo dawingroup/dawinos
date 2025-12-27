@@ -867,21 +867,38 @@ async function getKatanaMaterials(req, res) {
     console.log('Fetching materials from Katana');
 
     // Fetch all products with pagination
+    // Katana API uses 'limit' and 'offset' or 'page' parameters
     let allItems = [];
     let page = 1;
     const perPage = 100;
     let hasMore = true;
     
     while (hasMore) {
-      const katanaResponse = await katanaRequest(`/products?per_page=${perPage}&page=${page}`);
+      // Try both pagination styles - Katana may use limit/offset or per_page/page
+      const katanaResponse = await katanaRequest(`/products?limit=${perPage}&per_page=${perPage}&page=${page}`);
+      
+      console.log(`Katana page ${page} response:`, JSON.stringify(katanaResponse).substring(0, 500));
       
       if (katanaResponse.simulated || katanaResponse.error) {
+        console.log('Katana API error or simulated:', katanaResponse.error);
         break;
       }
       
-      const items = katanaResponse.data || katanaResponse;
+      // Handle different response formats
+      let items = [];
+      if (Array.isArray(katanaResponse)) {
+        items = katanaResponse;
+      } else if (katanaResponse.data && Array.isArray(katanaResponse.data)) {
+        items = katanaResponse.data;
+      } else if (katanaResponse.products && Array.isArray(katanaResponse.products)) {
+        items = katanaResponse.products;
+      } else if (katanaResponse.items && Array.isArray(katanaResponse.items)) {
+        items = katanaResponse.items;
+      }
       
-      if (Array.isArray(items) && items.length > 0) {
+      console.log(`Page ${page}: Got ${items.length} items`);
+      
+      if (items.length > 0) {
         allItems = allItems.concat(items);
         // If we got less than perPage, we've reached the end
         if (items.length < perPage) {
@@ -899,6 +916,8 @@ async function getKatanaMaterials(req, res) {
         hasMore = false;
       }
     }
+    
+    console.log(`Total items fetched from Katana: ${allItems.length}`);
     
     if (allItems.length > 0) {
       // Map Katana product fields

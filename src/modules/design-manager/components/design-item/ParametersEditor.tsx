@@ -136,8 +136,10 @@ export function ParametersEditor({
     try {
       const response = await fetch('https://api-okekivpl2a-uc.a.run.app/api/katana/get-materials');
       const data = await response.json();
+      console.log('Katana API response:', data);
       if (data.success) {
         setKatanaMaterials(data.materials);
+        console.log(`Loaded ${data.materials.length} materials from ${data.source}`);
       } else {
         setKatanaError('Failed to fetch materials');
       }
