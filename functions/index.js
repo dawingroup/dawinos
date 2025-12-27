@@ -866,18 +866,18 @@ async function getKatanaMaterials(req, res) {
   try {
     console.log('Fetching materials from Katana');
 
-    // Fetch all products with pagination
-    // Katana API uses 'limit' and 'offset' or 'page' parameters
+    // Fetch materials (not products) with pagination
+    // Katana API uses /materials endpoint for raw materials/inventory
     let allItems = [];
     let page = 1;
     const perPage = 100;
     let hasMore = true;
     
     while (hasMore) {
-      // Try both pagination styles - Katana may use limit/offset or per_page/page
-      const katanaResponse = await katanaRequest(`/products?limit=${perPage}&per_page=${perPage}&page=${page}`);
+      // Use /materials endpoint for raw materials, ingredients, components
+      const katanaResponse = await katanaRequest(`/materials?limit=${perPage}&per_page=${perPage}&page=${page}`);
       
-      console.log(`Katana page ${page} response:`, JSON.stringify(katanaResponse).substring(0, 500));
+      console.log(`Katana materials page ${page} response:`, JSON.stringify(katanaResponse).substring(0, 500));
       
       if (katanaResponse.simulated || katanaResponse.error) {
         console.log('Katana API error or simulated:', katanaResponse.error);
@@ -890,13 +890,13 @@ async function getKatanaMaterials(req, res) {
         items = katanaResponse;
       } else if (katanaResponse.data && Array.isArray(katanaResponse.data)) {
         items = katanaResponse.data;
-      } else if (katanaResponse.products && Array.isArray(katanaResponse.products)) {
-        items = katanaResponse.products;
+      } else if (katanaResponse.materials && Array.isArray(katanaResponse.materials)) {
+        items = katanaResponse.materials;
       } else if (katanaResponse.items && Array.isArray(katanaResponse.items)) {
         items = katanaResponse.items;
       }
       
-      console.log(`Page ${page}: Got ${items.length} items`);
+      console.log(`Page ${page}: Got ${items.length} materials`);
       
       if (items.length > 0) {
         allItems = allItems.concat(items);
@@ -917,18 +917,20 @@ async function getKatanaMaterials(req, res) {
       }
     }
     
-    console.log(`Total items fetched from Katana: ${allItems.length}`);
+    console.log(`Total materials fetched from Katana: ${allItems.length}`);
     
     if (allItems.length > 0) {
-      // Map Katana product fields
+      // Map Katana material fields
       const materials = allItems.map(m => ({
         id: m.id,
-        name: m.name || `Product #${m.id}`,
-        sku: m.default_variant?.sku || m.internal_barcode || '',
-        type: m.category_name || m.type || 'material',
-        thickness: 0,
-        inStock: m.in_stock_total || 0,
-        barcode: m.internal_barcode,
+        name: m.name || `Material #${m.id}`,
+        sku: m.sku || m.default_variant?.sku || m.internal_barcode || '',
+        type: m.category_name || m.category || m.type || 'material',
+        thickness: m.thickness || 0,
+        inStock: m.in_stock_total || m.quantity_in_stock || 0,
+        barcode: m.internal_barcode || m.barcode || '',
+        unit: m.unit || m.uom || '',
+        costPerUnit: m.cost_per_unit || m.unit_cost || 0,
       }));
       
       return res.json({ 
