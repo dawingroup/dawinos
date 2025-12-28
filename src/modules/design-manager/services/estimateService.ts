@@ -1,6 +1,6 @@
 /**
  * Estimate Service
- * Calculate project estimates from cutlist and material pricing
+ * Calculate project estimates from optimization results and material palette
  */
 
 import {
@@ -19,6 +19,7 @@ import type {
 } from '../types/estimate';
 import { DEFAULT_ESTIMATE_CONFIG } from '../types/estimate';
 import type { ConsolidatedCutlist } from '../types';
+import type { EstimationResult, MaterialPaletteEntry } from '@/shared/types';
 import { getMaterial } from './materialService';
 
 /**
@@ -70,7 +71,7 @@ export async function calculateEstimate(
 
     const totalPrice = group.estimatedSheets * unitCost;
 
-    lineItems.push({
+    const item: EstimateLineItem = {
       id: nanoid(10),
       description: `${group.materialName} (${group.thickness}mm)`,
       category: 'material',
@@ -78,8 +79,12 @@ export async function calculateEstimate(
       unit: 'sheets',
       unitPrice: unitCost,
       totalPrice,
-      linkedMaterialId: materialId,
-    });
+    };
+    // Only add linkedMaterialId if it exists (Firestore doesn't accept undefined)
+    if (materialId) {
+      item.linkedMaterialId = materialId;
+    }
+    lineItems.push(item);
   }
 
   // 2. Labor costs
@@ -151,6 +156,128 @@ export async function calculateEstimate(
 }
 
 /**
+ * Calculate estimate from optimization results and material palette
+ * This is the unified approach that uses Nesting Studio data
+ */
+export async function calculateEstimateFromOptimization(
+  projectId: string,
+  estimation: EstimationResult,
+  materialPalette: MaterialPaletteEntry[],
+  userId: string,
+  config: EstimateConfig = DEFAULT_ESTIMATE_CONFIG
+): Promise<ConsolidatedEstimate> {
+  const lineItems: EstimateLineItem[] = [];
+
+  // 1. Material costs from optimization sheet summary
+  for (const sheet of estimation.sheetSummary) {
+    // Find matching material in palette for unit cost
+    const paletteEntry = materialPalette.find(
+      entry => entry.designName === sheet.materialName || 
+               entry.normalizedName === sheet.materialName.toLowerCase().trim()
+    );
+    
+    // Use unit cost from palette (from inventory mapping) or fallback
+    let unitCost = paletteEntry?.unitCost || 0;
+    
+    // If no unit cost from palette, use default based on thickness
+    if (unitCost === 0) {
+      const thickness = paletteEntry?.thickness || 18;
+      const defaultPrices: Record<number, number> = {
+        3: 1500, 6: 2000, 9: 2500, 12: 3000, 15: 3500,
+        16: 3800, 18: 4200, 22: 5000, 25: 5500,
+      };
+      unitCost = defaultPrices[thickness] || 4000;
+    }
+
+    const totalPrice = sheet.sheetsRequired * unitCost;
+
+    const item: EstimateLineItem = {
+      id: nanoid(10),
+      description: `${sheet.materialName} (${sheet.sheetSize.length}×${sheet.sheetSize.width}mm)`,
+      category: 'material',
+      quantity: sheet.sheetsRequired,
+      unit: 'sheets',
+      unitPrice: unitCost,
+      totalPrice,
+    };
+    
+    // Link to inventory if mapped
+    if (paletteEntry?.inventoryId) {
+      item.linkedMaterialId = paletteEntry.inventoryId;
+    }
+    
+    lineItems.push(item);
+  }
+
+  // 2. Labor costs based on optimized parts count
+  const laborHours = (estimation.totalPartsCount * config.laborMinutesPerPart) / 60;
+  const laborCost = laborHours * config.laborRatePerHour;
+
+  lineItems.push({
+    id: nanoid(10),
+    description: 'Shop Labor',
+    category: 'labor',
+    quantity: Math.round(laborHours * 10) / 10,
+    unit: 'hours',
+    unitPrice: config.laborRatePerHour,
+    totalPrice: Math.round(laborCost),
+  });
+
+  // 3. Overhead
+  const materialSubtotal = lineItems
+    .filter((li) => li.category === 'material')
+    .reduce((sum, li) => sum + li.totalPrice, 0);
+  
+  if (config.overheadPercent > 0) {
+    const overheadAmount = materialSubtotal * config.overheadPercent;
+    lineItems.push({
+      id: nanoid(10),
+      description: `Overhead (${config.overheadPercent * 100}%)`,
+      category: 'overhead',
+      quantity: 1,
+      unit: 'lot',
+      unitPrice: Math.round(overheadAmount),
+      totalPrice: Math.round(overheadAmount),
+    });
+  }
+
+  // Calculate totals
+  const subtotal = lineItems.reduce((sum, li) => sum + li.totalPrice, 0);
+  const taxAmount = Math.round(subtotal * config.defaultTaxRate);
+  const marginAmount = config.defaultMarginPercent > 0
+    ? Math.round(subtotal * config.defaultMarginPercent)
+    : 0;
+
+  const estimate: ConsolidatedEstimate = {
+    generatedAt: Timestamp.now() as any,
+    generatedBy: userId,
+    isStale: false,
+    lastCutlistUpdate: estimation.validAt as any, // Use optimization validAt
+    lineItems,
+    subtotal: Math.round(subtotal),
+    taxRate: config.defaultTaxRate,
+    taxAmount,
+    total: Math.round(subtotal + taxAmount + marginAmount),
+    currency: config.currency,
+    marginPercent: config.defaultMarginPercent,
+    marginAmount,
+  };
+
+  // Save to project document
+  const projectRef = doc(db, 'designProjects', projectId);
+  await updateDoc(projectRef, {
+    consolidatedEstimate: {
+      ...estimate,
+      generatedAt: serverTimestamp(),
+    },
+    updatedAt: serverTimestamp(),
+    updatedBy: userId,
+  });
+
+  return estimate;
+}
+
+/**
  * Add manual line item to estimate
  */
 export async function addEstimateLineItem(
@@ -167,9 +294,12 @@ export async function addEstimateLineItem(
     unit: itemData.unit,
     unitPrice: itemData.unitPrice,
     totalPrice: itemData.quantity * itemData.unitPrice,
-    notes: itemData.notes,
     isManual: true,
   };
+  // Only add notes if it exists (Firestore doesn't accept undefined)
+  if (itemData.notes) {
+    newItem.notes = itemData.notes;
+  }
 
   const lineItems = [...currentEstimate.lineItems, newItem];
   return await recalculateAndSave(projectId, currentEstimate, lineItems, userId);

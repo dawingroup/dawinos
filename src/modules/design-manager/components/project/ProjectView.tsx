@@ -1,11 +1,14 @@
 /**
  * Project View
- * Project detail page with design items
+ * Project detail page with design items, cutlist, and estimates
  */
 
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Plus, LayoutGrid, List, FolderOpen, Calendar, User, Clock, CheckCircle, AlertTriangle, Package, Edit2, Scissors, Sparkles } from 'lucide-react';
+import { 
+  ArrowLeft, Plus, LayoutGrid, List, FolderOpen, Calendar, User, Clock, 
+  CheckCircle, AlertTriangle, Package, Edit2, Scissors, Sparkles, Calculator, Upload 
+} from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/hooks';
 import { useProject, useDesignItems } from '../../hooks';
@@ -18,10 +21,13 @@ import { NewDesignItemDialog } from '../design-item/NewDesignItemDialog';
 import { StageKanban } from '../dashboard/StageKanban';
 import { CutlistTab } from './CutlistTab';
 import { EstimateTab } from './EstimateTab';
-import { Calculator } from 'lucide-react';
+import { ProductionTab } from './ProductionTab';
+import { StrategyCanvas } from '../strategy';
+import type { Project } from '@/shared/types';
+import { BulkImporter } from '../ProjectEstimation/BulkImporter';
 
 type ViewMode = 'kanban' | 'list';
-type ProjectTab = 'items' | 'cutlist' | 'estimate';
+type ProjectTab = 'items' | 'cutlist' | 'estimate' | 'production';
 
 export default function ProjectView() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -32,6 +38,8 @@ export default function ProjectView() {
   const [categoryFilter, setCategoryFilter] = useState<DesignCategory | 'all'>('all');
   const [showNewItem, setShowNewItem] = useState(false);
   const [showEditProject, setShowEditProject] = useState(false);
+  const [showStrategy, setShowStrategy] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);
   const [activeTab, setActiveTab] = useState<ProjectTab>('items');
 
   const { items, loading: itemsLoading } = useDesignItems(projectId, {
@@ -42,7 +50,7 @@ export default function ProjectView() {
   if (projectLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0A7C8E]"></div>
       </div>
     );
   }
@@ -52,7 +60,7 @@ export default function ProjectView() {
       <div className="text-center py-12">
         <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
         <h2 className="text-lg font-medium text-gray-900">Project not found</h2>
-        <Link to="/design" className="text-[#1d1d1f] hover:underline mt-2 inline-block">
+        <Link to="/design" className="text-[#0A7C8E] hover:underline mt-2 inline-block">
           Back to Dashboard
         </Link>
       </div>
@@ -116,13 +124,20 @@ export default function ProjectView() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Link
-            to={`/design/project/${projectId}/strategy`}
+          <button
+            onClick={() => setShowBulkImport(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Upload className="w-4 h-4" />
+            Bulk Import
+          </button>
+          <button
+            onClick={() => setShowStrategy(true)}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:opacity-90 transition-opacity"
           >
             <Sparkles className="w-4 h-4" />
             AI Strategy
-          </Link>
+          </button>
           <button
             onClick={() => setShowEditProject(true)}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
@@ -132,7 +147,7 @@ export default function ProjectView() {
           </button>
           <button
             onClick={() => setShowNewItem(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#086a7a] transition-colors"
           >
             <Plus className="w-4 h-4" />
             Add Design Item
@@ -174,9 +189,9 @@ export default function ProjectView() {
           <p className="text-2xl font-bold text-gray-900">{stats.needsAttention}</p>
           <p className="text-xs text-gray-500">Critical items</p>
         </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 border-l-4 border-l-primary">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 border-l-4 border-l-[#0A7C8E]">
           <div className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-primary" />
+            <CheckCircle className="h-4 w-4 text-[#0A7C8E]" />
             <p className="text-sm font-medium text-gray-600">Avg Readiness</p>
           </div>
           <p className="text-2xl font-bold text-gray-900">{stats.avgReadiness}%</p>
@@ -229,7 +244,7 @@ export default function ProjectView() {
             className={cn(
               'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
               activeTab === 'items'
-                ? 'border-[#1d1d1f] text-[#1d1d1f]'
+                ? 'border-[#0A7C8E] text-[#0A7C8E]'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             )}
           >
@@ -241,7 +256,7 @@ export default function ProjectView() {
             className={cn(
               'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
               activeTab === 'cutlist'
-                ? 'border-[#1d1d1f] text-[#1d1d1f]'
+                ? 'border-[#0A7C8E] text-[#0A7C8E]'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             )}
           >
@@ -253,12 +268,27 @@ export default function ProjectView() {
             className={cn(
               'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
               activeTab === 'estimate'
-                ? 'border-[#1d1d1f] text-[#1d1d1f]'
+                ? 'border-[#0A7C8E] text-[#0A7C8E]'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             )}
           >
             <Calculator className="w-4 h-4" />
             Estimate
+          </button>
+          <button
+            onClick={() => setActiveTab('production')}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              activeTab === 'production'
+                ? 'border-[#0A7C8E] text-[#0A7C8E]'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            )}
+          >
+            <Scissors className="w-4 h-4" />
+            Production
+            {(project as unknown as Project).optimizationState?.production?.invalidatedAt && (
+              <span className="w-2 h-2 bg-amber-500 rounded-full" title="Optimization outdated" />
+            )}
           </button>
         </div>
       </div>
@@ -270,76 +300,76 @@ export default function ProjectView() {
             <div className="flex items-center gap-4">
               {/* Stage Filter */}
               <select
-            value={stageFilter}
-            onChange={(e) => setStageFilter(e.target.value as DesignStage | 'all')}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-          >
-            <option value="all">All Stages</option>
-            {STAGE_ORDER.map((stage) => (
-              <option key={stage} value={stage}>{STAGE_LABELS[stage]}</option>
-            ))}
-          </select>
+                value={stageFilter}
+                onChange={(e) => setStageFilter(e.target.value as DesignStage | 'all')}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#0A7C8E]/20 focus:border-[#0A7C8E]"
+              >
+                <option value="all">All Stages</option>
+                {STAGE_ORDER.map((stage) => (
+                  <option key={stage} value={stage}>{STAGE_LABELS[stage]}</option>
+                ))}
+              </select>
 
-          {/* Category Filter */}
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value as DesignCategory | 'all')}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-          >
-            <option value="all">All Categories</option>
-            {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>{label}</option>
-            ))}
-          </select>
+              {/* Category Filter */}
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value as DesignCategory | 'all')}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#0A7C8E]/20 focus:border-[#0A7C8E]"
+              >
+                <option value="all">All Categories</option>
+                {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
 
-          <span className="text-sm text-gray-500">
-            {items.length} item{items.length !== 1 ? 's' : ''}
-          </span>
-        </div>
+              <span className="text-sm text-gray-500">
+                {items.length} item{items.length !== 1 ? 's' : ''}
+              </span>
+            </div>
 
-        {/* View Toggle */}
-        <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
-          <button
-            onClick={() => setViewMode('kanban')}
-            className={cn(
-              'p-2 transition-colors',
-              viewMode === 'kanban' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'
-            )}
-            title="Kanban View"
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={cn(
-              'p-2 transition-colors',
-              viewMode === 'list' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'
-            )}
-            title="List View"
-          >
-            <List className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+            {/* View Toggle */}
+            <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setViewMode('kanban')}
+                className={cn(
+                  'p-2 transition-colors',
+                  viewMode === 'kanban' ? 'bg-[#0A7C8E] text-white' : 'text-gray-600 hover:bg-gray-100'
+                )}
+                title="Kanban View"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={cn(
+                  'p-2 transition-colors',
+                  viewMode === 'list' ? 'bg-[#0A7C8E] text-white' : 'text-gray-600 hover:bg-gray-100'
+                )}
+                title="List View"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
 
-      {/* Content */}
-      {itemsLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
-        </div>
-      ) : items.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <h3 className="text-lg font-medium text-gray-900">No design items yet</h3>
-          <p className="text-gray-500 mt-1">Create your first design item to get started.</p>
-          <button
-            onClick={() => setShowNewItem(true)}
-            className="mt-4 text-[#1d1d1f] hover:underline"
-          >
-            Add Design Item
-          </button>
-        </div>
-      ) : viewMode === 'kanban' ? (
+          {/* Content */}
+          {itemsLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0A7C8E]"></div>
+            </div>
+          ) : items.length === 0 ? (
+            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+              <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <h3 className="text-lg font-medium text-gray-900">No design items yet</h3>
+              <p className="text-gray-500 mt-1">Create your first design item to get started.</p>
+              <button
+                onClick={() => setShowNewItem(true)}
+                className="mt-4 text-[#0A7C8E] hover:underline"
+              >
+                Add Design Item
+              </button>
+            </div>
+          ) : viewMode === 'kanban' ? (
             <StageKanban items={items} projectId={projectId!} />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -361,6 +391,10 @@ export default function ProjectView() {
         <EstimateTab project={project} />
       )}
 
+      {activeTab === 'production' && (
+        <ProductionTab project={project} onRefresh={() => {}} />
+      )}
+
       {/* New Item Dialog */}
       <NewDesignItemDialog
         open={showNewItem}
@@ -377,6 +411,50 @@ export default function ProjectView() {
         userId={user?.email || ''}
         project={project}
       />
+
+      {/* Strategy Canvas with AI Report Generation */}
+      {showStrategy && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <StrategyCanvas
+            projectId={projectId!}
+            projectName={project.name}
+            projectCode={project.code}
+            clientBrief={project.description}
+            userId={user?.email || undefined}
+            onClose={() => setShowStrategy(false)}
+          />
+        </div>
+      )}
+
+      {/* Bulk Importer */}
+      {showBulkImport && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowBulkImport(false)} />
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="relative bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b">
+                <h2 className="text-lg font-semibold">Bulk Import Design Items</h2>
+                <button
+                  onClick={() => setShowBulkImport(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="p-4">
+                <BulkImporter
+                  projectId={projectId!}
+                  projectCode={project.code}
+                  onComplete={() => setShowBulkImport(false)}
+                  onCancel={() => setShowBulkImport(false)}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

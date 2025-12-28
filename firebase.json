@@ -23,6 +23,10 @@
         "function": "api"
       },
       {
+        "source": "/fn/analyzeAssetCapabilities",
+        "function": "analyzeAssetCapabilities"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

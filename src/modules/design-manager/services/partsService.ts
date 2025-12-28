@@ -5,6 +5,7 @@
 
 import {
   doc,
+  getDoc,
   updateDoc,
   serverTimestamp,
   Timestamp,
@@ -12,6 +13,8 @@ import {
 import { db } from '@/firebase/config';
 import { nanoid } from 'nanoid';
 import type { PartEntry, PartsSummary, PartEdgeBanding } from '../types';
+
+const PROJECTS_COLLECTION = 'designProjects';
 
 /**
  * Generate a unique part ID
@@ -131,6 +134,9 @@ export async function addPart(
     updatedBy: userId,
   });
 
+  // Invalidate project optimization
+  await invalidateProjectOptimization(projectId, userId, 'Part added');
+
   return part;
 }
 
@@ -161,6 +167,9 @@ export async function updatePart(
     updatedAt: serverTimestamp(),
     updatedBy: userId,
   });
+
+  // Invalidate project optimization
+  await invalidateProjectOptimization(projectId, userId, 'Part modified');
 }
 
 /**
@@ -184,6 +193,9 @@ export async function deletePart(
     updatedAt: serverTimestamp(),
     updatedBy: userId,
   });
+
+  // Invalidate project optimization
+  await invalidateProjectOptimization(projectId, userId, 'Part deleted');
 }
 
 /**
@@ -216,6 +228,9 @@ export async function bulkAddParts(
     updatedBy: userId,
   });
 
+  // Invalidate project optimization
+  await invalidateProjectOptimization(projectId, userId, 'Parts imported');
+
   return newParts;
 }
 
@@ -245,5 +260,52 @@ export async function replaceAllParts(
     updatedBy: userId,
   });
 
+  // Invalidate project optimization
+  await invalidateProjectOptimization(projectId, userId, 'Parts replaced');
+
   return parts;
+}
+
+// ============================================
+// Invalidation Helper
+// ============================================
+
+/**
+ * Invalidate project optimization and cutlist when parts change
+ */
+async function invalidateProjectOptimization(
+  projectId: string,
+  userId: string,
+  reason: string
+): Promise<void> {
+  const projectRef = doc(db, PROJECTS_COLLECTION, projectId);
+  const projectSnap = await getDoc(projectRef);
+  
+  if (!projectSnap.exists()) return;
+  
+  const project = projectSnap.data();
+  const now = Timestamp.now();
+  const timestamp = { seconds: now.seconds, nanoseconds: now.nanoseconds };
+  
+  const updates: Record<string, any> = {
+    // Mark cutlist as stale
+    'consolidatedCutlist.isStale': true,
+    'consolidatedCutlist.staleReason': reason,
+    updatedAt: serverTimestamp(),
+    updatedBy: userId,
+  };
+  
+  // Invalidate estimation if it exists
+  if (project.optimizationState?.estimation && !project.optimizationState.estimation.invalidatedAt) {
+    updates['optimizationState.estimation.invalidatedAt'] = timestamp;
+    updates['optimizationState.estimation.invalidationReasons'] = [reason];
+  }
+  
+  // Invalidate production if it exists
+  if (project.optimizationState?.production && !project.optimizationState.production.invalidatedAt) {
+    updates['optimizationState.production.invalidatedAt'] = timestamp;
+    updates['optimizationState.production.invalidationReasons'] = [reason];
+  }
+  
+  await updateDoc(projectRef, updates);
 }

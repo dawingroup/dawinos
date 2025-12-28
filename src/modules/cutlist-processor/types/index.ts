@@ -3,7 +3,13 @@
  * TypeScript type definitions for the cutlist processor module
  */
 
-import type { Timestamp } from '@/shared/types';
+import type { 
+  Timestamp, 
+  EstimationMode, 
+  CostAllocation, 
+  TimeAllocation, 
+  ComplexityFactors 
+} from '@/shared/types';
 
 /**
  * Panel/Part in a cutlist
@@ -164,6 +170,22 @@ export interface WorkInstance {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   createdBy?: string;
+  
+  // Estimation Mode (v2.1)
+  mode: EstimationMode;
+  
+  // Cost & Time Allocation (v2.1)
+  costAllocation?: CostAllocation;
+  timeAllocation?: TimeAllocation;
+  complexityFactors?: ComplexityFactors;
+  
+  // Quote tracking (for ESTIMATION mode)
+  quoteNumber?: string;
+  quoteValidUntil?: Timestamp;
+  quoteStatus?: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired';
+  
+  // Link to production instance (if quote accepted)
+  linkedProductionInstanceId?: string;
 }
 
 /**

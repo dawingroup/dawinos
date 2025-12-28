@@ -85,7 +85,9 @@ service cloud.firestore {
     match /designProjects/{projectId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update, delete: if isProjectMember(projectId);
+      // Allow any authenticated user to update (for optimization, palette, etc.)
+      allow update: if isAuthenticated();
+      allow delete: if isProjectMember(projectId);
       
       // Project-specific materials
       match /materials/{materialId} {
@@ -96,8 +98,7 @@ service cloud.firestore {
       // Design Items (subcollection)
       match /designItems/{itemId} {
         allow read: if isAuthenticated();
-        allow create, update: if isProjectMember(projectId);
-        allow delete: if isAdmin();
+        allow create, update, delete: if isProjectMember(projectId);
         
         // Stage History (append-only audit trail)
         match /stageHistory/{historyId} {
@@ -109,17 +110,15 @@ service cloud.firestore {
         // Approvals
         match /approvals/{approvalId} {
           allow read: if isAuthenticated();
-          allow create: if isProjectMember(projectId);
+          allow create, delete: if isProjectMember(projectId);
           allow update: if isAuthenticated() && 
             resource.data.assignedTo == request.auth.token.email;
-          allow delete: if isAdmin();
         }
         
         // Deliverables
         match /deliverables/{deliverableId} {
           allow read: if isAuthenticated();
-          allow create, update: if isProjectMember(projectId);
-          allow delete: if isAdmin();
+          allow create, update, delete: if isProjectMember(projectId);
         }
       }
       
@@ -151,6 +150,24 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if isAuthenticated();
       allow update, delete: if isAdmin();
+    }
+    
+    // ============================================
+    // Asset Registry Collections
+    // ============================================
+    
+    // Assets collection
+    match /assets/{assetId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+    
+    // Features collection
+    match /features/{featureId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
     }
     
     // ============================================

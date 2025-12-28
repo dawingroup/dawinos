@@ -4,8 +4,8 @@
  */
 
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, FileText, Activity, CheckSquare, History, Sparkles, Settings, Package } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, FileText, Activity, CheckSquare, History, Sparkles, Settings, Package, Trash2 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useDesignItem, useProject, useRAGUpdate } from '../../hooks';
 import { StageBadge } from './StageBadge';
@@ -27,6 +27,7 @@ import {
   createDeliverable,
   updateDeliverableStatus,
   deleteDeliverable,
+  deleteDesignItem,
   subscribeToDeliverables,
 } from '../../services/firestore';
 import { uploadDeliverableFile, validateDeliverableFile, deleteDeliverableFile } from '../../services/storage';
@@ -71,12 +72,15 @@ const ASPECT_LABELS: Record<string, string> = {
 
 export default function DesignItemDetail() {
   const { projectId, itemId } = useParams<{ projectId: string; itemId: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { project } = useProject(projectId);
   const { item, loading } = useDesignItem(projectId, itemId);
   const { updateAspect } = useRAGUpdate(projectId, itemId);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [showGateCheck, setShowGateCheck] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   
   // RAG Edit Modal state
   const [editingAspect, setEditingAspect] = useState<{
@@ -182,8 +186,53 @@ export default function DesignItemDetail() {
               Advance Stage
             </button>
           )}
+          
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+            title="Delete Item"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Design Item?</h3>
+            <p className="text-gray-600 mb-4">
+              This will permanently delete <strong>{item.name}</strong> and all its deliverables and approvals. This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50"
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    await deleteDesignItem(projectId!, itemId!);
+                    navigate(`/design/project/${projectId}`);
+                  } catch (err) {
+                    console.error('Delete error:', err);
+                    setDeleting(false);
+                  }
+                }}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
@@ -347,7 +396,7 @@ function OverviewTab({ item }: { item: NonNullable<ReturnType<typeof useDesignIt
           <div>
             <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Primary Material</h4>
             <p className="text-sm text-gray-900">
-              {params.primaryMaterial || <span className="text-gray-400 italic">Not specified</span>}
+              {params.primaryMaterial?.name || <span className="text-gray-400 italic">Not specified</span>}
             </p>
           </div>
           
@@ -355,7 +404,13 @@ function OverviewTab({ item }: { item: NonNullable<ReturnType<typeof useDesignIt
           <div>
             <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Finish</h4>
             <p className="text-sm text-gray-900">
-              {params.finish || <span className="text-gray-400 italic">Not specified</span>}
+              {params.finish ? (
+                typeof params.finish === 'string' 
+                  ? params.finish 
+                  : `${params.finish.type || 'Unknown'}${params.finish.color ? ` - ${params.finish.color}` : ''}${params.finish.sheen ? ` (${params.finish.sheen})` : ''}`
+              ) : (
+                <span className="text-gray-400 italic">Not specified</span>
+              )}
             </p>
           </div>
           

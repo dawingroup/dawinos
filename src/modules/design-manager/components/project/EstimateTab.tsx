@@ -4,10 +4,13 @@
  */
 
 import { useState } from 'react';
-import { RefreshCw, Download, AlertTriangle, Plus, Edit2, Trash2, Calculator } from 'lucide-react';
+import { RefreshCw, Download, AlertTriangle, Plus, Edit2, Trash2, Calculator, Layers, Package } from 'lucide-react';
 import { useAuth } from '@/shared/hooks';
+import { NestingStudio } from '../production/NestingStudio';
+import { MaterialPaletteTable } from './MaterialPaletteTable';
+import type { Project } from '@/shared/types';
 import {
-  calculateEstimate,
+  calculateEstimateFromOptimization,
   addEstimateLineItem,
   updateEstimateLineItem,
   removeEstimateLineItem,
@@ -15,7 +18,7 @@ import {
   downloadEstimateCSV,
 } from '../../services/estimateService';
 import { ESTIMATE_CATEGORY_LABELS, DEFAULT_ESTIMATE_CONFIG } from '../../types/estimate';
-import type { DesignProject, ConsolidatedCutlist } from '../../types';
+import type { DesignProject } from '../../types';
 import type { ConsolidatedEstimate, EstimateLineItem, EstimateLineItemFormData, EstimateLineItemCategory } from '../../types/estimate';
 import { formatDateTime } from '../../utils/formatting';
 
@@ -30,20 +33,33 @@ export function EstimateTab({ project }: EstimateTabProps) {
   const [localEstimate, setLocalEstimate] = useState<ConsolidatedEstimate | null>(null);
   const [showAddItem, setShowAddItem] = useState(false);
   const [editingItem, setEditingItem] = useState<EstimateLineItem | null>(null);
+  const [paletteKey, setPaletteKey] = useState(0); // For refreshing palette
 
-  const cutlist = (project as any).consolidatedCutlist as ConsolidatedCutlist | undefined;
+  const projectData = project as unknown as Project;
   const projectEstimate = (project as any).consolidatedEstimate as ConsolidatedEstimate | undefined;
   const estimate = localEstimate || projectEstimate;
+  
+  // Get optimization state
+  const estimation = projectData.optimizationState?.estimation;
+  const isEstimationValid = estimation && !estimation.invalidatedAt;
+  const materialPalette = projectData.materialPalette?.entries || [];
 
   const handleGenerate = async () => {
-    if (!user?.email || !cutlist) return;
+    if (!user?.email) return;
+    
+    // Check if optimization has been run
+    if (!estimation || !isEstimationValid) {
+      setError('Please run the Nesting Studio optimization first before generating an estimate.');
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     try {
-      const result = await calculateEstimate(
+      const result = await calculateEstimateFromOptimization(
         project.id,
-        project.customerId,
-        cutlist,
+        estimation,
+        materialPalette,
         user.email,
         DEFAULT_ESTIMATE_CONFIG
       );
@@ -105,13 +121,13 @@ export function EstimateTab({ project }: EstimateTabProps) {
 
   return (
     <div className="space-y-4">
-      {/* No cutlist warning */}
-      {!cutlist && (
+      {/* No optimization warning */}
+      {!isEstimationValid && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
           <AlertTriangle className="h-5 w-5 text-amber-500" />
           <div>
-            <p className="font-medium text-amber-800">No cutlist available</p>
-            <p className="text-sm text-amber-700">Generate a cutlist first before creating an estimate</p>
+            <p className="font-medium text-amber-800">Optimization required</p>
+            <p className="text-sm text-amber-700">Run the Nesting Studio optimization below to generate an estimate</p>
           </div>
         </div>
       )}
@@ -128,7 +144,7 @@ export function EstimateTab({ project }: EstimateTabProps) {
           </div>
           <button
             onClick={handleGenerate}
-            disabled={loading || !cutlist}
+            disabled={loading || !isEstimationValid}
             className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -174,7 +190,7 @@ export function EstimateTab({ project }: EstimateTabProps) {
         <div className="flex items-center gap-2">
           <button
             onClick={handleGenerate}
-            disabled={loading || !cutlist}
+            disabled={loading || !isEstimationValid}
             className="flex items-center gap-2 px-3 py-1.5 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 disabled:opacity-50"
           >
             <Calculator className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -219,9 +235,9 @@ export function EstimateTab({ project }: EstimateTabProps) {
           <Calculator className="w-12 h-12 text-gray-300 mx-auto mb-3" />
           <h3 className="text-lg font-medium text-gray-900">No estimate generated</h3>
           <p className="text-gray-500 mt-1">
-            {cutlist 
-              ? 'Click "Generate Estimate" to calculate costs from the cutlist'
-              : 'Generate a cutlist first, then create an estimate'}
+            {isEstimationValid 
+              ? 'Click "Generate Estimate" to calculate costs from optimization'
+              : 'Run the Nesting Studio optimization below, then generate an estimate'}
           </p>
         </div>
       ) : (
@@ -346,6 +362,49 @@ export function EstimateTab({ project }: EstimateTabProps) {
           currency={estimate?.currency || 'UGX'}
         />
       )}
+
+      {/* Material Palette Section */}
+      <div className="mt-8 border-t border-gray-200 pt-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Package className="w-5 h-5 text-purple-600" />
+          <div>
+            <h3 className="font-semibold text-gray-900">Material Palette</h3>
+            <p className="text-sm text-gray-500">Manage material inventory mappings for optimization</p>
+          </div>
+        </div>
+        
+        {user?.email && (
+          <MaterialPaletteTable
+            key={paletteKey}
+            projectId={project.id}
+            palette={projectData.materialPalette}
+            onPaletteUpdated={() => setPaletteKey(k => k + 1)}
+            userId={user.email}
+          />
+        )}
+      </div>
+
+      {/* Material Estimation Section */}
+      <div className="mt-8 border-t border-gray-200 pt-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Layers className="w-5 h-5 text-blue-600" />
+          <div>
+            <h3 className="font-semibold text-gray-900">Material Estimation</h3>
+            <p className="text-sm text-gray-500">Optimize sheet usage and estimate material costs</p>
+          </div>
+        </div>
+        
+        {user?.email && (
+          <NestingStudio
+            key={`nesting-${paletteKey}`}
+            projectId={project.id}
+            project={projectData}
+            mode="ESTIMATION"
+            userId={user.email}
+            onRefresh={() => setPaletteKey(k => k + 1)}
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -106,7 +106,7 @@ export function CustomerDetail() {
   const handleDelete = async () => {
     if (!customerId || !user?.email) return;
     try {
-      await remove(customerId, user.email, false);
+      await remove(customerId, user.email, true); // Hard delete - permanently remove from database
       navigate('/customers');
     } catch (err) {
       // Error handled by mutation state

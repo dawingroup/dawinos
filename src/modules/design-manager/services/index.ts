@@ -29,3 +29,17 @@ export {
   // Stage operations
   transitionStage,
 } from './firestore';
+
+// Material Harvester operations
+export {
+  harvestMaterials,
+  mapMaterialToInventory,
+  unmapMaterial,
+  normalizeMaterialName,
+  extractThickness,
+  detectMaterialType,
+  getPaletteStats,
+  allMaterialsMapped,
+  type HarvestResult,
+  type MaterialUsage,
+} from './materialHarvester';

@@ -6,7 +6,7 @@
 
 import { useAuth } from '@/shared/hooks';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LogOut, User, Scissors, FolderOpen } from 'lucide-react';
+import { LogOut, User, Scissors, FolderOpen, Wrench, Layers } from 'lucide-react';
 
 export interface HeaderProps {
   title?: string;
@@ -17,7 +17,13 @@ export function Header({ title = 'Dawin Finishes' }: HeaderProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const currentModule = location.pathname.startsWith('/design') ? 'design' : 'cutlist';
+  const getCurrentModule = () => {
+    if (location.pathname.startsWith('/design')) return 'design';
+    if (location.pathname.startsWith('/assets')) return 'assets';
+    if (location.pathname.startsWith('/features')) return 'features';
+    return 'cutlist';
+  };
+  const currentModule = getCurrentModule();
 
   return (
     <header className="sticky top-0 z-50 h-14 border-b border-gray-200 bg-white/95 backdrop-blur px-4 sm:px-6 lg:px-8 flex items-center justify-between">
@@ -61,6 +67,28 @@ export function Header({ title = 'Dawin Finishes' }: HeaderProps) {
           <FolderOpen className="h-4 w-4" />
           <span className="hidden sm:inline">Design Manager</span>
           <span className="sm:hidden">Designs</span>
+        </button>
+        <button
+          onClick={() => navigate('/assets')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors min-h-[36px] sm:min-h-auto ${
+            currentModule === 'assets'
+              ? 'bg-[#1d1d1f] text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Wrench className="h-4 w-4" />
+          <span className="hidden sm:inline">Assets</span>
+        </button>
+        <button
+          onClick={() => navigate('/features')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors min-h-[36px] sm:min-h-auto ${
+            currentModule === 'features'
+              ? 'bg-[#1d1d1f] text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Layers className="h-4 w-4" />
+          <span className="hidden sm:inline">Features</span>
         </button>
       </div>
 

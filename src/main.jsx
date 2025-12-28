@@ -8,7 +8,8 @@ import { OffcutProvider } from './contexts/OffcutContext.jsx'
 import { WorkInstanceProvider } from './contexts/WorkInstanceContext.jsx'
 import DesignManagerModule from './modules/design-manager/DesignManagerModule'
 import CustomerHubModule from './modules/customer-hub/CustomerHubModule'
-import { Scissors, FolderOpen, User, LogOut, Users, Layers, Cog, Map, Store } from 'lucide-react'
+import { Scissors, FolderOpen, User, LogOut, Users, Layers, Cog, Map, Store, Wrench } from 'lucide-react'
+import { AssetRegistryPage } from './modules/assets'
 import './index.css'
 
 /**
@@ -25,7 +26,8 @@ function GlobalHeader() {
     location.pathname.startsWith('/design/roadmap') ? 'roadmap' :
     location.pathname.startsWith('/design/shopify') ? 'shopify' :
     location.pathname.startsWith('/design') ? 'design' : 
-    location.pathname.startsWith('/customers') ? 'customers' : 'cutlist'
+    location.pathname.startsWith('/customers') ? 'customers' :
+    location.pathname.startsWith('/assets') ? 'assets' : 'cutlist'
 
   return (
     <header className="sticky top-0 z-50 h-14 border-b border-gray-200 bg-white/95 backdrop-blur px-4 sm:px-6 lg:px-8 flex items-center justify-between">
@@ -130,6 +132,17 @@ function GlobalHeader() {
           <span className="hidden sm:inline">Shopify</span>
           <span className="sm:hidden">Shop</span>
         </button>
+        <button
+          onClick={() => navigate('/assets')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            currentModule === 'assets'
+              ? 'bg-[#1d1d1f] text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Wrench className="h-4 w-4" />
+          <span className="hidden sm:inline">Assets</span>
+        </button>
       </div>
 
       {/* Right: User Menu */}
@@ -206,6 +219,7 @@ function MainApp() {
                 <Routes>
                   <Route path="/design/*" element={<DesignManagerModule />} />
                   <Route path="/customers/*" element={<CustomerHubModule />} />
+                  <Route path="/assets" element={<AssetRegistryPage />} />
                   <Route path="/*" element={<App />} />
                 </Routes>
               </AppLayout>

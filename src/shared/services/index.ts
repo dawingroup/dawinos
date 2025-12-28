@@ -6,3 +6,6 @@
 export * from './firebase';
 export * from './katana';
 export * from './notion';
+export * from './optimization';
+export * from './ragService';
+export * from './projectService';

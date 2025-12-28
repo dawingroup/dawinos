@@ -4,7 +4,7 @@
  */
 
 import { Link } from 'react-router-dom';
-import { FileSpreadsheet, Palette, Package, Factory, ArrowRight } from 'lucide-react';
+import { FileSpreadsheet, Palette, Package, Factory, ArrowRight, Wrench, Layers } from 'lucide-react';
 import { ROUTES } from '../routes';
 
 const modules = [
@@ -22,6 +22,22 @@ const modules = [
     icon: Palette,
     href: ROUTES.DESIGN,
     color: 'bg-[#1d1d1f]',
+    available: true,
+  },
+  {
+    title: 'Asset Registry',
+    description: 'Manage workshop machines and tools with AI-powered data enrichment.',
+    icon: Wrench,
+    href: ROUTES.ASSETS,
+    color: 'bg-amber-500',
+    available: true,
+  },
+  {
+    title: 'Feature Library',
+    description: 'Manufacturing capabilities linked to assets. Scan jigs to create features.',
+    icon: Layers,
+    href: ROUTES.FEATURES,
+    color: 'bg-purple-600',
     available: true,
   },
   {

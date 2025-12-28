@@ -52,19 +52,12 @@ export {
   truncate,
 } from './formatting';
 
-// Error logging utilities
+// CSV Splitter utilities
 export {
-  errorLogger,
-  ErrorCategory,
-  ErrorSeverity,
-  ERROR_CODES,
-  logFirebaseError,
-  logKatanaError,
-  logAIError,
-  logValidationError,
-  logUIError,
-  logCritical,
-  withErrorLogging,
-  type ErrorLog,
-  type ErrorCode,
-} from './error-logger';
+  splitByCabinet,
+  parsePolyboardCSV,
+  getSplitSummary,
+  type PolyboardRow,
+  type CabinetGroup,
+  type SplitResult,
+} from './csvSplitter';

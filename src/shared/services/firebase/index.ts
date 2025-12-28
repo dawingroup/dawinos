@@ -45,3 +45,6 @@ export {
   deleteFile,
   listFiles
 } from './storage';
+
+// Functions
+export { functions } from './functions';

@@ -11,6 +11,8 @@ import { AppLayout } from '@/shared/components/layout';
 const DashboardPage = lazy(() => import('../pages/DashboardPage'));
 const CutlistProcessorPage = lazy(() => import('../pages/CutlistProcessorPage'));
 const DesignManagerPage = lazy(() => import('../pages/DesignManagerPage'));
+const AssetRegistryPage = lazy(() => import('../pages/AssetRegistryPage'));
+const FeatureLibraryPage = lazy(() => import('../pages/FeatureLibraryPage'));
 
 /**
  * Loading fallback component
@@ -26,7 +28,7 @@ function PageLoader() {
 /**
  * Wrap lazy component with Suspense
  */
-function withSuspense(Component: React.LazyExoticComponent<() => JSX.Element>): ReactNode {
+function withSuspense(Component: React.LazyExoticComponent<React.ComponentType<unknown>>): ReactNode {
   return (
     <Suspense fallback={<PageLoader />}>
       <Component />
@@ -42,6 +44,8 @@ export const ROUTES = {
   DASHBOARD: '/',
   CUTLIST: '/cutlist',
   DESIGN: '/design',
+  ASSETS: '/assets',
+  FEATURES: '/features',
   PROCUREMENT: '/procurement',
   PRODUCTION: '/production',
 } as const;
@@ -67,6 +71,14 @@ export const routeConfig: RouteObject[] = [
       {
         path: 'design/*',
         element: withSuspense(DesignManagerPage),
+      },
+      {
+        path: 'assets',
+        element: withSuspense(AssetRegistryPage),
+      },
+      {
+        path: 'features',
+        element: withSuspense(FeatureLibraryPage),
       },
     ],
   },

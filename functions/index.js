@@ -12,6 +12,16 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
+// AI Functions
+const { analyzeFeatureFromAsset } = require('./src/ai/analyzeFeatureFromAsset');
+const { generateStrategyReport } = require('./src/ai/generateStrategyReport');
+exports.analyzeFeatureFromAsset = analyzeFeatureFromAsset;
+exports.generateStrategyReport = generateStrategyReport;
+
+// Firestore Triggers
+const { onAssetStatusChange } = require('./src/triggers/syncAssetStatus');
+exports.onAssetStatusChange = onAssetStatusChange;
+
 // API Keys configuration
 const NOTION_API_KEY = defineString('NOTION_API_KEY');
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
@@ -126,6 +136,217 @@ SPACE PLANNING STANDARDS:
 - Fast Casual: 10-12 sqft per seat
 - Hotel Lobby: 25-35 sqft per seat`,
 };
+
+// Enrich Asset Data with Gemini AI (Auto-fill specs)
+async function enrichAssetData(req, res) {
+  const { brand, model } = req.body;
+
+  if (!brand || !model) {
+    return res.status(400).json({ error: 'Both brand and model are required' });
+  }
+
+  console.log(`Enriching asset data for: ${brand} ${model}`);
+
+  try {
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY.value());
+    const model_ai = genAI.getGenerativeModel({
+      model: 'gemini-2.0-flash-exp',
+      generationConfig: {
+        temperature: 0.2,
+        topP: 0.8,
+        topK: 40,
+        maxOutputTokens: 2048,
+      },
+    });
+
+    const prompt = `You are a Workshop Librarian specializing in woodworking and manufacturing equipment.
+
+Search for the official technical specifications of the ${brand} ${model}.
+
+Extract and return the following information in JSON format:
+
+1. **specs**: Technical specifications as key-value pairs. Include:
+   - Power (watts or HP)
+   - Dimensions (L x W x H in mm)
+   - Weight (kg)
+   - RPM or speed ratings
+   - Voltage requirements
+   - Any other relevant technical specs
+
+2. **manualUrl**: The official manual download URL or product documentation page. If not found, return null.
+
+3. **productPageUrl**: The official manufacturer product page URL. If not found, return null.
+
+4. **maintenanceTasks**: Array of 5 recommended maintenance tasks specific to this tool.
+
+5. **maintenanceIntervalHours**: Recommended service interval in operating hours (number).
+
+Return ONLY valid JSON matching this exact schema:
+{
+  "specs": { "Power": "2200W", "RPM": "24000", ... },
+  "manualUrl": "https://..." or null,
+  "productPageUrl": "https://..." or null,
+  "maintenanceTasks": ["task1", "task2", "task3", "task4", "task5"],
+  "maintenanceIntervalHours": 200
+}
+
+If you cannot find specific information, use reasonable estimates based on similar tools. Mark estimated values with "(est.)" suffix.`;
+
+    const result = await model_ai.generateContent(prompt);
+    const response = result.response;
+    const text = response.text();
+
+    let jsonStr = text;
+    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1].trim();
+    }
+
+    let enrichedData;
+    try {
+      enrichedData = JSON.parse(jsonStr);
+    } catch (parseError) {
+      console.error('Failed to parse Gemini response:', parseError);
+      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.' });
+    }
+
+    const normalizedData = {
+      specs: enrichedData.specs || {},
+      manualUrl: enrichedData.manualUrl || null,
+      productPageUrl: enrichedData.productPageUrl || null,
+      maintenanceTasks: Array.isArray(enrichedData.maintenanceTasks) 
+        ? enrichedData.maintenanceTasks.slice(0, 5)
+        : ['Inspect power cord', 'Clean air vents', 'Check fasteners', 'Lubricate moving parts', 'Test safety switches'],
+      maintenanceIntervalHours: typeof enrichedData.maintenanceIntervalHours === 'number'
+        ? enrichedData.maintenanceIntervalHours
+        : 200,
+      enrichedAt: new Date().toISOString(),
+      enrichedBy: 'gemini-2.0-flash',
+      searchQuery: `${brand} ${model}`,
+    };
+
+    res.json({ data: normalizedData });
+
+  } catch (error) {
+    console.error('Error enriching asset data:', error);
+    res.status(500).json({ error: `Failed to enrich asset data: ${error.message}` });
+  }
+}
+
+// Analyze Asset Capabilities with Gemini AI
+async function analyzeAssetCapabilities(req, res) {
+  const { asset } = req.body;
+
+  if (!asset || !asset.brand || !asset.model) {
+    return res.status(400).json({ error: 'Asset with brand and model is required' });
+  }
+
+  console.log(`Analyzing capabilities for: ${asset.brand} ${asset.model}`);
+
+  try {
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY.value());
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.0-flash-exp',
+      generationConfig: {
+        temperature: 0.4,
+        topP: 0.8,
+        topK: 40,
+        maxOutputTokens: 4096,
+      },
+    });
+
+    const prompt = `You are a Manufacturing Capabilities Analyst for a custom millwork, furniture, and upholstery production shop.
+
+Analyze this workshop asset and identify ALL manufacturing features/capabilities it enables:
+
+**Asset Information:**
+- Brand: ${asset.brand}
+- Model: ${asset.model}
+- Category: ${asset.category || 'Unknown'}
+- Nickname: ${asset.nickname || 'None'}
+- Specifications: ${JSON.stringify(asset.specs || {})}
+- Location/Zone: ${asset.location?.zone || 'Workshop'}
+
+**Your Task:**
+Identify 3-8 specific manufacturing FEATURES this tool/machine can produce.
+
+For each feature, provide:
+1. **name**: Specific feature name (e.g., "Pocket Hole Joinery", "Dado Joint", "Edge Profile - Ogee")
+2. **description**: What this feature produces and quality considerations
+3. **category**: Choose ONE: JOINERY | EDGE_TREATMENT | DRILLING | SHAPING | ASSEMBLY | FINISHING | CUTTING | SPECIALTY
+4. **tags**: 3-5 searchable tags
+5. **estimatedMinutes**: Typical time per application
+6. **complexity**: simple | moderate | complex
+
+Return ONLY valid JSON array:
+[
+  {
+    "name": "Feature Name",
+    "description": "Detailed description...",
+    "category": "CATEGORY",
+    "tags": ["tag1", "tag2"],
+    "estimatedMinutes": 15,
+    "complexity": "moderate"
+  }
+]
+
+Be specific to ${asset.brand} ${asset.model}'s actual capabilities.`;
+
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const text = response.text();
+
+    let jsonStr = text;
+    const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1].trim();
+    }
+
+    let features;
+    try {
+      features = JSON.parse(jsonStr);
+    } catch (parseError) {
+      console.error('Failed to parse Gemini response:', parseError);
+      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.' });
+    }
+
+    if (!Array.isArray(features)) {
+      features = [features];
+    }
+
+    const validCategories = ['JOINERY', 'EDGE_TREATMENT', 'DRILLING', 'SHAPING', 'ASSEMBLY', 'FINISHING', 'CUTTING', 'SPECIALTY'];
+
+    const normalizedFeatures = features.map((f, index) => ({
+      name: f.name || `Feature ${index + 1}`,
+      description: f.description || '',
+      category: validCategories.includes(f.category) ? f.category : 'SPECIALTY',
+      tags: Array.isArray(f.tags) ? f.tags : [],
+      estimatedMinutes: typeof f.estimatedMinutes === 'number' ? f.estimatedMinutes : 15,
+      complexity: ['simple', 'moderate', 'complex'].includes(f.complexity) ? f.complexity : 'moderate',
+      sourceAssetId: asset.id,
+      sourceAssetName: asset.nickname || `${asset.brand} ${asset.model}`,
+    }));
+
+    console.log(`Found ${normalizedFeatures.length} capabilities for ${asset.brand} ${asset.model}`);
+
+    res.json({
+      data: {
+        asset: {
+          id: asset.id,
+          name: asset.nickname || `${asset.brand} ${asset.model}`,
+          brand: asset.brand,
+          model: asset.model,
+        },
+        suggestedFeatures: normalizedFeatures,
+        analyzedAt: new Date().toISOString(),
+      }
+    });
+
+  } catch (error) {
+    console.error('Error analyzing asset capabilities:', error);
+    res.status(500).json({ error: `Failed to analyze asset: ${error.message}` });
+  }
+}
 
 // Rate limiting helper using Firestore
 async function checkRateLimit(userId, limitPerMinute = 10) {
@@ -269,6 +490,20 @@ exports.api = onRequest({
       case '/ai/feature-context':
         await getFeatureContextForAI(req, res);
         break;
+      case '/ai/analyze-asset-capabilities':
+        if (req.method === 'POST') {
+          await analyzeAssetCapabilities(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/ai/enrich-asset-data':
+        if (req.method === 'POST') {
+          await enrichAssetData(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
       case '/shopify/connect':
         if (req.method === 'POST') {
           await connectShopify(req, res);
@@ -288,6 +523,20 @@ exports.api = onRequest({
         break;
       case '/shopify/status':
         await getShopifyStatus(req, res);
+        break;
+      case '/katana/validate-bom':
+        if (req.method === 'POST') {
+          await validateKatanaBOM(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/katana/create-bom':
+        if (req.method === 'POST') {
+          await createKatanaBOM(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
         break;
       default:
         res.json({ status: 'ok', message: 'API proxy is running', path, availableEndpoints: ['/customers', '/projects', '/log-activity', '/ai/analyze-brief', '/ai/dfm-check', '/ai/design-chat', '/ai/strategy-research', '/ai/analyze-image', '/ai/feature-cache', '/ai/feature-context', '/katana/sync-product', '/katana/get-materials', '/notion/sync-milestone'] });
@@ -1124,6 +1373,245 @@ async function syncCustomerToKatana(req, res) {
 
   } catch (error) {
     console.error('Error syncing customer to Katana:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// ============================================
+// Katana BOM Export Functions
+// ============================================
+
+/**
+ * Validate BOM readiness for Katana export
+ */
+async function validateKatanaBOM(req, res) {
+  try {
+    const { projectId } = req.body;
+    
+    if (!projectId) {
+      return res.status(400).json({ error: 'projectId is required' });
+    }
+
+    console.log('Validating BOM readiness for project:', projectId);
+
+    const projectDoc = await db.collection('designProjects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const project = { id: projectDoc.id, ...projectDoc.data() };
+    const issues = [];
+
+    // Check if optimization state exists
+    if (!project.optimizationState) {
+      issues.push({
+        type: 'NO_PRODUCTION_RESULTS',
+        message: 'No optimization has been run for this project'
+      });
+      return res.json({ ready: false, issues });
+    }
+
+    // Check production results exist
+    const production = project.optimizationState?.production;
+    if (!production) {
+      issues.push({
+        type: 'NO_PRODUCTION_RESULTS',
+        message: 'Production optimization has not been run'
+      });
+    } else {
+      // Check if production is invalidated
+      if (production.invalidatedAt) {
+        const reasons = production.invalidationReasons?.join(', ') || 'Unknown reason';
+        issues.push({
+          type: 'OPTIMIZATION_OUTDATED',
+          message: `Production optimization is outdated: ${reasons}`
+        });
+      }
+
+      // Check if nesting has results
+      if (!production.nestingSheets || production.nestingSheets.length === 0) {
+        issues.push({
+          type: 'EMPTY_NESTING',
+          message: 'No nesting sheets generated - run production optimization first'
+        });
+      }
+    }
+
+    // Check material palette exists
+    const palette = project.materialPalette;
+    if (!palette || !palette.entries || palette.entries.length === 0) {
+      issues.push({
+        type: 'NO_MATERIAL_PALETTE',
+        message: 'No material palette found - harvest materials from design items first'
+      });
+      return res.json({ ready: false, issues });
+    }
+
+    // Check all materials are mapped to inventory
+    const unmappedMaterials = palette.entries.filter(m => !m.inventoryId);
+    for (const material of unmappedMaterials) {
+      issues.push({
+        type: 'UNMAPPED_MATERIAL',
+        materialName: material.designName,
+        message: `Material "${material.designName}" not mapped to inventory`
+      });
+    }
+
+    // Build summary
+    const summary = {
+      totalMaterials: palette.entries.length,
+      mappedMaterials: palette.entries.length - unmappedMaterials.length,
+      totalSheets: production?.nestingSheets?.length || 0,
+      totalParts: production?.nestingSheets?.reduce(
+        (acc, sheet) => acc + (sheet.placements?.length || 0), 0
+      ) || 0,
+    };
+
+    res.json({
+      ready: issues.length === 0,
+      issues,
+      summary
+    });
+
+  } catch (error) {
+    console.error('Error validating Katana BOM:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Create Katana manufacturing order from cutlist optimization
+ */
+async function createKatanaBOM(req, res) {
+  try {
+    const { projectId } = req.body;
+    
+    if (!projectId) {
+      console.log('createKatanaBOM: Missing projectId');
+      return res.status(400).json({ error: 'projectId is required' });
+    }
+
+    console.log('Creating Katana BOM for project:', projectId);
+
+    // Get project
+    const projectDoc = await db.collection('designProjects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      console.log('createKatanaBOM: Project not found:', projectId);
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const project = { id: projectDoc.id, ...projectDoc.data() };
+    console.log('createKatanaBOM: Project loaded:', project.code, project.name);
+    console.log('createKatanaBOM: optimizationState exists:', !!project.optimizationState);
+    
+    const production = project.optimizationState?.production;
+    console.log('createKatanaBOM: production exists:', !!production);
+
+    // Validate
+    if (!production) {
+      console.log('createKatanaBOM: No production optimization');
+      return res.status(400).json({ error: 'Production optimization has not been run' });
+    }
+
+    if (production.katanaBOMId) {
+      console.log('createKatanaBOM: BOM already exported:', production.katanaBOMId);
+      return res.status(400).json({ 
+        error: `BOM already exported to Katana (Order ID: ${production.katanaBOMId})` 
+      });
+    }
+
+    console.log('createKatanaBOM: nestingSheets count:', production.nestingSheets?.length || 0);
+    if (!production.nestingSheets || production.nestingSheets.length === 0) {
+      console.log('createKatanaBOM: No nesting sheets');
+      return res.status(400).json({ error: 'No nesting sheets to export' });
+    }
+
+    const palette = project.materialPalette;
+    console.log('createKatanaBOM: materialPalette exists:', !!palette, 'entries:', palette?.entries?.length || 0);
+    if (!palette || !palette.entries) {
+      console.log('createKatanaBOM: Material palette not found');
+      return res.status(400).json({ error: 'Material palette not found' });
+    }
+
+    // Build BOM items from nesting results
+    const sheetsByMaterial = new Map();
+    for (const sheet of production.nestingSheets) {
+      const current = sheetsByMaterial.get(sheet.materialId) || 0;
+      sheetsByMaterial.set(sheet.materialId, current + 1);
+    }
+
+    const bomItems = [];
+    for (const [materialId, quantity] of sheetsByMaterial) {
+      const paletteMaterial = palette.entries.find(m => m.id === materialId);
+      if (!paletteMaterial) continue;
+
+      const sheetInfo = production.nestingSheets.find(s => s.materialId === materialId);
+      const sheetSize = sheetInfo?.sheetSize;
+
+      bomItems.push({
+        variant_id: paletteMaterial.inventoryId || undefined,
+        sku: paletteMaterial.inventorySku || undefined,
+        name: paletteMaterial.inventoryName || paletteMaterial.designName,
+        quantity,
+        unit: 'sheet',
+        notes: sheetSize 
+          ? `${sheetSize.length}x${sheetSize.width}mm, ${paletteMaterial.thickness}mm thick`
+          : `${paletteMaterial.thickness}mm thick`
+      });
+    }
+
+    if (bomItems.length === 0) {
+      return res.status(400).json({ error: 'No BOM items could be generated' });
+    }
+
+    console.log(`Built ${bomItems.length} BOM items for export`);
+
+    // Create Katana manufacturing order
+    const katanaOrder = {
+      reference: project.code || `PRJ-${projectId.substring(0, 8)}`,
+      customer_name: project.customerName,
+      notes: `Generated from Dawin Cutlist Processor\nProject: ${project.name}\nTotal sheets: ${production.nestingSheets.length}\nYield: ${production.optimizedYield}%`,
+      bom_items: bomItems,
+    };
+
+    // Try Katana API
+    const katanaResponse = await katanaRequest('/manufacturing-orders', 'POST', katanaOrder);
+    
+    let orderId, orderNumber, isSimulated = false;
+    
+    if (katanaResponse.simulated || katanaResponse.error) {
+      // Simulation mode
+      orderId = `SIM-${Date.now()}`;
+      orderNumber = `MO-${Math.floor(Math.random() * 10000)}`;
+      isSimulated = true;
+      console.log('Using simulated Katana BOM:', orderId);
+    } else {
+      orderId = katanaResponse.id;
+      orderNumber = katanaResponse.order_number;
+      console.log('Real Katana order created:', orderId);
+    }
+
+    // Save reference to project
+    await db.collection('designProjects').doc(projectId).update({
+      'optimizationState.production.katanaBOMId': orderId,
+      'optimizationState.production.katanaBOMExportedAt': admin.firestore.FieldValue.serverTimestamp(),
+      'optimizationState.production.katanaOrderNumber': orderNumber,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({
+      success: true,
+      orderId,
+      orderNumber,
+      bomItemCount: bomItems.length,
+      simulated: isSimulated,
+      message: isSimulated 
+        ? 'BOM created in simulation mode (Katana API key not configured)'
+        : 'BOM exported to Katana successfully'
+    });
+
+  } catch (error) {
+    console.error('Error creating Katana BOM:', error);
     res.status(500).json({ error: error.message });
   }
 }

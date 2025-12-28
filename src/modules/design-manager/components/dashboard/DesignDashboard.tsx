@@ -5,11 +5,11 @@
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, FolderOpen, AlertCircle, CheckCircle, Clock, TrendingUp } from 'lucide-react';
+import { Plus, FolderOpen, AlertCircle, CheckCircle, Clock, TrendingUp, Trash2, MoreVertical } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useAuth } from '@/shared/hooks';
 import type { DesignProject, DesignStage } from '../../types';
-import { subscribeToProjects } from '../../services/firestore';
+import { subscribeToProjects, deleteProject } from '../../services/firestore';
 import { STAGE_LABELS, STAGE_ICONS } from '../../utils/formatting';
 import { STAGE_ORDER } from '../../utils/stage-gate';
 import { NewProjectDialog } from '../project/NewProjectDialog';
@@ -187,6 +187,10 @@ interface ProjectRowProps {
 }
 
 function ProjectRow({ project }: ProjectRowProps) {
+  const [showMenu, setShowMenu] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   const statusColors = {
     active: 'bg-green-100 text-green-700',
     'on-hold': 'bg-amber-100 text-amber-700',
@@ -194,31 +198,112 @@ function ProjectRow({ project }: ProjectRowProps) {
     cancelled: 'bg-gray-100 text-gray-700',
   };
 
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDeleting(true);
+    try {
+      await deleteProject(project.id);
+      setShowDeleteConfirm(false);
+    } catch (err) {
+      console.error('Delete error:', err);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
-    <Link
-      to={`project/${project.id}`}
-      className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
-    >
-      <div className="flex items-center gap-4">
-        <div className="w-10 h-10 bg-[#1d1d1f] rounded-lg flex items-center justify-center">
-          <FolderOpen className="w-5 h-5 text-white" />
+    <div className="relative">
+      <Link
+        to={`project/${project.id}`}
+        className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-[#1d1d1f] rounded-lg flex items-center justify-center">
+            <FolderOpen className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="font-medium text-gray-900">{project.name}</h3>
+            <p className="text-sm text-gray-500">{project.code}</p>
+          </div>
         </div>
-        <div>
-          <h3 className="font-medium text-gray-900">{project.name}</h3>
-          <p className="text-sm text-gray-500">{project.code}</p>
+        <div className="flex items-center gap-4">
+          {project.customerName && (
+            <span className="text-sm text-gray-500">{project.customerName}</span>
+          )}
+          <span className={cn(
+            'text-xs px-2 py-1 rounded-full font-medium',
+            statusColors[project.status]
+          )}>
+            {project.status}
+          </span>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowMenu(!showMenu);
+            }}
+            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+          >
+            <MoreVertical className="w-4 h-4" />
+          </button>
         </div>
-      </div>
-      <div className="flex items-center gap-4">
-        {project.customerName && (
-          <span className="text-sm text-gray-500">{project.customerName}</span>
-        )}
-        <span className={cn(
-          'text-xs px-2 py-1 rounded-full font-medium',
-          statusColors[project.status]
-        )}>
-          {project.status}
-        </span>
-      </div>
-    </Link>
+      </Link>
+
+      {/* Dropdown Menu */}
+      {showMenu && (
+        <div 
+          className="absolute right-4 top-12 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1 min-w-[120px]"
+          onMouseLeave={() => setShowMenu(false)}
+        >
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowMenu(false);
+              setShowDeleteConfirm(true);
+            }}
+            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete
+          </button>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Project?</h3>
+            <p className="text-gray-600 mb-4">
+              This will permanently delete <strong>{project.name}</strong> and all its design items. This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDeleteConfirm(false);
+                }}
+                className="px-4 py-2 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50"
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
