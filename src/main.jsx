@@ -1,14 +1,13 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
-import App from './App.jsx'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 import { ConfigProvider } from './contexts/ConfigContext.jsx'
 import { OffcutProvider } from './contexts/OffcutContext.jsx'
 import { WorkInstanceProvider } from './contexts/WorkInstanceContext.jsx'
 import DesignManagerModule from './modules/design-manager/DesignManagerModule'
 import CustomerHubModule from './modules/customer-hub/CustomerHubModule'
-import { Scissors, FolderOpen, User, LogOut, Users, Layers, Cog, Map, Store, Wrench } from 'lucide-react'
+import { FolderOpen, User, LogOut, Users, Layers, Cog, Map, Store, Wrench } from 'lucide-react'
 import { AssetRegistryPage } from './modules/assets'
 import './index.css'
 
@@ -27,18 +26,17 @@ function GlobalHeader() {
     location.pathname.startsWith('/design/shopify') ? 'shopify' :
     location.pathname.startsWith('/design') ? 'design' : 
     location.pathname.startsWith('/customers') ? 'customers' :
-    location.pathname.startsWith('/assets') ? 'assets' : 'cutlist'
+    location.pathname.startsWith('/assets') ? 'assets' : 'design'
 
   return (
     <header className="sticky top-0 z-50 h-14 border-b border-gray-200 bg-white/95 backdrop-blur px-4 sm:px-6 lg:px-8 flex items-center justify-between">
       {/* Left: Logo and Brand */}
       <div className="flex items-center gap-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#872E5C] to-[#E18425]">
-          {currentModule === 'cutlist' ? (
-            <Scissors className="h-5 w-5 text-white" />
-          ) : (
-            <FolderOpen className="h-5 w-5 text-white" />
-          )}
+        <div 
+          className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#872E5C] to-[#E18425] cursor-pointer"
+          onClick={() => navigate('/design')}
+        >
+          <FolderOpen className="h-5 w-5 text-white" />
         </div>
         <div className="hidden sm:block">
           <h1 className="text-sm font-semibold text-gray-900">Dawin Finishes</h1>
@@ -48,18 +46,6 @@ function GlobalHeader() {
 
       {/* Center: Module Switcher */}
       <div className="flex items-center gap-1 border rounded-lg p-1 bg-gray-50">
-        <button
-          onClick={() => navigate('/')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            currentModule === 'cutlist'
-              ? 'bg-[#1d1d1f] text-white'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <Scissors className="h-4 w-4" />
-          <span className="hidden sm:inline">Cutlist Processor</span>
-          <span className="sm:hidden">Cutlist</span>
-        </button>
         <button
           onClick={() => navigate('/design')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
@@ -220,7 +206,10 @@ function MainApp() {
                   <Route path="/design/*" element={<DesignManagerModule />} />
                   <Route path="/customers/*" element={<CustomerHubModule />} />
                   <Route path="/assets" element={<AssetRegistryPage />} />
-                  <Route path="/*" element={<App />} />
+                  {/* Redirect root and legacy cutlist routes to Design Manager */}
+                  <Route path="/" element={<Navigate to="/design" replace />} />
+                  <Route path="/cutlist" element={<Navigate to="/design" replace />} />
+                  <Route path="/*" element={<Navigate to="/design" replace />} />
                 </Routes>
               </AppLayout>
             </WorkInstanceProvider>

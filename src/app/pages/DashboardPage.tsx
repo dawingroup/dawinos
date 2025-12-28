@@ -4,24 +4,16 @@
  */
 
 import { Link } from 'react-router-dom';
-import { FileSpreadsheet, Palette, Package, Factory, ArrowRight, Wrench, Layers } from 'lucide-react';
+import { Palette, Package, Factory, ArrowRight, Wrench, Layers } from 'lucide-react';
 import { ROUTES } from '../routes';
 
 const modules = [
   {
-    title: 'Cutlist Processor',
-    description: 'Upload CSV, optimize cutting patterns, generate outputs for PG Bison and Katana.',
-    icon: FileSpreadsheet,
-    href: ROUTES.CUTLIST,
-    color: 'bg-[#872E5C]',
-    available: true,
-  },
-  {
     title: 'Design Manager',
-    description: 'Track design workflow with traffic light status, stage gates, and approvals.',
+    description: 'Manage projects, design items, material palettes, and production optimization with traffic light workflow.',
     icon: Palette,
-    href: ROUTES.DESIGN,
-    color: 'bg-[#1d1d1f]',
+    href: '/design',
+    color: 'bg-[#872E5C]',
     available: true,
   },
   {

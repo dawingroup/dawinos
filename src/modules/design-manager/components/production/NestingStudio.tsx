@@ -383,6 +383,8 @@ export const NestingStudio: React.FC<NestingStudioProps> = ({
   console.log('[NestingStudio] mode:', mode, 'modeKey:', modeKey);
   console.log('[NestingStudio] optimizationState:', optimizationState);
   console.log('[NestingStudio] hasResults:', hasResults, 'isInvalidated:', isInvalidated);
+  console.log('[NestingStudio] project.optimizationState:', project?.optimizationState);
+  console.log('[NestingStudio] isOptimizing:', isOptimizing);
 
   // Run optimization
   const handleRunOptimization = async () => {
@@ -534,7 +536,9 @@ export const NestingStudio: React.FC<NestingStudioProps> = ({
             ? 'bg-amber-500 text-white hover:bg-amber-600'
             : buttonState.variant === 'success'
             ? 'bg-green-600 text-white hover:bg-green-700'
-            : 'bg-gray-200 text-gray-700'
+            : buttonState.variant === 'secondary'
+            ? 'bg-blue-400 text-white'
+            : 'bg-blue-600 text-white hover:bg-blue-700'
         } disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         <buttonState.icon className={`w-5 h-5 ${buttonState.spin ? 'animate-spin' : ''}`} />

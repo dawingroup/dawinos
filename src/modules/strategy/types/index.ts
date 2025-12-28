@@ -107,4 +107,25 @@ export interface GenerateStrategyInput {
   spaceDetails?: string;
   researchFindings?: ResearchFindingInput[];
   researchExcerpts?: string[];
+  // Project Scoping AI output
+  scopingContext?: {
+    deliverables?: Array<{
+      name: string;
+      category: string;
+      quantity: number;
+      roomType?: string;
+    }>;
+    summary?: {
+      totalDeliverables: number;
+      totalUnits: number;
+      byCategory: Record<string, number>;
+      estimatedTotalHours: number;
+    };
+    entities?: {
+      projectType?: string;
+      location?: string;
+      roomGroups?: Array<{ type: string; quantity: number }>;
+    };
+    trendInsights?: string[];
+  };
 }

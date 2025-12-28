@@ -13,6 +13,8 @@ const CutlistProcessorPage = lazy(() => import('../pages/CutlistProcessorPage'))
 const DesignManagerPage = lazy(() => import('../pages/DesignManagerPage'));
 const AssetRegistryPage = lazy(() => import('../pages/AssetRegistryPage'));
 const FeatureLibraryPage = lazy(() => import('../pages/FeatureLibraryPage'));
+// AI tools are now embedded in Strategy Canvas and Design Item Detail pages
+// const AIToolsPage = lazy(() => import('@/modules/design-manager/pages/AIToolsPage'));
 
 /**
  * Loading fallback component
@@ -46,6 +48,7 @@ export const ROUTES = {
   DESIGN: '/design',
   ASSETS: '/assets',
   FEATURES: '/features',
+  AI_TOOLS: '/ai-tools',
   PROCUREMENT: '/procurement',
   PRODUCTION: '/production',
 } as const;
@@ -80,6 +83,11 @@ export const routeConfig: RouteObject[] = [
         path: 'features',
         element: withSuspense(FeatureLibraryPage),
       },
+      // AI tools embedded in existing pages - see Strategy Canvas and Design Item Detail
+      // {
+      //   path: 'ai-tools',
+      //   element: withSuspense(AIToolsPage),
+      // },
     ],
   },
 ];

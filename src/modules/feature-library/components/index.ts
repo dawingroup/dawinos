@@ -3,4 +3,7 @@
  * Barrel export for all feature library components
  */
 
-export { FeatureScanner } from './FeatureScanner';
+export * from './FeatureScanner';
+export * from './FeatureCard';
+export * from './FeatureDetail';
+export * from './FeatureEditor';

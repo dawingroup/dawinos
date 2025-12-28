@@ -3,4 +3,5 @@
  * Barrel export for feature library pages
  */
 
-export { FeatureLibrary } from './FeatureLibrary';
+export * from './FeatureLibrary';
+export * from './FeatureLibraryPage';

@@ -15,12 +15,46 @@ const db = admin.firestore();
 // AI Functions
 const { analyzeFeatureFromAsset } = require('./src/ai/analyzeFeatureFromAsset');
 const { generateStrategyReport } = require('./src/ai/generateStrategyReport');
+const { designChat } = require('./src/ai/designChat');
+const { strategyResearch } = require('./src/ai/strategyResearch');
+const { projectScoping } = require('./src/ai/projectScoping');
+const { designItemEnhancement } = require('./src/ai/designItemEnhancement');
+const { imageAnalysis } = require('./src/ai/imageAnalysis');
 exports.analyzeFeatureFromAsset = analyzeFeatureFromAsset;
 exports.generateStrategyReport = generateStrategyReport;
+exports.designChat = designChat;
+exports.strategyResearch = strategyResearch;
+exports.projectScoping = projectScoping;
+exports.designItemEnhancement = designItemEnhancement;
+exports.imageAnalysis = imageAnalysis;
+
+// AI Utilities (new modular structure)
+const { 
+  getModel, 
+  parseJsonResponse, 
+  generateWithRetry,
+  MODEL_CONFIGS,
+} = require('./src/utils/geminiClient');
+const { 
+  checkRateLimit: checkRateLimitV2,
+  enforceRateLimit,
+  RATE_LIMITS,
+} = require('./src/utils/rateLimiter');
+const { 
+  validateChatInput,
+  validateAssetInput,
+  validateCutlistInput,
+  sanitizePromptText,
+} = require('./src/utils/validators');
 
 // Firestore Triggers
 const { onAssetStatusChange } = require('./src/triggers/syncAssetStatus');
 exports.onAssetStatusChange = onAssetStatusChange;
+
+// Feature Cache Invalidation Triggers
+const { onFeatureWritten, onFeatureLibraryWritten } = require('./src/triggers/invalidateFeatureCache');
+exports.onFeatureWritten = onFeatureWritten;
+exports.onFeatureLibraryWritten = onFeatureLibraryWritten;
 
 // API Keys configuration
 const NOTION_API_KEY = defineString('NOTION_API_KEY');
@@ -101,6 +135,7 @@ CONTEXT:
 - You have access to Dawin's Feature Library containing manufacturing capabilities
 - You understand East African wood species, finishes, and hardware suppliers
 - You follow AWI (Architectural Woodwork Institute) quality standards
+- You have access to the current design item's parameters, overview, and context
 
 CAPABILITIES:
 1. Analyze reference images to extract design elements, materials, and proportions
@@ -108,13 +143,28 @@ CAPABILITIES:
 3. Suggest materials appropriate for the project budget tier
 4. Identify manufacturing considerations and potential challenges
 5. Help document design decisions with clear rationale
+6. ENRICH DESIGN ITEMS: Review current parameters and suggest improvements or missing details
+7. Reference existing design item data when answering questions
+
+DESIGN ITEM ENRICHMENT:
+When a design item context is provided, you should:
+- Reference the current dimensions, materials, hardware, and finish specifications
+- Identify missing or incomplete parameters that should be filled in
+- Suggest specific values for empty fields based on the design context
+- Recommend materials, hardware, and finishes that complement each other
+- Flag any inconsistencies between specifications (e.g., hardware incompatible with material thickness)
+- Provide enrichment suggestions in this format:
+
+SUGGESTED ENRICHMENTS:
+- [field]: [suggested value] - [reason]
 
 When analyzing images, structure your response as:
 - Style Elements: [list identified design styles]
 - Materials Detected: [list visible or inferred materials]
 - Color Palette: [hex codes or descriptions]
 - Suggested Features: [Feature Library recommendations]
-- Manufacturing Notes: [any production considerations]`,
+- Manufacturing Notes: [any production considerations]
+- Parameter Suggestions: [recommendations for design item fields]`,
 
   strategyResearch: `You are a strategic research assistant for Dawin Group, helping project managers and designers develop comprehensive project strategies for custom furniture and millwork projects.
 
@@ -464,6 +514,13 @@ exports.api = onRequest({
           res.status(405).json({ error: 'Method not allowed' });
         }
         break;
+      case '/ai/design-chat-stream':
+        if (req.method === 'POST') {
+          await handleDesignChatStream(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
       case '/ai/strategy-research':
         if (req.method === 'POST') {
           await handleStrategyResearch(req, res);
@@ -500,6 +557,41 @@ exports.api = onRequest({
       case '/ai/enrich-asset-data':
         if (req.method === 'POST') {
           await enrichAssetData(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/ai/analyze-cutlist':
+        if (req.method === 'POST') {
+          await analyzeCutlistWithAI(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/ai/customer-intelligence':
+        if (req.method === 'POST') {
+          await getCustomerIntelligence(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/ai/project-scoping':
+        if (req.method === 'POST') {
+          await handleProjectScoping(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/ai/design-item-enhancement':
+        if (req.method === 'POST') {
+          await handleDesignItemEnhancement(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/ai/image-analysis':
+        if (req.method === 'POST') {
+          await handleImageAnalysisEndpoint(req, res);
         } else {
           res.status(405).json({ error: 'Method not allowed' });
         }
@@ -2301,8 +2393,17 @@ async function handleDesignChat(req, res) {
 
     const model = getGeminiFlash();
 
-    // Get cached Feature Library context
+    // Gap-7: Get cached Feature Library context
     const featureContext = await getCachedFeatureContext();
+    
+    // Gap-7: Get project-specific RAG context
+    const projectContext = projectId ? await getProjectContextForAI(projectId) : null;
+
+    // NEW: Get design item context for enrichment
+    let designItemContext = null;
+    if (designItemId && projectId) {
+      designItemContext = await getDesignItemContextForAI(projectId, designItemId);
+    }
 
     // Build conversation parts
     const parts = [];
@@ -2313,6 +2414,16 @@ async function handleDesignChat(req, res) {
     // Add Feature Library context if available
     if (featureContext) {
       parts.push({ text: `\n\nDAWIN FEATURE LIBRARY (use for recommendations):\n${featureContext}` });
+    }
+    
+    // Gap-7: Add project-specific RAG context
+    if (projectContext) {
+      parts.push({ text: `\n\nPROJECT CONTEXT (use for personalized responses):\n${JSON.stringify(projectContext, null, 2)}` });
+    }
+
+    // NEW: Add design item context for enrichment suggestions
+    if (designItemContext) {
+      parts.push({ text: `\n\nCURRENT DESIGN ITEM (reference this and suggest enrichments where needed):\n${JSON.stringify(designItemContext, null, 2)}` });
     }
 
     // Add conversation history (last 10 messages)
@@ -2408,6 +2519,173 @@ async function handleDesignChat(req, res) {
       error: 'AI processing failed',
       details: error.message,
     });
+  }
+}
+
+/**
+ * Handle Design Chat with Streaming - SSE for real-time responses
+ * Gap-4: Streaming implementation for better UX
+ */
+async function handleDesignChatStream(req, res) {
+  try {
+    const { 
+      designItemId, 
+      projectId,
+      message, 
+      imageData, 
+      conversationHistory = [],
+      userId 
+    } = req.body;
+
+    if (!message && !imageData) {
+      return res.status(400).json({ error: 'Message or imageData is required' });
+    }
+
+    // Rate limiting
+    if (userId) {
+      const rateCheck = await checkRateLimit(userId, 20);
+      if (!rateCheck.allowed) {
+        return res.status(429).json({ 
+          error: 'Rate limit exceeded', 
+          retryAfter: rateCheck.retryAfter,
+        });
+      }
+    }
+
+    console.log('Design Chat Stream request:', { designItemId, projectId, hasImage: !!imageData });
+
+    // Set up SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    const model = getGeminiFlash();
+    const featureContext = await getCachedFeatureContext();
+    
+    // Gap-7: Get project-specific RAG context
+    const projectContext = projectId ? await getProjectContextForAI(projectId) : null;
+
+    // Get design item context for enrichment
+    let designItemContext = null;
+    if (designItemId && projectId) {
+      designItemContext = await getDesignItemContextForAI(projectId, designItemId);
+    }
+
+    // Build conversation parts
+    const parts = [];
+    parts.push({ text: SYSTEM_PROMPTS.designChat });
+    
+    if (featureContext) {
+      parts.push({ text: `\n\nDAWIN FEATURE LIBRARY (use for recommendations):\n${featureContext}` });
+    }
+    
+    // Gap-7: Add project-specific RAG context
+    if (projectContext) {
+      parts.push({ text: `\n\nPROJECT CONTEXT (use for personalized responses):\n${JSON.stringify(projectContext, null, 2)}` });
+    }
+
+    // Add design item context for enrichment suggestions
+    if (designItemContext) {
+      parts.push({ text: `\n\nCURRENT DESIGN ITEM (reference this and suggest enrichments where needed):\n${JSON.stringify(designItemContext, null, 2)}` });
+    }
+
+    const recentHistory = conversationHistory.slice(-10);
+    for (const msg of recentHistory) {
+      parts.push({ text: `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}` });
+    }
+
+    if (message) {
+      parts.push({ text: `User: ${message}` });
+    }
+
+    if (imageData) {
+      const imageMatch = imageData.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (imageMatch) {
+        parts.push({
+          inlineData: {
+            mimeType: `image/${imageMatch[1]}`,
+            data: imageMatch[2],
+          },
+        });
+        if (!message) {
+          parts.push({ text: 'User: Please analyze this image for furniture/millwork design.' });
+        }
+      }
+    }
+
+    // Stream the response
+    let fullResponse = '';
+    const streamResult = await model.generateContentStream({
+      contents: [{ role: 'user', parts }],
+    });
+
+    for await (const chunk of streamResult.stream) {
+      const chunkText = chunk.text();
+      if (chunkText) {
+        fullResponse += chunkText;
+        res.write(`data: ${JSON.stringify({ type: 'chunk', text: chunkText })}\n\n`);
+      }
+    }
+
+    // Get final response metadata
+    const response = await streamResult.response;
+    const usageMetadata = response.usageMetadata || {};
+
+    // Parse analysis and recommendations
+    const imageAnalysis = imageData && fullResponse.includes('Style Elements:') 
+      ? parseImageAnalysis(fullResponse) 
+      : null;
+    const featureRecommendations = extractFeatureRecommendations(fullResponse);
+
+    // Save conversation to Firestore
+    if (designItemId && projectId) {
+      try {
+        const conversationRef = db.collection('designItemConversations').doc(designItemId);
+        const conversationDoc = await conversationRef.get();
+        
+        const newMessages = [
+          { role: 'user', content: message || '[Image uploaded]', timestamp: admin.firestore.FieldValue.serverTimestamp() },
+          { role: 'assistant', content: fullResponse, timestamp: admin.firestore.FieldValue.serverTimestamp(), metadata: { imageAnalysis, featureRecommendations, modelUsed: 'gemini-2.0-flash', streaming: true } },
+        ];
+
+        if (conversationDoc.exists) {
+          await conversationRef.update({
+            messages: admin.firestore.FieldValue.arrayUnion(...newMessages),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } else {
+          await conversationRef.set({
+            designItemId,
+            projectId,
+            messages: newMessages,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      } catch (saveError) {
+        console.error('Error saving conversation:', saveError);
+      }
+    }
+
+    // Send final event with metadata
+    res.write(`data: ${JSON.stringify({ 
+      type: 'done', 
+      imageAnalysis,
+      featureRecommendations,
+      usageMetadata: {
+        inputTokens: usageMetadata.promptTokenCount || 0,
+        outputTokens: usageMetadata.candidatesTokenCount || 0,
+        modelUsed: 'gemini-2.0-flash',
+      }
+    })}\n\n`);
+
+    res.end();
+
+  } catch (error) {
+    console.error('Design Chat Stream error:', error);
+    res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
+    res.end();
   }
 }
 
@@ -2662,6 +2940,271 @@ function extractFeatureRecommendations(text) {
   return recommendations.slice(0, 5);
 }
 
+/**
+ * Gap-1: Cutlist AI Analysis
+ * Analyzes cutlist/parts data and provides optimization suggestions
+ */
+async function analyzeCutlistWithAI(req, res) {
+  try {
+    const { projectId, parts, materials, analysisType = 'full' } = req.body;
+
+    if (!parts || !Array.isArray(parts) || parts.length === 0) {
+      return res.status(400).json({ error: 'Parts array is required' });
+    }
+
+    console.log('Cutlist AI Analysis:', { projectId, partsCount: parts.length, analysisType });
+
+    const model = getGeminiFlash();
+    const featureContext = await getCachedFeatureContext();
+
+    // Build analysis prompt
+    const prompt = `You are a Manufacturing Optimization Expert for custom millwork and cabinet production.
+
+Analyze this cutlist and provide actionable insights:
+
+**PARTS DATA (${parts.length} parts):**
+${JSON.stringify(parts.slice(0, 50), null, 2)}
+
+**MATERIALS:**
+${materials ? JSON.stringify(materials, null, 2) : 'Not specified'}
+
+${featureContext ? `**AVAILABLE FEATURES:**\n${featureContext}` : ''}
+
+**ANALYSIS TYPE:** ${analysisType}
+
+Provide analysis in this JSON structure:
+{
+  "summary": {
+    "totalParts": number,
+    "uniqueMaterials": number,
+    "estimatedSheets": number,
+    "complexityScore": "low|medium|high"
+  },
+  "optimizations": [
+    {
+      "type": "material|dimension|grain|grouping",
+      "title": "string",
+      "description": "string",
+      "impact": "high|medium|low",
+      "savings": "string (optional)"
+    }
+  ],
+  "dfmWarnings": [
+    {
+      "severity": "error|warning|info",
+      "partIds": ["string"],
+      "issue": "string",
+      "recommendation": "string"
+    }
+  ],
+  "materialRecommendations": [
+    {
+      "currentMaterial": "string",
+      "suggestedMaterial": "string",
+      "reason": "string"
+    }
+  ],
+  "nestingTips": ["string"]
+}`;
+
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    });
+
+    const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const usageMetadata = result.response.usageMetadata || {};
+
+    // Parse JSON from response
+    let analysis = null;
+    try {
+      const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || 
+                        responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        analysis = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+      }
+    } catch (parseError) {
+      console.error('Failed to parse cutlist analysis:', parseError);
+    }
+
+    // Save analysis to project if projectId provided
+    if (projectId && analysis) {
+      try {
+        await db.collection('designProjects').doc(projectId).update({
+          'optimizationState.aiAnalysis': {
+            ...analysis,
+            analyzedAt: admin.firestore.FieldValue.serverTimestamp(),
+            partsAnalyzed: parts.length,
+          },
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (saveError) {
+        console.error('Error saving cutlist analysis:', saveError);
+      }
+    }
+
+    res.json({
+      success: true,
+      analysis: analysis || { raw: responseText },
+      usageMetadata: {
+        inputTokens: usageMetadata.promptTokenCount || 0,
+        outputTokens: usageMetadata.candidatesTokenCount || 0,
+        modelUsed: 'gemini-2.0-flash',
+      },
+    });
+
+  } catch (error) {
+    console.error('Cutlist AI Analysis error:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Gap-2: Customer Intelligence
+ * Analyzes customer history and provides insights for personalization
+ */
+async function getCustomerIntelligence(req, res) {
+  try {
+    const { customerId, includeProjectHistory = true } = req.body;
+
+    if (!customerId) {
+      return res.status(400).json({ error: 'customerId is required' });
+    }
+
+    console.log('Customer Intelligence:', { customerId, includeProjectHistory });
+
+    // Get customer data
+    const customerDoc = await db.collection('customers').doc(customerId).get();
+    if (!customerDoc.exists) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    const customer = customerDoc.data();
+
+    // Get customer's project history
+    let projectHistory = [];
+    if (includeProjectHistory) {
+      const projectsSnapshot = await db.collection('designProjects')
+        .where('customerId', '==', customerId)
+        .orderBy('createdAt', 'desc')
+        .limit(10)
+        .get();
+      
+      for (const doc of projectsSnapshot.docs) {
+        const project = doc.data();
+        projectHistory.push({
+          id: doc.id,
+          name: project.name,
+          code: project.code,
+          status: project.status,
+          stage: project.stage,
+          totalValue: project.budget?.total,
+          materialsUsed: project.materialPalette?.entries?.map(m => m.designName) || [],
+          completedAt: project.completedAt,
+        });
+      }
+    }
+
+    const model = getGeminiFlash();
+
+    const prompt = `You are a Customer Success Analyst for a custom millwork and cabinet manufacturing company.
+
+Analyze this customer and provide actionable intelligence:
+
+**CUSTOMER:**
+- Name: ${customer.name}
+- Segment: ${customer.segment || 'Unknown'}
+- Contact: ${customer.email || 'N/A'}
+- Notes: ${customer.notes?.substring(0, 500) || 'None'}
+- Tags: ${(customer.tags || []).join(', ') || 'None'}
+
+**PROJECT HISTORY (${projectHistory.length} projects):**
+${JSON.stringify(projectHistory, null, 2)}
+
+Provide intelligence in this JSON structure:
+{
+  "customerProfile": {
+    "preferredStyles": ["string"],
+    "preferredMaterials": ["string"],
+    "pricePoint": "budget|mid-range|premium|luxury",
+    "communicationPreference": "string",
+    "decisionMakingStyle": "string"
+  },
+  "insights": [
+    {
+      "type": "pattern|opportunity|risk",
+      "title": "string",
+      "description": "string",
+      "confidence": "high|medium|low"
+    }
+  ],
+  "recommendations": [
+    {
+      "action": "string",
+      "reason": "string",
+      "priority": "high|medium|low"
+    }
+  ],
+  "upsellOpportunities": ["string"],
+  "lifetimeValueEstimate": "string",
+  "nextBestAction": "string"
+}`;
+
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    });
+
+    const responseText = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const usageMetadata = result.response.usageMetadata || {};
+
+    // Parse JSON from response
+    let intelligence = null;
+    try {
+      const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || 
+                        responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        intelligence = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+      }
+    } catch (parseError) {
+      console.error('Failed to parse customer intelligence:', parseError);
+    }
+
+    // Save intelligence to customer record
+    if (intelligence) {
+      try {
+        await db.collection('customers').doc(customerId).update({
+          aiIntelligence: {
+            ...intelligence,
+            analyzedAt: admin.firestore.FieldValue.serverTimestamp(),
+            projectsAnalyzed: projectHistory.length,
+          },
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (saveError) {
+        console.error('Error saving customer intelligence:', saveError);
+      }
+    }
+
+    res.json({
+      success: true,
+      customer: {
+        id: customerId,
+        name: customer.name,
+        segment: customer.segment,
+      },
+      projectCount: projectHistory.length,
+      intelligence: intelligence || { raw: responseText },
+      usageMetadata: {
+        inputTokens: usageMetadata.promptTokenCount || 0,
+        outputTokens: usageMetadata.candidatesTokenCount || 0,
+        modelUsed: 'gemini-2.0-flash',
+      },
+    });
+
+  } catch (error) {
+    console.error('Customer Intelligence error:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
 // ============================================
 // Feature Library Context Cache
 // ============================================
@@ -2850,6 +3393,203 @@ async function getFeatureContextForAI(req, res) {
   } catch (error) {
     console.error('Error getting feature context:', error);
     res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Gap-7: RAG - Retrieve project context for AI prompts
+ * Fetches relevant project data, design items, materials, and customer info
+ */
+async function getProjectContextForAI(projectId) {
+  if (!projectId) return null;
+  
+  try {
+    const context = {
+      project: null,
+      designItems: [],
+      materials: [],
+      customer: null,
+      recentConversations: [],
+    };
+
+    // Get project details
+    const projectDoc = await db.collection('designProjects').doc(projectId).get();
+    if (!projectDoc.exists) return null;
+    
+    const project = projectDoc.data();
+    context.project = {
+      id: projectId,
+      name: project.name,
+      code: project.code,
+      status: project.status,
+      stage: project.stage,
+      description: project.description?.substring(0, 500),
+      constraints: project.constraints || [],
+      goals: project.goals || [],
+      budget: project.budget,
+      timeline: project.timeline,
+    };
+
+    // Get design items (limit to 10 most recent)
+    const itemsSnapshot = await db.collection('designProjects').doc(projectId)
+      .collection('designItems')
+      .orderBy('updatedAt', 'desc')
+      .limit(10)
+      .get();
+    
+    for (const doc of itemsSnapshot.docs) {
+      const item = doc.data();
+      context.designItems.push({
+        id: doc.id,
+        name: item.name,
+        category: item.category,
+        subcategory: item.subcategory,
+        status: item.status,
+        ragStatus: item.ragStatus,
+        dimensions: item.parameters?.dimensions,
+        primaryMaterial: item.parameters?.primaryMaterial?.name,
+        constructionMethod: item.parameters?.constructionMethod,
+      });
+    }
+
+    // Get material palette
+    if (project.materialPalette?.entries) {
+      context.materials = project.materialPalette.entries.slice(0, 10).map(m => ({
+        designName: m.designName,
+        inventoryName: m.inventoryName,
+        thickness: m.thickness,
+        category: m.category,
+      }));
+    }
+
+    // Get customer info if linked
+    if (project.customerId) {
+      const customerDoc = await db.collection('customers').doc(project.customerId).get();
+      if (customerDoc.exists) {
+        const customer = customerDoc.data();
+        context.customer = {
+          name: customer.name,
+          segment: customer.segment,
+          preferences: customer.preferences?.substring?.(0, 200),
+        };
+      }
+    }
+
+    // Get recent AI conversations for this project (limit to 5)
+    const conversationsSnapshot = await db.collection('designItemConversations')
+      .where('projectId', '==', projectId)
+      .orderBy('updatedAt', 'desc')
+      .limit(5)
+      .get();
+    
+    for (const doc of conversationsSnapshot.docs) {
+      const conv = doc.data();
+      const lastMessages = (conv.messages || []).slice(-3);
+      context.recentConversations.push({
+        designItemId: conv.designItemId,
+        lastMessages: lastMessages.map(m => ({
+          role: m.role,
+          content: m.content?.substring(0, 200),
+        })),
+      });
+    }
+
+    return context;
+  } catch (error) {
+    console.error('Error getting project context for AI:', error);
+    return null;
+  }
+}
+
+/**
+ * Get Design Item context for AI prompts
+ * Fetches the full design item data including parameters for enrichment suggestions
+ */
+async function getDesignItemContextForAI(projectId, designItemId) {
+  if (!projectId || !designItemId) return null;
+  
+  try {
+    const itemDoc = await db.collection('designProjects').doc(projectId)
+      .collection('designItems').doc(designItemId).get();
+    
+    if (!itemDoc.exists) return null;
+    
+    const item = itemDoc.data();
+    
+    // Build comprehensive context for AI
+    const context = {
+      // Identity
+      id: designItemId,
+      itemCode: item.itemCode,
+      name: item.name,
+      description: item.description || null,
+      category: item.category,
+      
+      // Status
+      currentStage: item.currentStage,
+      ragStatus: item.ragStatus,
+      overallReadiness: item.overallReadiness,
+      
+      // Dimensions
+      dimensions: item.parameters?.dimensions || {
+        width: null,
+        height: null,
+        depth: null,
+        unit: 'mm',
+      },
+      
+      // Materials
+      primaryMaterial: item.parameters?.primaryMaterial || null,
+      secondaryMaterials: item.parameters?.secondaryMaterials || [],
+      edgeBanding: item.parameters?.edgeBanding || null,
+      
+      // Hardware
+      hardware: item.parameters?.hardware || [],
+      
+      // Finish
+      finish: item.parameters?.finish || null,
+      
+      // Construction
+      constructionMethod: item.parameters?.constructionMethod || null,
+      joineryTypes: item.parameters?.joineryTypes || [],
+      
+      // Quality
+      awiGrade: item.parameters?.awiGrade || null,
+      
+      // Special requirements
+      specialRequirements: item.parameters?.specialRequirements || [],
+      
+      // Workflow flags
+      hasBlockers: item.hasBlockers || false,
+      blockerNotes: item.blockerNotes || null,
+      requiresPrototype: item.requiresPrototype || false,
+      
+      // Notes
+      notes: item.notes || null,
+      
+      // Files count
+      filesCount: item.files?.length || 0,
+      
+      // Identify empty/incomplete fields
+      incompleteFields: [],
+    };
+    
+    // Identify incomplete fields for AI to suggest enrichments
+    if (!context.dimensions?.width) context.incompleteFields.push('dimensions.width');
+    if (!context.dimensions?.height) context.incompleteFields.push('dimensions.height');
+    if (!context.dimensions?.depth) context.incompleteFields.push('dimensions.depth');
+    if (!context.primaryMaterial) context.incompleteFields.push('primaryMaterial');
+    if (!context.finish) context.incompleteFields.push('finish');
+    if (!context.constructionMethod) context.incompleteFields.push('constructionMethod');
+    if (context.joineryTypes.length === 0) context.incompleteFields.push('joineryTypes');
+    if (context.hardware.length === 0) context.incompleteFields.push('hardware');
+    if (!context.awiGrade) context.incompleteFields.push('awiGrade');
+    if (!context.description) context.incompleteFields.push('description');
+    
+    return context;
+  } catch (error) {
+    console.error('Error getting design item context for AI:', error);
+    return null;
   }
 }
 
@@ -3084,6 +3824,105 @@ async function syncProductToShopify(req, res) {
     });
   } catch (error) {
     console.error('Error syncing to Shopify:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// ============================================
+// NEW AI ENDPOINT HANDLERS
+// ============================================
+
+/**
+ * Handle Project Scoping AI request via Express API
+ * Wraps the projectScoping callable function logic
+ */
+async function handleProjectScoping(req, res) {
+  try {
+    const { briefText, projectId, projectName, projectType, location, includeResearch, customerId } = req.body;
+
+    if (!briefText || typeof briefText !== 'string' || briefText.length < 20) {
+      return res.status(400).json({ error: 'Brief text must be at least 20 characters' });
+    }
+
+    // Import the core logic from projectScoping module
+    const { processProjectScoping } = require('./src/ai/projectScopingLogic');
+    
+    const result = await processProjectScoping({
+      briefText,
+      projectId,
+      projectName,
+      projectType,
+      location: location || 'East Africa',
+      includeResearch: includeResearch !== false,
+      customerId,
+      geminiApiKey: GEMINI_API_KEY.value(),
+      db,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Project Scoping error:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Handle Design Item Enhancement AI request via Express API
+ */
+async function handleDesignItemEnhancement(req, res) {
+  try {
+    const { deliverable, projectContext, customerId, includeSuppliers } = req.body;
+
+    if (!deliverable || !deliverable.itemType) {
+      return res.status(400).json({ error: 'Deliverable with itemType is required' });
+    }
+
+    // Import the core logic from designItemEnhancement module
+    const { processDesignItemEnhancement } = require('./src/ai/designItemEnhancementLogic');
+    
+    const result = await processDesignItemEnhancement({
+      deliverable,
+      projectContext,
+      customerId,
+      includeSuppliers: includeSuppliers !== false,
+      geminiApiKey: GEMINI_API_KEY.value(),
+      katanaApiKey: KATANA_API_KEY.value(),
+      db,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Design Item Enhancement error:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Handle Image Analysis AI request via Express API
+ */
+async function handleImageAnalysisEndpoint(req, res) {
+  try {
+    const { imageBase64, imageMimeType, projectId, additionalPrompt } = req.body;
+
+    if (!imageBase64) {
+      return res.status(400).json({ error: 'Image data is required' });
+    }
+
+    // Import the core logic from imageAnalysis module  
+    const { processImageAnalysis } = require('./src/ai/imageAnalysisLogic');
+    
+    const result = await processImageAnalysis({
+      imageBase64,
+      imageMimeType: imageMimeType || 'image/jpeg',
+      projectId,
+      additionalPrompt,
+      geminiApiKey: GEMINI_API_KEY.value(),
+      db,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Image Analysis error:', error);
     res.status(500).json({ error: error.message });
   }
 }

@@ -1,19 +1,12 @@
 /**
  * Optimization Services
- * Barrel export for optimization services
+ * Exports all optimization-related services
  */
 
-export { 
-  OptimizationService, 
-  optimizationService,
-  type Panel,
-  type StockSheet,
-  type OptimizationOptions,
-  type OptimizationResult,
-  type SheetLayout,
-  type PanelPlacement,
-} from './OptimizationService';
-
+export * from './InvalidationDetector';
+export * from './OptimizationService';
+export * from './projectOptimization';
+export * from './changeDetection';
 export {
   InvalidationDetector,
   invalidationDetector,

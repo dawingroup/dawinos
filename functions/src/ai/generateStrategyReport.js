@@ -66,9 +66,10 @@ exports.generateStrategyReport = onCall(
       // ============================================
       console.log('Step 1: Fetching available features...');
       
+      // Use consolidated featureLibrary collection (migrated from legacy 'features')
       const featuresSnapshot = await db
-        .collection('features')
-        .where('isAvailable', '==', true)
+        .collection('featureLibrary')
+        .where('status', '==', 'active')
         .get();
 
       const availableFeatures = [];

@@ -10,8 +10,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/shared/hooks';
 import { NestingStudio, KatanaExportSection, ShopTravelerSection } from '../production';
+import { OptimizationStatusBadge } from '@/shared/components/OptimizationStatusBadge';
 import type { Project } from '@/shared/types';
 import type { DesignProject, DesignStage } from '../../types';
+import type { OptimizationStatus } from '@/shared/services/optimization/changeDetection';
 
 // ============================================
 // Types
@@ -71,20 +73,29 @@ export function ProductionTab({ project, stage, onRefresh }: ProductionTabProps)
   }
 
   const projectData = project as unknown as Project;
-  const hasProduction = !!projectData.optimizationState?.production && 
-                        !projectData.optimizationState.production.invalidatedAt;
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Scissors className="w-6 h-6 text-purple-600" />
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Production Optimization</h2>
-          <p className="text-sm text-gray-500">
-            Generate optimized cutting layouts and export to manufacturing
-          </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Scissors className="w-6 h-6 text-purple-600" />
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Production Optimization</h2>
+            <p className="text-sm text-gray-500">
+              Generate optimized cutting layouts and export to manufacturing
+            </p>
+          </div>
         </div>
+        
+        {/* Optimization Status Badge */}
+        <OptimizationStatusBadge 
+          status={(project as unknown as { optimizationStatus?: OptimizationStatus }).optimizationStatus || null}
+          onReOptimize={onRefresh ? async () => onRefresh() : undefined}
+          size="md"
+          showLabel={true}
+          showReasons={true}
+        />
       </div>
 
       {/* Nesting Studio */}

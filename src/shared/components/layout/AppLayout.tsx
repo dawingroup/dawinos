@@ -6,6 +6,7 @@
 
 import { Outlet } from 'react-router-dom';
 import { Header } from './Header';
+import { Footer } from './Footer';
 
 export interface AppLayoutProps {
   children?: React.ReactNode;
@@ -23,6 +24,9 @@ export function AppLayout({ children }: AppLayoutProps) {
           {children || <Outlet />}
         </div>
       </main>
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }

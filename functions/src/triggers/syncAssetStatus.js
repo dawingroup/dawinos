@@ -37,14 +37,11 @@ exports.onAssetStatusChange = onDocumentUpdated(
     const isNowUnavailable = ['MAINTENANCE', 'REPAIR', 'BROKEN', 'RETIRED'].includes(afterData.status);
 
     try {
-      // Find all features that require this asset (check both collections)
-      // 1. Check features collection (legacy) - by asset ID
-      const featuresSnapshot = await db
-        .collection('features')
-        .where('requiredAssetIds', 'array-contains', assetId)
-        .get();
-
-      // 2. Check featureLibrary collection - by asset name in requiredEquipment
+      // Find all features that require this asset
+      // NOTE: Legacy 'features' collection deprecated - use featureLibrary only
+      // TODO: Run migration script to move any remaining legacy features
+      
+      // Check featureLibrary collection - by asset name in requiredEquipment
       const featureLibrarySnapshot = await db
         .collection('featureLibrary')
         .where('requiredEquipment', 'array-contains', assetDisplayName)
@@ -56,45 +53,17 @@ exports.onAssetStatusChange = onDocumentUpdated(
         .where('_sourceAsset.assetId', '==', assetId)
         .get();
 
-      const totalFeatures = featuresSnapshot.size + featureLibrarySnapshot.size + featureLibraryBySourceSnapshot.size;
+      const totalFeatures = featureLibrarySnapshot.size + featureLibraryBySourceSnapshot.size;
       
       if (totalFeatures === 0) {
         console.log(`No features require asset ${assetId} (${assetDisplayName})`);
         return null;
       }
 
-      console.log(`Found ${featuresSnapshot.size} legacy features, ${featureLibrarySnapshot.size} library features (by name), ${featureLibraryBySourceSnapshot.size} library features (by source) for asset ${assetId}`);
+      console.log(`Found ${featureLibrarySnapshot.size} features (by name), ${featureLibraryBySourceSnapshot.size} features (by source) for asset ${assetId}`);
 
       // Process each feature
       const batch = db.batch();
-      const updatePromises = [];
-
-      for (const featureDoc of featuresSnapshot.docs) {
-        const feature = featureDoc.data();
-        const featureRef = featureDoc.ref;
-
-        // Calculate new availability
-        const availability = await calculateFeatureAvailability(
-          feature.requiredAssetIds,
-          assetId,
-          afterData.status,
-          assetDisplayName
-        );
-
-        console.log(`Feature ${feature.name}: isAvailable=${availability.isAvailable}, reason=${availability.reason}`);
-
-        batch.update(featureRef, {
-          isAvailable: availability.isAvailable,
-          availabilityReason: availability.reason,
-          updatedAt: FieldValue.serverTimestamp(),
-          _lastStatusCheck: {
-            assetId,
-            assetName: assetDisplayName,
-            assetStatus: afterData.status,
-            checkedAt: new Date().toISOString(),
-          },
-        });
-      }
 
       // Process featureLibrary features (by equipment name)
       const processedIds = new Set();

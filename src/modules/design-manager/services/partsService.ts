@@ -272,6 +272,7 @@ export async function replaceAllParts(
 
 /**
  * Invalidate project optimization and cutlist when parts change
+ * Integrates with ChangeDetectionService for dependency tracking
  */
 async function invalidateProjectOptimization(
   projectId: string,
@@ -287,10 +288,21 @@ async function invalidateProjectOptimization(
   const now = Timestamp.now();
   const timestamp = { seconds: now.seconds, nanoseconds: now.nanoseconds };
   
-  const updates: Record<string, any> = {
+  // Get current optimization status
+  const currentStatus = project.optimizationStatus;
+  const currentReasons = currentStatus?.invalidationReasons || [];
+  const updatedReasons = currentReasons.includes(reason) 
+    ? currentReasons 
+    : [...currentReasons, reason];
+  
+  const updates: Record<string, unknown> = {
     // Mark cutlist as stale
     'consolidatedCutlist.isStale': true,
     'consolidatedCutlist.staleReason': reason,
+    // Update optimization status for change detection
+    'optimizationStatus.status': 'stale',
+    'optimizationStatus.invalidationReasons': updatedReasons,
+    'optimizationStatus.version': (currentStatus?.version || 0) + 1,
     updatedAt: serverTimestamp(),
     updatedBy: userId,
   };
@@ -308,4 +320,5 @@ async function invalidateProjectOptimization(
   }
   
   await updateDoc(projectRef, updates);
+  console.log(`Project ${projectId} marked stale: ${reason}`);
 }

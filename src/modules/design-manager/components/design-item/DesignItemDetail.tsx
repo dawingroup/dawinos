@@ -41,6 +41,12 @@ const BriefAnalyzer = lazy(() =>
 const DfMChecker = lazy(() => 
   import('../ai/DfMChecker').then(m => ({ default: m.DfMChecker }))
 );
+const ImageAnalysisAI = lazy(() => 
+  import('../ai/ImageAnalysisAI').then(m => ({ default: m.ImageAnalysisAI }))
+);
+const DesignItemEnhancementAI = lazy(() => 
+  import('../ai/DesignItemEnhancementAI').then(m => ({ default: m.DesignItemEnhancementAI }))
+);
 const DesignChat = lazy(() => 
   import('../design-ai/DesignChat').then(m => ({ default: m.DesignChat }))
 );
@@ -754,7 +760,7 @@ interface AITabProps {
 }
 
 function AITab({ item, projectId, itemId, userId }: AITabProps) {
-  const [activeAITool, setActiveAITool] = useState<'brief' | 'dfm'>('dfm');
+  const [activeAITool, setActiveAITool] = useState<'enhance' | 'dfm' | 'image' | 'brief' | 'chat'>('enhance');
 
   const handleAnalysisComplete = (results: BriefAnalysisResult) => {
     console.log('Brief analysis complete:', results);
@@ -787,7 +793,18 @@ function AITab({ item, projectId, itemId, userId }: AITabProps) {
     >
       <div className="space-y-6">
         {/* AI Tool Selector */}
-        <div className="flex gap-2 border-b pb-4">
+        <div className="flex flex-wrap gap-2 border-b pb-4">
+          <button
+            onClick={() => setActiveAITool('enhance')}
+            className={cn(
+              'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+              activeAITool === 'enhance'
+                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            )}
+          >
+            ✨ AI Enhancement
+          </button>
           <button
             onClick={() => setActiveAITool('dfm')}
             className={cn(
@@ -800,6 +817,17 @@ function AITab({ item, projectId, itemId, userId }: AITabProps) {
             🔧 DfM Check
           </button>
           <button
+            onClick={() => setActiveAITool('image')}
+            className={cn(
+              'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+              activeAITool === 'image'
+                ? 'bg-[#1d1d1f] text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            )}
+          >
+            🖼️ Image Analysis
+          </button>
+          <button
             onClick={() => setActiveAITool('brief')}
             className={cn(
               'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
@@ -809,6 +837,17 @@ function AITab({ item, projectId, itemId, userId }: AITabProps) {
             )}
           >
             📝 Brief Analyzer
+          </button>
+          <button
+            onClick={() => setActiveAITool('chat')}
+            className={cn(
+              'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+              activeAITool === 'chat'
+                ? 'bg-[#1d1d1f] text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            )}
+          >
+            💬 Design Chat
           </button>
         </div>
 
@@ -829,18 +868,40 @@ function AITab({ item, projectId, itemId, userId }: AITabProps) {
               onApplyItem={(extractedItem) => console.log('Apply item:', extractedItem)}
             />
           )}
+
+          {activeAITool === 'image' && (
+            <ImageAnalysisAI
+              projectId={projectId}
+              onAnalysisComplete={(result) => console.log('Image analysis:', result)}
+              onItemSelect={(selectedItem) => console.log('Selected item:', selectedItem)}
+            />
+          )}
+
+          {activeAITool === 'enhance' && (
+            <DesignItemEnhancementAI
+              designItem={{
+                id: itemId || '',
+                name: item?.name || 'Design Item',
+                itemType: (item as any)?.itemType,
+                category: item?.category,
+                quantity: (item as any)?.quantity || 1,
+              }}
+              onEnhancementComplete={(result) => console.log('Enhancement complete:', result)}
+            />
+          )}
+
+          {activeAITool === 'chat' && (
+            <div className="h-[500px] border rounded-lg overflow-hidden">
+              <DesignChat
+                designItemId={itemId}
+                projectId={projectId}
+                designItemName={item?.name}
+                userId={userId}
+              />
+            </div>
+          )}
         </Suspense>
       </div>
-
-      {/* Design AI Chat - Floating button */}
-      <Suspense fallback={null}>
-        <DesignChat
-          designItemId={itemId}
-          projectId={projectId}
-          designItemName={item?.name}
-          userId={userId}
-        />
-      </Suspense>
     </AIErrorBoundary>
   );
 }

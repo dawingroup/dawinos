@@ -2,7 +2,7 @@
  * Feature Library Module
  * 
  * Public API for the feature library module.
- * Manages manufacturing features/capabilities linked to physical assets.
+ * Manufacturing capabilities linked to workshop assets
  * 
  * @module feature-library
  */
@@ -11,7 +11,12 @@
 export * from './types';
 
 // Public components
+export * from './components';
 export { FeatureScanner } from './components';
 
 // Public pages
+export * from './pages';
 export { FeatureLibrary } from './pages';
+
+// Public services
+export * from './services';

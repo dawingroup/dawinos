@@ -3,8 +3,8 @@
  * Main canvas for project strategy research with AI report generation
  */
 
-import { useState } from 'react';
-import { Target, Ruler, DollarSign, Search, Lightbulb, X, FileText, Download, Sparkles } from 'lucide-react';
+import { useState, lazy, Suspense } from 'react';
+import { Target, Ruler, DollarSign, Search, Lightbulb, X, FileText, Download, Sparkles, Package } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { functions } from '@/shared/services/firebase';
@@ -16,6 +16,14 @@ import { ResearchAssistant } from './ResearchAssistant';
 import { TrendInsightsPanel } from './TrendInsightsPanel';
 import { StrategyPDF } from '@/modules/strategy/components/StrategyPDF';
 import type { StrategyReport, GenerateStrategyInput } from '@/modules/strategy/types';
+
+// Lazy load AI components
+const ProjectScopingAI = lazy(() => 
+  import('../ai/ProjectScopingAI').then(m => ({ default: m.ProjectScopingAI }))
+);
+const CustomerIntelligenceAI = lazy(() => 
+  import('../ai/CustomerIntelligenceAI').then(m => ({ default: m.CustomerIntelligenceAI }))
+);
 
 interface StrategyCanvasProps {
   projectId: string;
@@ -49,6 +57,9 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
   const [reportError, setReportError] = useState<string | null>(null);
   const [showReportPanel, setShowReportPanel] = useState(false);
 
+  // Project Scoping AI state - used to feed into Strategy Report
+  const [scopingResult, setScopingResult] = useState<any>(null);
+
   
   // Generate AI Strategy Report
   const handleGenerateReport = async () => {
@@ -79,11 +90,24 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
         'generateStrategyReport'
       );
 
+      // Build scoping context if available
+      const scopingContext = scopingResult ? {
+        deliverables: scopingResult.deliverables?.slice(0, 20)?.map((d: any) => ({
+          name: d.name,
+          category: d.category,
+          quantity: d.quantity,
+          roomType: d.roomTypeName,
+        })),
+        summary: scopingResult.summary,
+        entities: scopingResult.entities,
+        trendInsights: scopingResult.aiEnhancement?.trendInsights,
+      } : null;
+
       const result = await generateStrategy({
         projectName: projectName || 'Untitled Project',
-        projectType: strategy?.spaceParameters?.spaceType || 'Custom Millwork',
+        projectType: scopingResult?.entities?.projectType || strategy?.spaceParameters?.spaceType || 'Custom Millwork',
         clientBrief: clientBrief || 'Custom millwork project',
-        location: 'East Africa',
+        location: scopingResult?.entities?.location || 'East Africa',
         year: new Date().getFullYear(),
         // Enhanced inputs
         constraints: strategy?.challenges?.constraints || [],
@@ -93,6 +117,8 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
         spaceDetails,
         researchFindings,
         researchExcerpts,
+        // Include scoping output
+        scopingContext: scopingContext || undefined,
       });
 
       setGeneratedReport(result.data);
@@ -187,6 +213,32 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Strategy Inputs */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Project Scoping AI - FIRST */}
+            <div className="bg-white rounded-xl border-2 border-purple-200 p-6 bg-gradient-to-br from-purple-50 to-white">
+              <div className="flex items-center gap-2 mb-4">
+                <Package className="w-5 h-5 text-purple-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Project Scoping AI</h2>
+                <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">START HERE</span>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Enter your design brief to automatically extract deliverables. The output will be used to generate your strategy report.
+              </p>
+              <Suspense fallback={
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-2 border-purple-600 border-t-transparent"></div>
+                </div>
+              }>
+                <ProjectScopingAI
+                  projectId={projectId}
+                  projectName={projectName}
+                  onScopingComplete={(result) => {
+                    console.log('Scoping complete:', result);
+                    setScopingResult(result);
+                  }}
+                />
+              </Suspense>
+            </div>
+
             {/* Challenges Section */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -242,11 +294,28 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
                 onDelete={deleteFinding}
               />
             </div>
+
           </div>
 
-          {/* Right Column - Research Assistant */}
-          <div className="lg:col-span-1">
-            <div className="sticky top-24">
+          {/* Right Column - Research Assistant & Customer Intelligence */}
+          <div className="lg:col-span-1 space-y-6">
+            <div className="sticky top-24 space-y-6">
+              {/* Customer Intelligence */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <Suspense fallback={
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-teal-600 border-t-transparent"></div>
+                  </div>
+                }>
+                  <CustomerIntelligenceAI
+                    customerId={undefined}
+                    customerName="Customer"
+                    onContextReady={(context) => console.log('Customer context:', context)}
+                  />
+                </Suspense>
+              </div>
+
+              {/* Research Assistant */}
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <div className="flex items-center gap-2 p-4 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-indigo-600">
                   <Search className="w-5 h-5 text-white" />
