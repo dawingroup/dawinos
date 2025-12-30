@@ -11,10 +11,11 @@ import type { RAGStatus, RAGStatusValue, RAGValue } from '../types';
  * @returns Percentage 0-100
  */
 export function calculateOverallReadiness(ragStatus: RAGStatus): number {
+  if (!ragStatus) return 0;
   const allAspects = [
-    ...Object.values(ragStatus.designCompleteness),
-    ...Object.values(ragStatus.manufacturingReadiness),
-    ...Object.values(ragStatus.qualityGates),
+    ...Object.values(ragStatus.designCompleteness || {}),
+    ...Object.values(ragStatus.manufacturingReadiness || {}),
+    ...Object.values(ragStatus.qualityGates || {}),
   ];
   
   const applicable = allAspects.filter(a => a.status !== 'not-applicable');
@@ -38,10 +39,11 @@ export function calculateOverallReadiness(ragStatus: RAGStatus): number {
  * @returns Worst status value
  */
 export function getWorstStatus(ragStatus: RAGStatus): RAGStatusValue {
+  if (!ragStatus) return 'red';
   const allStatuses = [
-    ...Object.values(ragStatus.designCompleteness),
-    ...Object.values(ragStatus.manufacturingReadiness),
-    ...Object.values(ragStatus.qualityGates),
+    ...Object.values(ragStatus.designCompleteness || {}),
+    ...Object.values(ragStatus.manufacturingReadiness || {}),
+    ...Object.values(ragStatus.qualityGates || {}),
   ]
     .filter(a => a.status !== 'not-applicable')
     .map(a => a.status);
@@ -58,10 +60,11 @@ export function getWorstStatus(ragStatus: RAGStatus): RAGStatusValue {
  * @returns Best status value
  */
 export function getBestStatus(ragStatus: RAGStatus): RAGStatusValue {
+  if (!ragStatus) return 'red';
   const allStatuses = [
-    ...Object.values(ragStatus.designCompleteness),
-    ...Object.values(ragStatus.manufacturingReadiness),
-    ...Object.values(ragStatus.qualityGates),
+    ...Object.values(ragStatus.designCompleteness || {}),
+    ...Object.values(ragStatus.manufacturingReadiness || {}),
+    ...Object.values(ragStatus.qualityGates || {}),
   ]
     .filter(a => a.status !== 'not-applicable')
     .map(a => a.status);
@@ -78,10 +81,11 @@ export function getBestStatus(ragStatus: RAGStatus): RAGStatusValue {
  * @returns Count of each status type
  */
 export function countByStatus(ragStatus: RAGStatus): Record<RAGStatusValue, number> {
+  if (!ragStatus) return { green: 0, amber: 0, red: 0, 'not-applicable': 0 };
   const allAspects = [
-    ...Object.values(ragStatus.designCompleteness),
-    ...Object.values(ragStatus.manufacturingReadiness),
-    ...Object.values(ragStatus.qualityGates),
+    ...Object.values(ragStatus.designCompleteness || {}),
+    ...Object.values(ragStatus.manufacturingReadiness || {}),
+    ...Object.values(ragStatus.qualityGates || {}),
   ];
   
   const counts: Record<RAGStatusValue, number> = {
@@ -105,10 +109,11 @@ export function countByStatus(ragStatus: RAGStatus): Record<RAGStatusValue, numb
  * @returns Count of applicable aspects
  */
 export function getApplicableCount(ragStatus: RAGStatus): number {
+  if (!ragStatus) return 0;
   const allAspects = [
-    ...Object.values(ragStatus.designCompleteness),
-    ...Object.values(ragStatus.manufacturingReadiness),
-    ...Object.values(ragStatus.qualityGates),
+    ...Object.values(ragStatus.designCompleteness || {}),
+    ...Object.values(ragStatus.manufacturingReadiness || {}),
+    ...Object.values(ragStatus.qualityGates || {}),
   ];
   
   return allAspects.filter(a => a.status !== 'not-applicable').length;

@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { Plus, Upload, Trash2, Edit2, Package, AlertCircle } from 'lucide-react';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 import { useParts } from '../../hooks/useParts';
 import type { DesignItem, PartEntry } from '../../types';
 import { PartForm } from './PartForm';

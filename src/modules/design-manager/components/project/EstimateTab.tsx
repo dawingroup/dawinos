@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { RefreshCw, Download, AlertTriangle, Plus, Edit2, Trash2, Calculator, Layers, Package } from 'lucide-react';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 import { NestingStudio } from '../production/NestingStudio';
 import { MaterialPaletteTable } from './MaterialPaletteTable';
 import type { Project } from '@/shared/types';

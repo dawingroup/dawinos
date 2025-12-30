@@ -10,7 +10,7 @@ import {
   CheckCircle, AlertTriangle, Package, Edit2, Scissors, Sparkles, Calculator, Upload 
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 import { useProject, useDesignItems } from '../../hooks';
 import { ProjectDialog } from './ProjectDialog';
 import type { DesignStage, DesignCategory } from '../../types';

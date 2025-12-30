@@ -5,7 +5,7 @@
 
 import { useParams } from 'react-router-dom';
 import { StrategyCanvas } from '../components/strategy/StrategyCanvas';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function StrategyCanvasPage() {
   const { projectId } = useParams<{ projectId: string }>();

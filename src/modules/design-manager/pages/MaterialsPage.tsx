@@ -3,7 +3,7 @@
  * Global materials administration page
  */
 
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 import { MaterialList } from '../components/materials';
 
 export function MaterialsPage() {

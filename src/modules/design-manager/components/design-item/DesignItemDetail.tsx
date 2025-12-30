@@ -31,7 +31,7 @@ import {
   subscribeToDeliverables,
 } from '../../services/firestore';
 import { uploadDeliverableFile, validateDeliverableFile, deleteDeliverableFile } from '../../services/storage';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 import type { RAGStatus, RAGValue, RAGStatusValue, DesignItem, BriefAnalysisResult, DfMIssue } from '../../types';
 
 // Lazy load AI components to prevent blocking main bundle

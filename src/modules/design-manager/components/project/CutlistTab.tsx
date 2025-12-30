@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { RefreshCw, Download, AlertTriangle, ChevronDown, ChevronRight, Package } from 'lucide-react';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 import { useCutlistAggregation } from '../../hooks/useCutlistAggregation';
 import { exportCutlistCSV, exportCutlistSummaryCSV, downloadCSV } from '../../services/cutlistAggregation';
 import type { DesignProject, ConsolidatedCutlist, MaterialGroup } from '../../types';

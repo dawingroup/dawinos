@@ -12,7 +12,7 @@ import { STAGE_ORDER, canAdvanceToStage } from '../../utils/stage-gate';
 import { DesignItemCard } from '../design-item/DesignItemCard';
 import { StageGateCheck } from '../stage-gate/StageGateCheck';
 import { transitionStage } from '../../services/firestore';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface StageKanbanProps {
   items: DesignItem[];

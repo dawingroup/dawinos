@@ -125,7 +125,7 @@ export function RAGStatusPanel({
         title="Design Completeness"
         readiness={getCategoryReadiness(ragStatus, 'designCompleteness')}
         aspects={DESIGN_COMPLETENESS_ASPECTS}
-        values={ragStatus.designCompleteness as unknown as Record<string, RAGValue>}
+        values={(ragStatus?.designCompleteness || {}) as unknown as Record<string, RAGValue>}
         category="designCompleteness"
         editable={editable}
         onAspectClick={onAspectClick}
@@ -135,7 +135,7 @@ export function RAGStatusPanel({
         title="Manufacturing Readiness"
         readiness={getCategoryReadiness(ragStatus, 'manufacturingReadiness')}
         aspects={MANUFACTURING_READINESS_ASPECTS}
-        values={ragStatus.manufacturingReadiness as unknown as Record<string, RAGValue>}
+        values={(ragStatus?.manufacturingReadiness || {}) as unknown as Record<string, RAGValue>}
         category="manufacturingReadiness"
         editable={editable}
         onAspectClick={onAspectClick}
@@ -145,7 +145,7 @@ export function RAGStatusPanel({
         title="Quality Gates"
         readiness={getCategoryReadiness(ragStatus, 'qualityGates')}
         aspects={QUALITY_GATES_ASPECTS}
-        values={ragStatus.qualityGates as unknown as Record<string, RAGValue>}
+        values={(ragStatus?.qualityGates || {}) as unknown as Record<string, RAGValue>}
         category="qualityGates"
         editable={editable}
         onAspectClick={onAspectClick}

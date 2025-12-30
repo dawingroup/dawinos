@@ -6,7 +6,7 @@
 import { useState, useCallback } from 'react';
 import type { DesignStage } from '../types';
 import { transitionStage } from '../services/firestore';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface UseStageTransitionReturn {
   transitionToStage: (

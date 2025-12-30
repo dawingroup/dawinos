@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, FolderOpen, AlertCircle, CheckCircle, Clock, TrendingUp, Trash2, MoreVertical } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 import type { DesignProject, DesignStage } from '../../types';
 import { subscribeToProjects, deleteProject } from '../../services/firestore';
 import { STAGE_LABELS, STAGE_ICONS } from '../../utils/formatting';

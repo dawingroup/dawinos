@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { Check, X, Clock, User, MessageSquare, Plus, Send } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 import type { Approval, ApprovalType, DesignItem } from '../../types';
 
 export interface ApprovalWorkflowProps {

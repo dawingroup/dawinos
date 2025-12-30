@@ -8,7 +8,7 @@ import {
   Scissors, 
   Lock,
 } from 'lucide-react';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 import { NestingStudio, KatanaExportSection, ShopTravelerSection } from '../production';
 import { OptimizationStatusBadge } from '@/shared/components/OptimizationStatusBadge';
 import type { Project } from '@/shared/types';

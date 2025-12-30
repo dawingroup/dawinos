@@ -6,7 +6,7 @@
 import { useState, useCallback } from 'react';
 import type { RAGStatusValue } from '../types';
 import { updateRAGAspect } from '../services/firestore';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface UseRAGUpdateReturn {
   updateAspect: (

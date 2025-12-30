@@ -162,22 +162,89 @@ export function ProjectScopingAI({
       for (const del of itemsToAdd) {
         if (addedItems.has(del.id)) continue; // Skip already added
 
+        // Generate item code
+        const itemCode = `${projectId?.substring(0, 8) || 'ITEM'}-${Date.now().toString(36).toUpperCase()}`;
+        
+        // Create default RAG status
+        const defaultRagValue = {
+          status: 'red',
+          notes: '',
+          updatedAt: new Date().toISOString(),
+          updatedBy: 'ai_scoping',
+        };
+        
+        const defaultRagStatus = {
+          designCompleteness: {
+            overallDimensions: defaultRagValue,
+            model3D: defaultRagValue,
+            productionDrawings: defaultRagValue,
+            materialSpecs: defaultRagValue,
+            hardwareSpecs: defaultRagValue,
+            finishSpecs: defaultRagValue,
+            joineryDetails: defaultRagValue,
+            tolerances: defaultRagValue,
+            assemblyInstructions: defaultRagValue,
+          },
+          manufacturingReadiness: {
+            materialAvailability: defaultRagValue,
+            hardwareAvailability: defaultRagValue,
+            toolingReadiness: defaultRagValue,
+            processDocumentation: defaultRagValue,
+            qualityCriteria: defaultRagValue,
+            costValidation: defaultRagValue,
+          },
+          qualityGates: {
+            internalDesignReview: defaultRagValue,
+            manufacturingReview: defaultRagValue,
+            clientApproval: defaultRagValue,
+            prototypeValidation: defaultRagValue,
+          },
+        };
+
         await addDoc(designItemsRef, {
+          // Identification
+          itemCode,
           name: del.name,
+          description: `${del.roomTypeName} - ${del.subcategory}`,
+          category: del.category === 'MANUFACTURED' ? 'casework' : 
+                   del.category === 'PROCURED' ? 'fixtures' : 'specialty',
+          
+          // Project relationship
+          projectId: projectId,
+          projectCode: projectId?.substring(0, 8) || 'PROJ',
+          
+          // Status
+          currentStage: 'concept',
+          ragStatus: defaultRagStatus,
+          overallReadiness: 0,
+          
+          // History
+          stageHistory: [],
+          approvals: [],
+          
+          // Files
+          files: [],
+          
+          // Additional fields from scoping
           itemType: del.itemType,
-          category: del.category,
           subcategory: del.subcategory,
           quantity: del.quantity,
           roomType: del.roomTypeName,
-          status: 'pending',
+          priority: 'normal',
           source: 'ai_scoping',
+          
+          // AI metadata
           aiMetadata: {
             scopedAt: new Date().toISOString(),
             confidenceScore: del.aiMetadata?.confidenceScore || 0.85,
             requiresClarification: del.aiMetadata?.requiresClarification || false,
           },
+          
+          // Timestamps
           createdAt: serverTimestamp(),
+          createdBy: 'ai_scoping',
           updatedAt: serverTimestamp(),
+          updatedBy: 'ai_scoping',
         });
 
         addedCount++;
