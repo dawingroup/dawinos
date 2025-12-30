@@ -20,6 +20,20 @@ const { strategyResearch } = require('./src/ai/strategyResearch');
 const { projectScoping } = require('./src/ai/projectScoping');
 const { designItemEnhancement } = require('./src/ai/designItemEnhancement');
 const { imageAnalysis } = require('./src/ai/imageAnalysis');
+const { generateProductNames } = require('./src/ai/productNaming');
+const { generateProductContent, generateDiscoverabilityData } = require('./src/ai/productContent');
+const { auditShopifyProduct } = require('./src/ai/catalogAudit');
+
+// Scheduled Audit Functions
+const { dailyCatalogAudit, weeklyCatalogAudit } = require('./src/scheduled/catalogAudit');
+exports.dailyCatalogAudit = dailyCatalogAudit;
+exports.weeklyCatalogAudit = weeklyCatalogAudit;
+
+// Shopify Webhook Handlers
+const { shopifyProductUpdate, shopifyProductDelete } = require('./src/webhooks/shopifyProductUpdate');
+exports.shopifyProductUpdate = shopifyProductUpdate;
+exports.shopifyProductDelete = shopifyProductDelete;
+
 exports.analyzeFeatureFromAsset = analyzeFeatureFromAsset;
 exports.generateStrategyReport = generateStrategyReport;
 exports.designChat = designChat;
@@ -27,6 +41,22 @@ exports.strategyResearch = strategyResearch;
 exports.projectScoping = projectScoping;
 exports.designItemEnhancement = designItemEnhancement;
 exports.imageAnalysis = imageAnalysis;
+exports.generateProductNames = generateProductNames;
+exports.generateProductContent = generateProductContent;
+exports.generateDiscoverabilityData = generateDiscoverabilityData;
+exports.auditShopifyProduct = auditShopifyProduct;
+
+// Customer Sync Functions
+const { 
+  syncCustomerCallable, 
+  syncAllCustomersCallable, 
+  scheduledCustomerSync,
+  importFromQuickBooksCallable,
+} = require('./src/sync/customerSync');
+exports.syncCustomer = syncCustomerCallable;
+exports.syncAllCustomers = syncAllCustomersCallable;
+exports.scheduledCustomerSync = scheduledCustomerSync;
+exports.importFromQuickBooks = importFromQuickBooksCallable;
 
 // AI Utilities (new modular structure)
 const { 
@@ -430,7 +460,7 @@ async function checkRateLimit(userId, limitPerMinute = 10) {
 exports.api = onRequest({ 
   cors: true,
   invoker: 'public',
-  secrets: [ANTHROPIC_API_KEY, KATANA_API_KEY, GEMINI_API_KEY]
+  secrets: [ANTHROPIC_API_KEY, KATANA_API_KEY, GEMINI_API_KEY, QUICKBOOKS_CLIENT_ID, QUICKBOOKS_CLIENT_SECRET]
 }, async (req, res) => {
   const path = req.path.replace('/api', '');
   console.log('API Request:', req.method, path);
@@ -496,6 +526,13 @@ exports.api = onRequest({
       case '/quickbooks/sync-customer':
         if (req.method === 'POST') {
           await syncCustomerToQuickBooks(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/quickbooks/import-customers':
+        if (req.method === 'POST') {
+          await importCustomersFromQuickBooks(req, res);
         } else {
           res.status(405).json({ error: 'Method not allowed' });
         }
@@ -592,6 +629,34 @@ exports.api = onRequest({
       case '/ai/image-analysis':
         if (req.method === 'POST') {
           await handleImageAnalysisEndpoint(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/ai/generate-product-names':
+        if (req.method === 'POST') {
+          await handleGenerateProductNames(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/ai/generate-product-content':
+        if (req.method === 'POST') {
+          await handleGenerateProductContent(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/ai/generate-discoverability':
+        if (req.method === 'POST') {
+          await handleGenerateDiscoverability(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/ai/audit-product':
+        if (req.method === 'POST') {
+          await handleAuditProduct(req, res);
         } else {
           res.status(405).json({ error: 'Method not allowed' });
         }
@@ -2354,6 +2419,121 @@ async function syncCustomerToQuickBooks(req, res) {
   }
 }
 
+/**
+ * Import customers FROM QuickBooks into this tool
+ */
+async function importCustomersFromQuickBooks(req, res) {
+  try {
+    // Query all active customers from QuickBooks
+    const query = encodeURIComponent("SELECT * FROM Customer WHERE Active = true MAXRESULTS 1000");
+    const data = await qboRequest(`/query?query=${query}`);
+    const qbCustomers = data.QueryResponse?.Customer || [];
+    
+    const results = {
+      total: qbCustomers.length,
+      imported: 0,
+      updated: 0,
+      skipped: 0,
+      errors: [],
+    };
+
+    // Get next customer number for new imports
+    const existingCustomers = await db.collection('customers').get();
+    let maxNumber = 0;
+    existingCustomers.docs.forEach((doc) => {
+      const code = doc.data().code || '';
+      const match = code.match(/DF-CUS-(\d+)/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNumber) maxNumber = num;
+      }
+    });
+
+    for (const qbCustomer of qbCustomers) {
+      try {
+        // Check if customer already exists by QuickBooks ID
+        const existingQuery = await db.collection('customers')
+          .where('externalIds.quickbooksId', '==', qbCustomer.Id)
+          .get();
+
+        if (!existingQuery.empty) {
+          // Update existing customer
+          const existingDoc = existingQuery.docs[0];
+          await db.collection('customers').doc(existingDoc.id).update({
+            name: qbCustomer.DisplayName || qbCustomer.CompanyName || 'Unknown',
+            email: qbCustomer.PrimaryEmailAddr?.Address || null,
+            phone: qbCustomer.PrimaryPhone?.FreeFormNumber || null,
+            billingAddress: qbCustomer.BillAddr ? {
+              street1: qbCustomer.BillAddr.Line1 || '',
+              street2: qbCustomer.BillAddr.Line2 || '',
+              city: qbCustomer.BillAddr.City || '',
+              state: qbCustomer.BillAddr.CountrySubDivisionCode || '',
+              postalCode: qbCustomer.BillAddr.PostalCode || '',
+              country: qbCustomer.BillAddr.Country || 'Kenya',
+            } : null,
+            'syncStatus.quickbooks': 'synced',
+            'syncStatus.quickbooksLastSync': admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedBy: 'quickbooks_import',
+          });
+          results.updated++;
+        } else {
+          // Create new customer
+          maxNumber++;
+          const customerCode = `DF-CUS-${maxNumber.toString().padStart(3, '0')}`;
+          
+          await db.collection('customers').add({
+            code: customerCode,
+            name: qbCustomer.DisplayName || qbCustomer.CompanyName || 'Unknown',
+            type: qbCustomer.CompanyName ? 'commercial' : 'residential',
+            status: 'active',
+            email: qbCustomer.PrimaryEmailAddr?.Address || null,
+            phone: qbCustomer.PrimaryPhone?.FreeFormNumber || null,
+            website: qbCustomer.WebAddr?.URI || null,
+            billingAddress: qbCustomer.BillAddr ? {
+              street1: qbCustomer.BillAddr.Line1 || '',
+              street2: qbCustomer.BillAddr.Line2 || '',
+              city: qbCustomer.BillAddr.City || '',
+              state: qbCustomer.BillAddr.CountrySubDivisionCode || '',
+              postalCode: qbCustomer.BillAddr.PostalCode || '',
+              country: qbCustomer.BillAddr.Country || 'Kenya',
+            } : null,
+            contacts: [],
+            externalIds: {
+              quickbooksId: qbCustomer.Id,
+            },
+            syncStatus: {
+              quickbooks: 'synced',
+              quickbooksLastSync: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            notes: qbCustomer.Notes || '',
+            tags: ['imported-from-quickbooks'],
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdBy: 'quickbooks_import',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedBy: 'quickbooks_import',
+          });
+          results.imported++;
+        }
+      } catch (err) {
+        results.errors.push({ qbId: qbCustomer.Id, name: qbCustomer.DisplayName, error: err.message });
+      }
+    }
+
+    // Log import results
+    await db.collection('syncLogs').add({
+      type: 'quickbooks_import',
+      results,
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true, results });
+  } catch (error) {
+    console.error('QuickBooks import error:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
 // ============================================
 // Gemini AI Handlers
 // ============================================
@@ -3923,6 +4103,345 @@ async function handleImageAnalysisEndpoint(req, res) {
     res.json(result);
   } catch (error) {
     console.error('Image Analysis error:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Handle Generate Product Names AI request via Express API
+ */
+async function handleGenerateProductNames(req, res) {
+  try {
+    const { context, namingStrategy, existingNames = [] } = req.body;
+
+    if (!context || !context.category) {
+      return res.status(400).json({ error: 'Product context with category is required' });
+    }
+
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY.value());
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.0-flash',
+      generationConfig: { 
+        maxOutputTokens: 2048, 
+        temperature: 0.8,
+      },
+    });
+
+    const defaultStrategy = `Create names that:
+1. Evoke quality craftsmanship and premium materials
+2. Are memorable and easy to pronounce
+3. Work well for SEO
+4. Fit the Dawin Finishes brand identity
+5. Could work as part of a collection
+6. Are 2-4 words, avoiding generic terms`;
+
+    const prompt = `You are a product naming specialist for Dawin Finishes, a custom millwork and cabinet manufacturer.
+
+NAMING STRATEGY:
+${namingStrategy || defaultStrategy}
+
+EXISTING PRODUCT NAMES (avoid duplicates):
+${existingNames.length > 0 ? existingNames.join(', ') : 'None yet'}
+
+PRODUCT CONTEXT:
+- Category: ${context.category}
+- Materials: ${context.materials?.join(', ') || 'Custom materials'}
+- Features: ${context.features?.join(', ') || 'Handcrafted quality'}
+- Target Market: ${context.targetMarket || 'Design professionals and homeowners'}
+${context.dimensions ? `- Dimensions: ${context.dimensions}` : ''}
+${context.collectionHint ? `- Collection Hint: ${context.collectionHint}` : ''}
+
+Generate exactly 5 product name candidates. For each, provide:
+1. The name (2-4 words, evocative and memorable)
+2. A URL-friendly handle (lowercase, hyphens only)
+3. Brief rationale (1 sentence explaining why this name works)
+4. Scores 0-100 for: brandFit, seoScore, uniqueness
+
+Respond in this exact JSON format:
+{
+  "candidates": [
+    {
+      "name": "Product Name",
+      "handle": "product-name",
+      "rationale": "Why this name works for the brand",
+      "scores": { "brandFit": 85, "seoScore": 78, "uniqueness": 92 }
+    }
+  ]
+}`;
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    
+    let parsed;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch (parseError) {
+      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[1].trim());
+      } else {
+        const rawMatch = responseText.match(/\{[\s\S]*\}/);
+        if (rawMatch) {
+          parsed = JSON.parse(rawMatch[0]);
+        } else {
+          throw new Error('Failed to parse AI response');
+        }
+      }
+    }
+
+    const now = new Date().toISOString();
+    parsed.candidates = parsed.candidates.map(candidate => ({
+      ...candidate,
+      generatedAt: now,
+    }));
+
+    res.json(parsed);
+  } catch (error) {
+    console.error('Generate Product Names error:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Handle Generate Product Content AI request via Express API
+ */
+async function handleGenerateProductContent(req, res) {
+  try {
+    const { product, contentTypes = ['short', 'full', 'meta', 'bullets'], tone = 'professional' } = req.body;
+
+    if (!product || !product.name) {
+      return res.status(400).json({ error: 'Product with name is required' });
+    }
+
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY.value());
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.0-flash',
+      generationConfig: { 
+        maxOutputTokens: 4096, 
+        temperature: 0.7,
+      },
+    });
+
+    let dimensionsStr = 'Custom sizing available';
+    if (product.specifications?.dimensions) {
+      const d = product.specifications.dimensions;
+      dimensionsStr = `${d.length}x${d.width}x${d.height} ${d.unit || 'mm'}`;
+    }
+
+    const prompt = `Generate product content for a custom millwork product from Dawin Finishes.
+
+PRODUCT DETAILS:
+- Name: ${product.name}
+- Category: ${product.category || 'Custom Millwork'}
+- Materials: ${product.specifications?.materials?.join(', ') || 'Premium materials'}
+- Finishes: ${product.specifications?.finishes?.join(', ') || 'Custom finish options'}
+- Features: ${product.specifications?.features?.join(', ') || 'Handcrafted quality'}
+- Dimensions: ${dimensionsStr}
+- Description hint: ${product.description || 'High-quality custom piece'}
+
+TONE: ${tone}
+
+Generate the following in JSON format:
+{
+  "shortDescription": "50-100 word compelling summary",
+  "fullDescription": "300-500 word HTML description with <p>, <h3>, <ul>, <li>, <strong> tags",
+  "metaDescription": "Max 155 characters SEO meta description",
+  "bulletPoints": ["5-7 key selling points"],
+  "faqs": [{"question": "...", "answer": "..."}]
+}`;
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    
+    let parsed;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch (parseError) {
+      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[1].trim());
+      } else {
+        const rawMatch = responseText.match(/\{[\s\S]*\}/);
+        if (rawMatch) {
+          parsed = JSON.parse(rawMatch[0]);
+        } else {
+          throw new Error('Failed to parse AI response');
+        }
+      }
+    }
+
+    parsed.generatedAt = new Date().toISOString();
+    parsed.modelVersion = 'gemini-1.5-flash';
+    parsed.editedByUser = false;
+
+    res.json(parsed);
+  } catch (error) {
+    console.error('Generate Product Content error:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Handle Generate Discoverability Data AI request via Express API
+ */
+async function handleGenerateDiscoverability(req, res) {
+  try {
+    const { product } = req.body;
+
+    if (!product || !product.name) {
+      return res.status(400).json({ error: 'Product is required' });
+    }
+
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY.value());
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.0-flash',
+      generationConfig: { 
+        maxOutputTokens: 2048, 
+        temperature: 0.6,
+      },
+    });
+
+    const prompt = `Generate AI discoverability data for this custom millwork product:
+
+PRODUCT: ${product.name}
+CATEGORY: ${product.category || 'Custom Millwork'}
+MATERIALS: ${product.specifications?.materials?.join(', ') || 'Various'}
+FEATURES: ${product.specifications?.features?.join(', ') || 'Custom'}
+
+Generate discovery content in JSON format:
+{
+  "whatItIs": "Clear 1-sentence description",
+  "bestFor": "Who should buy this and why",
+  "comparedTo": "How it compares to alternatives",
+  "uniqueFeatures": ["3-5 standout features"],
+  "useCases": ["4-6 specific use cases"],
+  "faqs": [{"question": "...", "answer": "..."}],
+  "semanticTags": {
+    "materialType": ["wood", "veneer", etc.],
+    "styleCategory": ["modern", "traditional", etc.],
+    "roomType": ["kitchen", "bathroom", etc.],
+    "colorFamily": ["natural", "white", etc.]
+  },
+  "searchKeywords": ["10-15 relevant search terms"]
+}`;
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    
+    let parsed;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch (parseError) {
+      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[1].trim());
+      } else {
+        const rawMatch = responseText.match(/\{[\s\S]*\}/);
+        if (rawMatch) {
+          parsed = JSON.parse(rawMatch[0]);
+        } else {
+          throw new Error('Failed to parse AI response');
+        }
+      }
+    }
+
+    parsed.generatedAt = new Date().toISOString();
+    res.json(parsed);
+  } catch (error) {
+    console.error('Generate Discoverability error:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Handle Audit Product request via Express API
+ */
+async function handleAuditProduct(req, res) {
+  try {
+    const { shopifyProduct, auditConfig = {} } = req.body;
+
+    if (!shopifyProduct) {
+      return res.status(400).json({ error: 'Shopify product data is required' });
+    }
+
+    const config = {
+      minDescriptionLength: auditConfig.minDescriptionLength || 100,
+      maxDescriptionLength: auditConfig.maxDescriptionLength || 5000,
+      minImageCount: auditConfig.minImageCount || 3,
+      requiredBrandTerms: auditConfig.brandTerms?.required || ['Dawin', 'custom', 'crafted'],
+      prohibitedTerms: auditConfig.brandTerms?.prohibited || ['cheap', 'discount', 'knockoff'],
+    };
+
+    const issues = [];
+    const categoryScores = {
+      content_completeness: 100,
+      seo_quality: 100,
+      image_optimization: 100,
+      schema_data: 100,
+      brand_consistency: 100,
+    };
+
+    // Title check
+    if (!shopifyProduct.title || shopifyProduct.title.length < 5) {
+      issues.push({
+        id: `title_${Date.now()}`,
+        category: 'content_completeness',
+        severity: 'critical',
+        field: 'title',
+        message: 'Title is missing or too short',
+      });
+      categoryScores.content_completeness -= 25;
+    }
+
+    // Description check
+    const descriptionLength = (shopifyProduct.body_html || '').replace(/<[^>]*>/g, '').length;
+    if (descriptionLength < config.minDescriptionLength) {
+      issues.push({
+        id: `desc_short_${Date.now()}`,
+        category: 'content_completeness',
+        severity: 'high',
+        field: 'body_html',
+        message: `Description too short (${descriptionLength} chars)`,
+      });
+      categoryScores.content_completeness -= 20;
+    }
+
+    // Image check
+    const images = shopifyProduct.images || [];
+    if (images.length < config.minImageCount) {
+      issues.push({
+        id: `img_count_${Date.now()}`,
+        category: 'image_optimization',
+        severity: 'high',
+        field: 'images',
+        message: `Insufficient images (${images.length}/${config.minImageCount})`,
+      });
+      categoryScores.image_optimization -= 20;
+    }
+
+    // Ensure scores don't go below 0
+    Object.keys(categoryScores).forEach(key => {
+      categoryScores[key] = Math.max(0, categoryScores[key]);
+    });
+
+    // Weighted average
+    const weights = { content_completeness: 0.3, seo_quality: 0.25, image_optimization: 0.2, schema_data: 0.1, brand_consistency: 0.15 };
+    let overallScore = 0;
+    Object.entries(weights).forEach(([category, weight]) => {
+      overallScore += categoryScores[category] * weight;
+    });
+    overallScore = Math.round(overallScore);
+
+    res.json({
+      productId: shopifyProduct.id,
+      auditedAt: new Date().toISOString(),
+      overallScore,
+      categoryScores,
+      issues,
+      recommendations: issues.slice(0, 5).map(i => `${i.severity.toUpperCase()}: ${i.message}`),
+    });
+  } catch (error) {
+    console.error('Audit Product error:', error);
     res.status(500).json({ error: error.message });
   }
 }

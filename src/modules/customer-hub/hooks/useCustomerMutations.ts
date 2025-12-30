@@ -24,7 +24,7 @@ interface UseCustomerMutationsReturn {
   create: (data: CustomerFormData, userId: string) => Promise<string>;
   update: (customerId: string, data: Partial<CustomerFormData>, userId: string) => Promise<void>;
   remove: (customerId: string, userId: string, hardDelete?: boolean) => Promise<void>;
-  generateCode: (name: string, type: string) => string;
+  generateCode: () => Promise<string>;
   clearErrors: () => void;
 }
 

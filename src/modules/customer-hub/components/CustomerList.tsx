@@ -5,9 +5,11 @@
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, Building2, Phone, Mail } from 'lucide-react';
+import { Search, Plus, Building2, Phone, Mail, Download, RefreshCw } from 'lucide-react';
 import { useCustomers } from '../hooks';
 import type { CustomerStatus, CustomerType } from '../types';
+
+const API_BASE = 'https://api-okekivpl2a-uc.a.run.app';
 
 const STATUS_CONFIG: Record<CustomerStatus, { bg: string; text: string; label: string }> = {
   active: { bg: 'bg-green-100', text: 'text-green-800', label: 'Active' },
@@ -30,6 +32,38 @@ export function CustomerList({ onNewCustomer }: CustomerListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<CustomerStatus | ''>('');
   const [typeFilter, setTypeFilter] = useState<CustomerType | ''>('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleImportFromQuickBooks = async () => {
+    setIsImporting(true);
+    setImportResult(null);
+    
+    try {
+      const response = await fetch(`${API_BASE}/quickbooks/import-customers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Import failed');
+      }
+      
+      setImportResult({
+        success: true,
+        message: `Imported ${data.results.imported} new, updated ${data.results.updated} existing (${data.results.total} total in QuickBooks)`,
+      });
+    } catch (err) {
+      setImportResult({
+        success: false,
+        message: err instanceof Error ? err.message : 'Import failed',
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const { filteredCustomers, loading, error } = useCustomers({
     status: statusFilter || undefined,
@@ -61,14 +95,36 @@ export function CustomerList({ onNewCustomer }: CustomerListProps) {
           <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
           <p className="text-muted-foreground">Manage your customer database</p>
         </div>
-        <button
-          onClick={onNewCustomer}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          New Customer
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleImportFromQuickBooks}
+            disabled={isImporting}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            {isImporting ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            {isImporting ? 'Importing...' : 'Import from QuickBooks'}
+          </button>
+          <button
+            onClick={onNewCustomer}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            New Customer
+          </button>
+        </div>
       </div>
+
+      {/* Import Result Banner */}
+      {importResult && (
+        <div className={`p-3 rounded-lg ${importResult.success ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+          {importResult.message}
+          <button onClick={() => setImportResult(null)} className="ml-2 underline text-sm">Dismiss</button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">

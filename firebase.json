@@ -27,6 +27,22 @@
         "function": "analyzeAssetCapabilities"
       },
       {
+        "source": "/fn/generateProductNames",
+        "function": "generateProductNames"
+      },
+      {
+        "source": "/fn/generateProductContent",
+        "function": "generateProductContent"
+      },
+      {
+        "source": "/fn/generateDiscoverabilityData",
+        "function": "generateDiscoverabilityData"
+      },
+      {
+        "source": "/fn/auditShopifyProduct",
+        "function": "auditShopifyProduct"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

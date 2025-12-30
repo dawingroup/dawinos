@@ -44,6 +44,7 @@ export interface ContactPerson {
 export interface ExternalIds {
   katanaId?: string;        // Katana MRP customer ID
   quickbooksId?: string;    // QuickBooks customer ID
+  shopifyId?: string;       // Shopify customer ID
   driveFolderId?: string;   // Google Drive folder ID
   driveProjectsFolderId?: string;
   driveDocumentsFolderId?: string;
@@ -60,6 +61,9 @@ export interface SyncStatus {
   quickbooks?: 'synced' | 'failed' | 'pending';
   quickbooksError?: string;
   quickbooksLastSync?: Timestamp;
+  shopify?: 'synced' | 'failed' | 'pending';
+  shopifyError?: string;
+  shopifyLastSync?: Timestamp;
   drive?: 'synced' | 'failed' | 'pending';
   driveError?: string;
   driveLastSync?: Timestamp;

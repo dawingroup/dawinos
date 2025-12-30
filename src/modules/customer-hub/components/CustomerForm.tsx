@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import { X, RefreshCw, FolderPlus } from 'lucide-react';
 import { useCustomerMutations } from '../hooks';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 import { useDriveService } from '@/services/driveService';
 import type { Customer, CustomerFormData, CustomerType, CustomerStatus } from '../types';
 
@@ -63,11 +63,9 @@ export function CustomerForm({ customer, onClose, onSuccess }: CustomerFormProps
     }
   }, [customer]);
 
-  const handleGenerateCode = () => {
-    if (formData.name) {
-      const code = generateCode(formData.name, formData.type);
-      setFormData((prev) => ({ ...prev, code }));
-    }
+  const handleGenerateCode = async () => {
+    const code = await generateCode();
+    setFormData((prev) => ({ ...prev, code }));
   };
 
   const validate = (): boolean => {
@@ -186,7 +184,17 @@ export function CustomerForm({ customer, onClose, onSuccess }: CustomerFormProps
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                onChange={(e) => {
+                  const newName = e.target.value;
+                  setFormData((prev) => ({ ...prev, name: newName }));
+                }}
+                onBlur={async () => {
+                  // Auto-generate code on blur if empty (new customer only)
+                  if (!isEditing && formData.name.trim() && !formData.code) {
+                    const code = await generateCode();
+                    setFormData((prev) => ({ ...prev, code }));
+                  }
+                }}
                 className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary ${
                   errors.name ? 'border-red-300' : 'border-gray-200'
                 }`}
@@ -276,6 +284,43 @@ export function CustomerForm({ customer, onClose, onSuccess }: CustomerFormProps
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
               placeholder="Additional notes about this customer..."
             />
+          </div>
+
+          {/* External Integrations */}
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-3">External Integrations</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Shopify Customer ID
+                </label>
+                <input
+                  type="text"
+                  value={formData.externalIds?.shopifyId || ''}
+                  onChange={(e) => setFormData((prev) => ({
+                    ...prev,
+                    externalIds: { ...prev.externalIds, shopifyId: e.target.value }
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  placeholder="e.g., gid://shopify/Customer/123456"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  QuickBooks Customer ID
+                </label>
+                <input
+                  type="text"
+                  value={formData.externalIds?.quickbooksId || ''}
+                  onChange={(e) => setFormData((prev) => ({
+                    ...prev,
+                    externalIds: { ...prev.externalIds, quickbooksId: e.target.value }
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  placeholder="e.g., 12345"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Google Drive Folder - different UI for new vs edit */}

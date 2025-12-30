@@ -20,7 +20,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useCustomer, useCustomerMutations } from '../hooks';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 import { useDriveService } from '@/services/driveService';
 import { CustomerForm } from './CustomerForm';
 import type { CustomerStatus, CustomerType } from '../types';

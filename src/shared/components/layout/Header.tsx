@@ -6,7 +6,7 @@
 
 import { useAuth } from '@/shared/hooks';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LogOut, User, Scissors, FolderOpen, Wrench, Layers } from 'lucide-react';
+import { LogOut, User, Scissors, FolderOpen, Wrench, Layers, Rocket } from 'lucide-react';
 
 export interface HeaderProps {
   title?: string;
@@ -18,6 +18,7 @@ export function Header({ title = 'Dawin Finishes' }: HeaderProps) {
   const navigate = useNavigate();
 
   const getCurrentModule = () => {
+    if (location.pathname.startsWith('/launch-pipeline')) return 'launch';
     if (location.pathname.startsWith('/design')) return 'design';
     if (location.pathname.startsWith('/assets')) return 'assets';
     if (location.pathname.startsWith('/features')) return 'features';
@@ -89,6 +90,17 @@ export function Header({ title = 'Dawin Finishes' }: HeaderProps) {
         >
           <Layers className="h-4 w-4" />
           <span className="hidden sm:inline">Features</span>
+        </button>
+        <button
+          onClick={() => navigate('/launch-pipeline')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors min-h-[36px] sm:min-h-auto ${
+            currentModule === 'launch'
+              ? 'bg-[#1d1d1f] text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Rocket className="h-4 w-4" />
+          <span className="hidden sm:inline">Launch</span>
         </button>
       </div>
 

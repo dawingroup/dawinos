@@ -4,7 +4,7 @@
  */
 
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, FileSpreadsheet, Palette, Package, Factory, Wrench, Layers } from 'lucide-react';
+import { LayoutDashboard, FileSpreadsheet, Palette, Package, Factory, Wrench, Layers, Rocket } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
 export interface NavItem {
@@ -40,6 +40,12 @@ const navItems: NavItem[] = [
     label: 'Feature Library',
     href: '/features',
     icon: <Layers className="w-5 h-5" />,
+  },
+  {
+    label: 'Launch Pipeline',
+    href: '/launch-pipeline',
+    icon: <Rocket className="w-5 h-5" />,
+    badge: 'New',
   },
   {
     label: 'Procurement',

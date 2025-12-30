@@ -175,16 +175,36 @@ export async function deleteCustomer(
 }
 
 /**
- * Generate a customer code from name
+ * Get the next sequential customer number
  */
-export function generateCustomerCode(name: string, type: string): string {
-  const namePart = name
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '')
-    .substring(0, 6);
-  
-  const typePart = type.substring(0, 3).toUpperCase();
-  const randomPart = Math.random().toString(36).substring(2, 5).toUpperCase();
-  
-  return `${namePart}-${typePart}-${randomPart}`;
+export async function getNextCustomerNumber(): Promise<number> {
+  return new Promise((resolve) => {
+    const q = query(customersRef);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      unsubscribe();
+      
+      let maxNumber = 0;
+      snapshot.docs.forEach((doc) => {
+        const code = doc.data().code || '';
+        // Extract number from DF-CUS-### format
+        const match = code.match(/DF-CUS-(\d+)/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num > maxNumber) maxNumber = num;
+        }
+      });
+      
+      resolve(maxNumber + 1);
+    });
+  });
+}
+
+/**
+ * Generate a customer code in format DF-CUS-[Sequential#]
+ */
+export async function generateCustomerCode(): Promise<string> {
+  const nextNumber = await getNextCustomerNumber();
+  // Pad to 3 digits minimum (001, 002, ... 999, 1000, etc.)
+  const paddedNumber = nextNumber.toString().padStart(3, '0');
+  return `DF-CUS-${paddedNumber}`;
 }
