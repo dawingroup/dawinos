@@ -7,9 +7,63 @@ import { OffcutProvider } from './contexts/OffcutContext.jsx'
 import { WorkInstanceProvider } from './contexts/WorkInstanceContext.jsx'
 import DesignManagerModule from './modules/design-manager/DesignManagerModule'
 import CustomerHubModule from './modules/customer-hub/CustomerHubModule'
-import { FolderOpen, User, LogOut, Users, Layers, Cog, Map, Store, Wrench } from 'lucide-react'
+import LaunchPipelineModule from './modules/launch-pipeline/LaunchPipelineModule'
+import { FolderOpen, User, LogOut, Users, Layers, Cog, Wrench, AlertTriangle, Rocket } from 'lucide-react'
 import { AssetRegistryPage } from './modules/assets'
 import './index.css'
+
+/**
+ * Error Boundary to catch and display runtime errors
+ */
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    this.setState({ errorInfo });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+          <div className="max-w-lg w-full bg-white rounded-lg shadow-lg p-6">
+            <div className="flex items-center gap-3 text-red-600 mb-4">
+              <AlertTriangle className="w-8 h-8" />
+              <h1 className="text-xl font-bold">Something went wrong</h1>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded p-3 mb-4">
+              <p className="text-sm font-mono text-red-800 break-all">
+                {this.state.error?.message || 'Unknown error'}
+              </p>
+            </div>
+            <details className="text-xs text-gray-600 mb-4">
+              <summary className="cursor-pointer font-medium">Stack trace</summary>
+              <pre className="mt-2 p-2 bg-gray-100 rounded overflow-auto max-h-48 text-xs">
+                {this.state.error?.stack}
+              </pre>
+            </details>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full px-4 py-2 bg-[#872E5C] text-white rounded-md hover:bg-[#6a2449]"
+            >
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 /**
  * Global Header with Module Switcher
@@ -22,14 +76,13 @@ function GlobalHeader() {
   
   const currentModule = location.pathname.startsWith('/design/materials') ? 'materials' :
     location.pathname.startsWith('/design/features') ? 'features' :
-    location.pathname.startsWith('/design/roadmap') ? 'roadmap' :
-    location.pathname.startsWith('/design/shopify') ? 'shopify' :
+    location.pathname.startsWith('/launch-pipeline') ? 'launch-pipeline' :
     location.pathname.startsWith('/design') ? 'design' : 
     location.pathname.startsWith('/customers') ? 'customers' :
     location.pathname.startsWith('/assets') ? 'assets' : 'design'
 
   return (
-    <header className="sticky top-0 z-50 h-14 border-b border-gray-200 bg-white/95 backdrop-blur px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+    <header className="sticky top-0 z-50 h-16 sm:h-14 border-b border-gray-200 bg-white/95 backdrop-blur px-2 sm:px-6 lg:px-8 flex items-center justify-between gap-2">
       {/* Left: Logo and Brand */}
       <div className="flex items-center gap-2">
         <div 
@@ -45,10 +98,11 @@ function GlobalHeader() {
       </div>
 
       {/* Center: Module Switcher */}
-      <div className="flex items-center gap-1 border rounded-lg p-1 bg-gray-50">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1 border rounded-lg p-1 bg-gray-50 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <button
           onClick={() => navigate('/design')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
             currentModule === 'design'
               ? 'bg-[#1d1d1f] text-white'
               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -60,7 +114,7 @@ function GlobalHeader() {
         </button>
         <button
           onClick={() => navigate('/customers')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
             currentModule === 'customers'
               ? 'bg-[#1d1d1f] text-white'
               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -72,7 +126,7 @@ function GlobalHeader() {
         </button>
         <button
           onClick={() => navigate('/design/materials')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
             currentModule === 'materials'
               ? 'bg-[#1d1d1f] text-white'
               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -84,7 +138,7 @@ function GlobalHeader() {
         </button>
         <button
           onClick={() => navigate('/design/features')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
             currentModule === 'features'
               ? 'bg-[#1d1d1f] text-white'
               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -95,32 +149,8 @@ function GlobalHeader() {
           <span className="sm:hidden">Feat</span>
         </button>
         <button
-          onClick={() => navigate('/design/roadmap')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            currentModule === 'roadmap'
-              ? 'bg-[#1d1d1f] text-white'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <Map className="h-4 w-4" />
-          <span className="hidden sm:inline">Roadmap</span>
-          <span className="sm:hidden">Road</span>
-        </button>
-        <button
-          onClick={() => navigate('/design/shopify')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            currentModule === 'shopify'
-              ? 'bg-[#1d1d1f] text-white'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <Store className="h-4 w-4" />
-          <span className="hidden sm:inline">Shopify</span>
-          <span className="sm:hidden">Shop</span>
-        </button>
-        <button
           onClick={() => navigate('/assets')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
             currentModule === 'assets'
               ? 'bg-[#1d1d1f] text-white'
               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -129,6 +159,18 @@ function GlobalHeader() {
           <Wrench className="h-4 w-4" />
           <span className="hidden sm:inline">Assets</span>
         </button>
+        <button
+          onClick={() => navigate('/launch-pipeline')}
+          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
+            currentModule === 'launch-pipeline'
+              ? 'bg-[#1d1d1f] text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Rocket className="h-4 w-4" />
+          <span className="hidden sm:inline">Launch</span>
+        </button>
+        </div>
       </div>
 
       {/* Right: User Menu */}
@@ -153,7 +195,7 @@ function GlobalHeader() {
             </div>
             <button
               onClick={() => signOut()}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+              className="p-2 min-h-[44px] min-w-[44px] text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
               title="Sign out"
             >
               <LogOut className="w-4 h-4" />
@@ -162,7 +204,7 @@ function GlobalHeader() {
         ) : (
           <button
             onClick={() => signInWithGoogle()}
-            className="flex items-center gap-2 px-4 py-2 bg-[#1d1d1f] text-white rounded-md text-sm font-medium hover:bg-[#424245] transition-colors"
+            className="flex items-center gap-2 px-4 py-2 min-h-[44px] bg-[#1d1d1f] text-white rounded-md text-sm font-medium hover:bg-[#424245] transition-colors"
           >
             <User className="h-4 w-4 sm:hidden" />
             <span className="hidden sm:inline">Sign In</span>
@@ -206,6 +248,7 @@ function MainApp() {
                   <Route path="/design/*" element={<DesignManagerModule />} />
                   <Route path="/customers/*" element={<CustomerHubModule />} />
                   <Route path="/assets" element={<AssetRegistryPage />} />
+                  <Route path="/launch-pipeline/*" element={<LaunchPipelineModule />} />
                   {/* Redirect root and legacy cutlist routes to Design Manager */}
                   <Route path="/" element={<Navigate to="/design" replace />} />
                   <Route path="/cutlist" element={<Navigate to="/design" replace />} />
@@ -222,6 +265,8 @@ function MainApp() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <MainApp />
+    <ErrorBoundary>
+      <MainApp />
+    </ErrorBoundary>
   </React.StrictMode>,
 )

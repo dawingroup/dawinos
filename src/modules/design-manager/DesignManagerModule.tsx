@@ -5,6 +5,7 @@
 
 import { Routes, Route } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
+import { Navigate } from 'react-router-dom';
 
 // Lazy load pages for code splitting
 const DesignManagerPageNew = lazy(() => import('./components/dashboard/DesignManagerPageNew'));
@@ -13,8 +14,6 @@ const DesignItemDetail = lazy(() => import('./components/design-item/DesignItemD
 const MaterialsPage = lazy(() => import('./pages/MaterialsPage'));
 const FeatureLibraryPage = lazy(() => import('./components/feature-library/FeatureLibraryPage'));
 const StrategyCanvasPage = lazy(() => import('./pages/StrategyCanvasPage'));
-const RoadmapPage = lazy(() => import('./components/roadmap/RoadmapPage'));
-const ShopifyPage = lazy(() => import('./pages/ShopifyPage'));
 
 /**
  * Loading fallback
@@ -37,8 +36,8 @@ export default function DesignManagerModule() {
         <Route index element={<DesignManagerPageNew />} />
         <Route path="materials" element={<MaterialsPage />} />
         <Route path="features" element={<FeatureLibraryPage />} />
-        <Route path="roadmap" element={<RoadmapPage />} />
-        <Route path="shopify" element={<ShopifyPage />} />
+        <Route path="roadmap" element={<Navigate to="/design" replace />} />
+        <Route path="shopify" element={<Navigate to="/design" replace />} />
         <Route path="project/:projectId" element={<ProjectView />} />
         <Route path="project/:projectId/strategy" element={<StrategyCanvasPage />} />
         <Route path="project/:projectId/item/:itemId" element={<DesignItemDetail />} />

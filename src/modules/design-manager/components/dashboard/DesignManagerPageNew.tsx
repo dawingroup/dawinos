@@ -8,7 +8,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Package, LayoutGrid, List, Plus, Search, Filter, FolderOpen, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/shared/components/ui';
-import { useAuth } from '@/shared/hooks';
+import { useAuth } from '@/contexts/AuthContext';
 import { subscribeToProjects, subscribeToDesignItems } from '../../services/firestore';
 import type { DesignProject, DesignItem } from '../../types';
 import { DesignItemCard } from '../design-item/DesignItemCard';
@@ -133,7 +133,7 @@ export default function DesignManagerPageNew() {
   }
 
   return (
-    <div className="px-6 py-6 space-y-6">
+    <div className="px-4 py-4 sm:px-6 sm:py-6 space-y-6">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -142,7 +142,7 @@ export default function DesignManagerPageNew() {
         </div>
 <Button 
           onClick={handleNewProject}
-          className="bg-primary hover:bg-primary/90"
+          className="bg-primary hover:bg-primary/90 min-h-[44px] w-full sm:w-auto"
         >
           <Plus className="h-4 w-4 mr-2" />
           New Project
