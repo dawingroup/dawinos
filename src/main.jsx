@@ -8,8 +8,9 @@ import { WorkInstanceProvider } from './contexts/WorkInstanceContext.jsx'
 import DesignManagerModule from './modules/design-manager/DesignManagerModule'
 import CustomerHubModule from './modules/customer-hub/CustomerHubModule'
 import LaunchPipelineModule from './modules/launch-pipeline/LaunchPipelineModule'
-import { FolderOpen, User, LogOut, Users, Layers, Cog, Wrench, AlertTriangle, Rocket } from 'lucide-react'
+import { FolderOpen, User, LogOut, Users, Layers, Cog, Wrench, AlertTriangle, Rocket, Database, Image } from 'lucide-react'
 import { AssetRegistryPage } from './modules/assets'
+import ClipperPage from './app/pages/ClipperPage'
 import './index.css'
 
 /**
@@ -74,7 +75,9 @@ function GlobalHeader() {
   const location = useLocation()
   const navigate = useNavigate()
   
-  const currentModule = location.pathname.startsWith('/design/materials') ? 'materials' :
+  const currentModule = location.pathname.startsWith('/clipper') ? 'clipper' :
+    location.pathname.startsWith('/design/katana') ? 'katana' :
+    location.pathname.startsWith('/design/materials') ? 'materials' :
     location.pathname.startsWith('/design/features') ? 'features' :
     location.pathname.startsWith('/launch-pipeline') ? 'launch-pipeline' :
     location.pathname.startsWith('/design') ? 'design' : 
@@ -100,6 +103,17 @@ function GlobalHeader() {
       {/* Center: Module Switcher */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1 border rounded-lg p-1 bg-gray-50 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <button
+          onClick={() => navigate('/clipper')}
+          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
+            currentModule === 'clipper'
+              ? 'bg-[#1d1d1f] text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Image className="h-4 w-4" />
+          <span className="hidden sm:inline">Clipper</span>
+        </button>
         <button
           onClick={() => navigate('/design')}
           className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
@@ -135,6 +149,18 @@ function GlobalHeader() {
           <Layers className="h-4 w-4" />
           <span className="hidden sm:inline">Materials</span>
           <span className="sm:hidden">Mat</span>
+        </button>
+        <button
+          onClick={() => navigate('/design/katana')}
+          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
+            currentModule === 'katana'
+              ? 'bg-[#1d1d1f] text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Database className="h-4 w-4" />
+          <span className="hidden sm:inline">Katana</span>
+          <span className="sm:hidden">Ktn</span>
         </button>
         <button
           onClick={() => navigate('/design/features')}
@@ -245,6 +271,7 @@ function MainApp() {
             <WorkInstanceProvider>
               <AppLayout>
                 <Routes>
+                  <Route path="/clipper" element={<ClipperPage />} />
                   <Route path="/design/*" element={<DesignManagerModule />} />
                   <Route path="/customers/*" element={<CustomerHubModule />} />
                   <Route path="/assets" element={<AssetRegistryPage />} />

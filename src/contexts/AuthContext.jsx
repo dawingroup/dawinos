@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { 
-  signInWithPopup, 
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut, 
   onAuthStateChanged,
   GoogleAuthProvider
@@ -24,6 +26,21 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     console.log('AuthProvider: Setting up auth state listener');
+    
+    // Check for redirect result first
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          console.log('Redirect sign-in successful:', result.user.email);
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.accessToken) {
+            localStorage.setItem('googleAccessToken', credential.accessToken);
+          }
+        }
+      })
+      .catch((error) => {
+        console.error('Redirect result error:', error);
+      });
     
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       console.log('Auth state changed:', currentUser ? currentUser.email : 'No user');
@@ -54,7 +71,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       console.log('Attempting Google sign-in with popup...');
       
-      // Use popup for more reliable authentication
+      // Use popup for authentication
       const result = await signInWithPopup(auth, googleProvider);
       console.log('Sign-in successful:', result.user.email);
       
@@ -75,7 +92,8 @@ export const AuthProvider = ({ children }) => {
       if (error.code === 'auth/popup-closed-by-user') {
         console.log('Popup was closed by user');
       } else if (error.code === 'auth/popup-blocked') {
-        alert('Popup was blocked. Please allow popups for this site and try again.');
+        console.log('Popup was blocked, trying redirect instead');
+        await signInWithRedirect(auth, googleProvider);
       } else if (error.code === 'auth/unauthorized-domain') {
         alert(`Domain not authorized: ${window.location.origin}. Please contact support.`);
       } else if (error.code === 'auth/cancelled-popup-request') {

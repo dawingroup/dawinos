@@ -14,6 +14,7 @@ const DesignManagerPage = lazy(() => import('../pages/DesignManagerPage'));
 const AssetRegistryPage = lazy(() => import('../pages/AssetRegistryPage'));
 const FeatureLibraryPage = lazy(() => import('../pages/FeatureLibraryPage'));
 const LaunchPipelineModule = lazy(() => import('@/modules/launch-pipeline/LaunchPipelineModule'));
+const ClipperPage = lazy(() => import('../pages/ClipperPage'));
 // AI tools are now embedded in Strategy Canvas and Design Item Detail pages
 // const AIToolsPage = lazy(() => import('@/modules/design-manager/pages/AIToolsPage'));
 
@@ -45,6 +46,7 @@ function withSuspense(Component: React.LazyExoticComponent<React.ComponentType<u
 export const ROUTES = {
   HOME: '/',
   DASHBOARD: '/',
+  CLIPPER: '/clipper',
   CUTLIST: '/cutlist',
   DESIGN: '/design',
   ASSETS: '/assets',
@@ -68,6 +70,10 @@ export const routeConfig: RouteObject[] = [
       {
         index: true,
         element: withSuspense(DashboardPage),
+      },
+      {
+        path: 'clipper',
+        element: withSuspense(ClipperPage),
       },
       {
         path: 'cutlist/*',

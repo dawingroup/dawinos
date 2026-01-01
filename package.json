@@ -1,7 +1,7 @@
 {
-  "name": "dawin-cutlist-processor",
-  "version": "1.0.0",
-  "description": "Cutting list processor and optimizer for Dawin Group millwork operations",
+  "name": "dawinos-finishes",
+  "version": "2.0.0",
+  "description": "DawinOS - Dawin Finishes: Manufacturing & millwork operations platform for the Dawin Group",
   "type": "module",
   "scripts": {
     "dev": "vite",

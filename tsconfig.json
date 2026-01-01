@@ -29,10 +29,14 @@
     "paths": {
       "@/*": ["./src/*"],
       "@/app/*": ["./src/app/*"],
-      "@/modules/*": ["./src/modules/*"],
-      "@/shared/*": ["./src/shared/*"],
+      "@/core/*": ["./src/core/*"],
+      "@/subsidiaries/*": ["./src/subsidiaries/*"],
+      "@/extensions/*": ["./src/extensions/*"],
+      "@/finishes/*": ["./src/subsidiaries/finishes/*"],
       "@/assets/*": ["./src/assets/*"],
-      "@/styles/*": ["./src/styles/*"]
+      "@/styles/*": ["./src/styles/*"],
+      "@/modules/*": ["./src/modules/*"],
+      "@/shared/*": ["./src/shared/*"]
     }
   },
   "include": ["src"],

@@ -1,0 +1,9 @@
+{
+  "projects": {
+    "default": "dawinos",
+    "production": "dawinos",
+    "legacy": "dawin-cutlist-processor"
+  },
+  "targets": {},
+  "etags": {}
+}
