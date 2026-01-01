@@ -4,10 +4,30 @@
  */
 
 import React, { useState } from 'react';
-import { Search, Filter, Grid, List, Plus, RefreshCw, Image } from 'lucide-react';
+import { Search, Grid, List, RefreshCw, Image, Lightbulb, Puzzle, ShoppingCart, Palette, Wrench, Rocket } from 'lucide-react';
 import { ClipCard } from './ClipCard';
 import { useClips } from '../hooks/useClips';
-import type { DesignClip } from '../types';
+import type { DesignClip, ClipType } from '../types';
+
+const CLIP_TYPE_ICONS: Record<ClipType, React.ElementType> = {
+  'inspiration': Lightbulb,
+  'reference': Image,
+  'parts-source': Puzzle,
+  'procurement': ShoppingCart,
+  'material': Palette,
+  'asset': Wrench,
+  'product-idea': Rocket,
+};
+
+const CLIP_TYPE_COLORS: Record<ClipType, string> = {
+  'inspiration': 'bg-yellow-100 text-yellow-700',
+  'reference': 'bg-blue-100 text-blue-700',
+  'parts-source': 'bg-purple-100 text-purple-700',
+  'procurement': 'bg-green-100 text-green-700',
+  'material': 'bg-pink-100 text-pink-700',
+  'asset': 'bg-orange-100 text-orange-700',
+  'product-idea': 'bg-indigo-100 text-indigo-700',
+};
 
 interface ClipGalleryProps {
   projectId?: string;
@@ -136,7 +156,15 @@ export function ClipGallery({
                 className="w-16 h-16 object-cover rounded"
               />
               <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-gray-900 truncate">{clip.title}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-medium text-gray-900 truncate">{clip.title}</h3>
+                  {clip.clipType && CLIP_TYPE_ICONS[clip.clipType] && (
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${CLIP_TYPE_COLORS[clip.clipType]}`}>
+                      {React.createElement(CLIP_TYPE_ICONS[clip.clipType], { className: 'w-3 h-3' })}
+                      {clip.clipType.replace('-', ' ')}
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-gray-500 truncate">{clip.brand || clip.sourceUrl}</p>
                 {clip.price && (
                   <p className="text-sm text-gray-600">{clip.price.formatted}</p>

@@ -180,7 +180,28 @@ async function toggleClippingMode(): Promise<{ success: boolean }> {
     return { success: false };
   }
   
-  await chrome.tabs.sendMessage(activeTab.id, { type: 'TOGGLE_CLIPPING_MODE' });
+  // Try to send message, inject content script if it fails
+  try {
+    await chrome.tabs.sendMessage(activeTab.id, { type: 'TOGGLE_CLIPPING_MODE' });
+  } catch (error) {
+    // Content script not loaded, inject it first
+    console.log('Injecting content script...');
+    await chrome.scripting.executeScript({
+      target: { tabId: activeTab.id },
+      files: ['content.js'],
+    });
+    // Also inject styles
+    await chrome.scripting.insertCSS({
+      target: { tabId: activeTab.id },
+      css: `
+        .dawin-clipping-active { cursor: crosshair !important; }
+        .dawin-highlight { outline: 3px solid #872E5C !important; outline-offset: 2px; }
+      `,
+    });
+    // Now send the message
+    await chrome.tabs.sendMessage(activeTab.id, { type: 'TOGGLE_CLIPPING_MODE' });
+  }
+  
   return { success: true };
 }
 

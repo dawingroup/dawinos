@@ -43,7 +43,7 @@ export function useClips(options: UseClipsOptions = {}): UseClipsReturn {
   };
 
   useEffect(() => {
-    if (!user?.email) {
+    if (!user?.uid) {
       setClips([]);
       setLoading(false);
       return;
@@ -52,25 +52,25 @@ export function useClips(options: UseClipsOptions = {}): UseClipsReturn {
     setLoading(true);
     setError(null);
 
-    const unsubscribe = subscribeToClips(user.email, filter, (newClips) => {
+    const unsubscribe = subscribeToClips(user.uid, filter, (newClips) => {
       setClips(newClips);
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [user?.email, options.projectId, refreshKey]);
+  }, [user?.uid, options.projectId, refreshKey]);
 
   const handleCreateClip = useCallback(async (
     clipData: Omit<DesignClip, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>
   ) => {
-    if (!user?.email) throw new Error('Not authenticated');
+    if (!user?.uid) throw new Error('Not authenticated');
     
     return createClip({
       ...clipData,
-      createdBy: user.email,
+      createdBy: user.uid,
       syncStatus: 'synced',
     });
-  }, [user?.email]);
+  }, [user?.uid]);
 
   const handleUpdateClip = useCallback(async (clipId: string, updates: Partial<DesignClip>) => {
     await updateClip(clipId, updates);

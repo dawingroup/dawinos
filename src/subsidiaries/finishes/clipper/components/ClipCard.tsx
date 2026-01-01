@@ -4,8 +4,18 @@
  */
 
 import React from 'react';
-import { ExternalLink, Tag, Link2, MoreVertical } from 'lucide-react';
-import type { DesignClip } from '../types';
+import { ExternalLink, Tag, Link2, Lightbulb, Image, Puzzle, ShoppingCart, Palette, Wrench, Rocket, Sparkles, Clock } from 'lucide-react';
+import type { DesignClip, ClipType } from '../types';
+
+const CLIP_TYPE_CONFIG: Record<ClipType, { icon: React.ElementType; label: string; color: string }> = {
+  'inspiration': { icon: Lightbulb, label: 'Inspiration', color: 'bg-yellow-100 text-yellow-700' },
+  'reference': { icon: Image, label: 'Reference', color: 'bg-blue-100 text-blue-700' },
+  'parts-source': { icon: Puzzle, label: 'Parts', color: 'bg-purple-100 text-purple-700' },
+  'procurement': { icon: ShoppingCart, label: 'Procure', color: 'bg-green-100 text-green-700' },
+  'material': { icon: Palette, label: 'Material', color: 'bg-pink-100 text-pink-700' },
+  'asset': { icon: Wrench, label: 'Asset', color: 'bg-orange-100 text-orange-700' },
+  'product-idea': { icon: Rocket, label: 'Product', color: 'bg-indigo-100 text-indigo-700' },
+};
 
 interface ClipCardProps {
   clip: DesignClip;
@@ -54,9 +64,31 @@ export function ClipCard({ clip, onClick, onLink, selected }: ClipCardProps) {
           </div>
         </div>
         
-        {/* Sync status badge */}
+        {/* Clip type badge */}
+        {clip.clipType && CLIP_TYPE_CONFIG[clip.clipType] && (
+          <div className={`absolute top-2 left-2 px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1 ${CLIP_TYPE_CONFIG[clip.clipType].color}`}>
+            {React.createElement(CLIP_TYPE_CONFIG[clip.clipType].icon, { className: 'w-3 h-3' })}
+            {CLIP_TYPE_CONFIG[clip.clipType].label}
+          </div>
+        )}
+        
+        {/* Analysis status badge */}
+        {clip.analysisStatus === 'pending' && (
+          <div className="absolute top-2 right-2 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            Analyzing
+          </div>
+        )}
+        {clip.analysisStatus === 'completed' && clip.aiAnalysis && (
+          <div className="absolute top-2 right-2 px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 flex items-center gap-1">
+            <Sparkles className="w-3 h-3" />
+            AI
+          </div>
+        )}
+        
+        {/* Sync status badge (only show if not synced) */}
         {clip.syncStatus !== 'synced' && (
-          <div className={`absolute top-2 right-2 px-2 py-0.5 rounded text-xs font-medium ${
+          <div className={`absolute bottom-2 right-2 px-2 py-0.5 rounded text-xs font-medium ${
             clip.syncStatus === 'pending' ? 'bg-amber-100 text-amber-700' :
             clip.syncStatus === 'syncing' ? 'bg-blue-100 text-blue-700' :
             'bg-red-100 text-red-700'

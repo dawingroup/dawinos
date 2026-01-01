@@ -20,6 +20,7 @@ const { strategyResearch } = require('./src/ai/strategyResearch');
 const { projectScoping } = require('./src/ai/projectScoping');
 const { designItemEnhancement } = require('./src/ai/designItemEnhancement');
 const { imageAnalysis } = require('./src/ai/imageAnalysis');
+const { analyzeClip } = require('./src/ai/analyzeClip');
 const { generateProductNames } = require('./src/ai/productNaming');
 const { generateProductContent, generateDiscoverabilityData } = require('./src/ai/productContent');
 const { auditShopifyProduct } = require('./src/ai/catalogAudit');
@@ -41,6 +42,7 @@ exports.strategyResearch = strategyResearch;
 exports.projectScoping = projectScoping;
 exports.designItemEnhancement = designItemEnhancement;
 exports.imageAnalysis = imageAnalysis;
+exports.analyzeClip = analyzeClip;
 exports.generateProductNames = generateProductNames;
 exports.generateProductContent = generateProductContent;
 exports.generateDiscoverabilityData = generateDiscoverabilityData;
@@ -85,6 +87,10 @@ exports.onAssetStatusChange = onAssetStatusChange;
 const { onFeatureWritten, onFeatureLibraryWritten } = require('./src/triggers/invalidateFeatureCache');
 exports.onFeatureWritten = onFeatureWritten;
 exports.onFeatureLibraryWritten = onFeatureLibraryWritten;
+
+// Clip Analysis Trigger
+const { onDesignClipCreated } = require('./src/triggers/analyzeNewClip');
+exports.onDesignClipCreated = onDesignClipCreated;
 
 // API Keys configuration
 const NOTION_API_KEY = defineString('NOTION_API_KEY');

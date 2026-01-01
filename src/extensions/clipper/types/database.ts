@@ -30,6 +30,7 @@ export interface ClipRecord {
   
   // Organization
   projectId?: string;
+  designItemId?: string;
   roomType?: string;
   
   // AI Analysis

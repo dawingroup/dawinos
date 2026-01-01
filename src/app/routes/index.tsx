@@ -8,7 +8,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { AppLayout } from '@/shared/components/layout';
 
 // Lazy load pages for code splitting
-const DashboardPage = lazy(() => import('../pages/DashboardPage'));
+const DawinOSDashboard = lazy(() => import('../pages/DawinOSDashboard'));
 const CutlistProcessorPage = lazy(() => import('../pages/CutlistProcessorPage'));
 const DesignManagerPage = lazy(() => import('../pages/DesignManagerPage'));
 const AssetRegistryPage = lazy(() => import('../pages/AssetRegistryPage'));
@@ -69,7 +69,7 @@ export const routeConfig: RouteObject[] = [
     children: [
       {
         index: true,
-        element: withSuspense(DashboardPage),
+        element: withSuspense(DawinOSDashboard),
       },
       {
         path: 'clipper',

@@ -9,3 +9,4 @@ export { default as SignInScreen } from './SignInScreen';
 export { default as LoadingScreen } from './LoadingScreen';
 export { ClipGallery } from './ClipGallery';
 export { ClipDetail } from './ClipDetail';
+export { DetailedClipForm } from './DetailedClipForm';

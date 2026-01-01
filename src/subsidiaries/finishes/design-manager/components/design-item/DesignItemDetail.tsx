@@ -5,7 +5,7 @@
 
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Activity, CheckSquare, History, Sparkles, Settings, Package, Trash2, DollarSign } from 'lucide-react';
+import { ArrowLeft, FileText, Activity, CheckSquare, History, Sparkles, Settings, Package, Trash2, DollarSign, Image } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useDesignItem, useProject, useRAGUpdate } from '../../hooks';
 import { StageBadge } from './StageBadge';
@@ -50,7 +50,7 @@ const DesignChat = lazy(() =>
 
 import { useAIContext } from '../../hooks/useAIContext';
 
-type Tab = 'overview' | 'rag' | 'parameters' | 'parts' | 'costing' | 'files' | 'approvals' | 'history' | 'ai';
+type Tab = 'overview' | 'rag' | 'parameters' | 'parts' | 'costing' | 'files' | 'approvals' | 'history' | 'ai' | 'inspiration';
 
 // Aspect labels for display
 const ASPECT_LABELS: Record<string, string> = {
@@ -146,6 +146,7 @@ export default function DesignItemDetail() {
     { id: 'costing' as Tab, label: 'Costing', icon: DollarSign },
     { id: 'rag' as Tab, label: 'RAG Status', icon: Activity },
     { id: 'files' as Tab, label: 'Files', icon: FileText },
+    { id: 'inspiration' as Tab, label: 'Inspiration', icon: Image },
     { id: 'approvals' as Tab, label: 'Approvals', icon: CheckSquare },
     { id: 'history' as Tab, label: 'History', icon: History },
     { id: 'ai' as Tab, label: 'AI Analysis', icon: Sparkles },
@@ -307,6 +308,10 @@ export default function DesignItemDetail() {
         
         {activeTab === 'ai' && (
           <AITab item={item} projectId={projectId!} itemId={itemId!} userId={user?.uid} />
+        )}
+        
+        {activeTab === 'inspiration' && (
+          <InspirationTab item={item} projectId={projectId!} itemId={itemId!} />
         )}
       </div>
 
@@ -1453,4 +1458,252 @@ function CostingTab({
       </div>
     </div>
   );
+}
+
+// Inspiration Tab - Shows design clips linked to this item
+interface InspirationTabProps {
+  item: DesignItem;
+  projectId: string;
+  itemId: string;
+}
+
+function InspirationTab({ item, projectId, itemId }: InspirationTabProps) {
+  const [showGallery, setShowGallery] = useState(false);
+  const [selectedClip, setSelectedClip] = useState<any>(null);
+  const [linkedClips, setLinkedClips] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Subscribe to clips linked to this design item
+  useEffect(() => {
+    const loadLinkedClips = async () => {
+      setLoading(true);
+      try {
+        const { collection, query, where, onSnapshot } = await import('firebase/firestore');
+        const { db } = await import('@/shared/services/firebase');
+        
+        const clipsRef = collection(db, 'designClips');
+        const q = query(clipsRef, where('designItemId', '==', itemId));
+        
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const clips = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+          setLinkedClips(clips);
+          setLoading(false);
+        });
+        
+        return unsubscribe;
+      } catch (error) {
+        console.error('Failed to load linked clips:', error);
+        setLoading(false);
+      }
+    };
+    
+    loadLinkedClips();
+  }, [itemId]);
+
+  const handleLinkClip = async (clip: any) => {
+    try {
+      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      const { db } = await import('@/shared/services/firebase');
+      
+      const clipRef = doc(db, 'designClips', clip.id);
+      await updateDoc(clipRef, {
+        projectId,
+        designItemId: itemId,
+        updatedAt: serverTimestamp(),
+      });
+      
+      setShowGallery(false);
+    } catch (error) {
+      console.error('Failed to link clip:', error);
+      alert('Failed to link clip. Please try again.');
+    }
+  };
+
+  const handleUnlinkClip = async (clipId: string) => {
+    if (!confirm('Unlink this clip from the design item?')) return;
+    
+    try {
+      const { doc, updateDoc, serverTimestamp, deleteField } = await import('firebase/firestore');
+      const { db } = await import('@/shared/services/firebase');
+      
+      const clipRef = doc(db, 'designClips', clipId);
+      await updateDoc(clipRef, {
+        designItemId: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('Failed to unlink clip:', error);
+      alert('Failed to unlink clip. Please try again.');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Design Inspiration</h3>
+          <p className="text-sm text-gray-500">
+            Reference images and inspiration clips for {item.name}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowGallery(true)}
+          className="px-4 py-2 bg-[#1d1d1f] text-white rounded-lg text-sm font-medium hover:bg-[#424245] flex items-center gap-2"
+        >
+          <Image className="w-4 h-4" />
+          Link Clip
+        </button>
+      </div>
+
+      {/* Linked Clips Grid */}
+      {linkedClips.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+          <Image className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <h3 className="text-lg font-medium text-gray-900">No inspiration clips yet</h3>
+          <p className="text-sm text-gray-500 mt-1 max-w-md mx-auto">
+            Link design clips from your Clipper library to use as reference for this design item
+          </p>
+          <button
+            onClick={() => setShowGallery(true)}
+            className="mt-4 px-4 py-2 bg-[#1d1d1f] text-white rounded-lg text-sm font-medium hover:bg-[#424245]"
+          >
+            Browse Clips
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+          {linkedClips.map((clip) => (
+            <div
+              key={clip.id}
+              className="group relative bg-white rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => setSelectedClip(clip)}
+            >
+              <div className="aspect-square bg-gray-100">
+                <img
+                  src={clip.thumbnailUrl || clip.imageUrl}
+                  alt={clip.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="p-3">
+                <h4 className="font-medium text-gray-900 text-sm truncate">{clip.title}</h4>
+                {clip.brand && (
+                  <p className="text-xs text-gray-500 truncate">{clip.brand}</p>
+                )}
+              </div>
+              {/* Unlink button on hover */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleUnlinkClip(clip.id);
+                }}
+                className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                title="Unlink clip"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Clip Gallery Modal */}
+      {showGallery && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Select Inspiration Clip</h3>
+              <button
+                onClick={() => setShowGallery(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div></div>}>
+                <ClipGalleryWrapper onLinkClip={handleLinkClip} />
+              </Suspense>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clip Detail Modal */}
+      {selectedClip && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">{selectedClip.title}</h3>
+              <button
+                onClick={() => setSelectedClip(null)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <img
+                src={selectedClip.imageUrl}
+                alt={selectedClip.title}
+                className="w-full max-h-[60vh] object-contain rounded-lg"
+              />
+              {selectedClip.description && (
+                <p className="mt-4 text-gray-600">{selectedClip.description}</p>
+              )}
+              {selectedClip.sourceUrl && (
+                <a
+                  href={selectedClip.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 text-sm text-blue-600 hover:underline inline-block"
+                >
+                  View original source →
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Lazy wrapper for ClipGallery to avoid circular deps
+function ClipGalleryWrapper({ onLinkClip }: { onLinkClip: (clip: any) => void }) {
+  const [ClipGallery, setClipGallery] = useState<React.ComponentType<any> | null>(null);
+
+  useEffect(() => {
+    import('@/subsidiaries/finishes/clipper/components').then((mod) => {
+      setClipGallery(() => mod.ClipGallery);
+    });
+  }, []);
+
+  if (!ClipGallery) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
+      </div>
+    );
+  }
+
+  return <ClipGallery onLinkClip={onLinkClip} selectable />;
 }

@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { Image, Download, RefreshCw, Settings, ExternalLink } from 'lucide-react';
+import { Image, Download, Lightbulb, Puzzle, ShoppingCart, ExternalLink, Sparkles } from 'lucide-react';
 import { ClipGallery } from '@/subsidiaries/finishes/clipper/components';
 import { useClips } from '@/subsidiaries/finishes/clipper/hooks';
 import type { DesignClip } from '@/subsidiaries/finishes/clipper/types';
@@ -14,8 +14,9 @@ export default function ClipperPage() {
   const { clips, loading } = useClips();
   const [selectedClip, setSelectedClip] = useState<DesignClip | null>(null);
 
-  const syncedCount = clips.filter(c => c.syncStatus === 'synced').length;
-  const pendingCount = clips.filter(c => c.syncStatus === 'pending').length;
+  const inspirationCount = clips.filter(c => c.clipType === 'inspiration').length;
+  const partsCount = clips.filter(c => c.clipType === 'parts-source').length;
+  const procurementCount = clips.filter(c => c.clipType === 'procurement').length;
 
   return (
     <div className="space-y-6">
@@ -42,7 +43,7 @@ export default function ClipperPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-purple-100 rounded-lg">
@@ -56,36 +57,47 @@ export default function ClipperPage() {
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex items-center gap-3">
+            <div className="p-2 bg-yellow-100 rounded-lg">
+              <Lightbulb className="w-5 h-5 text-yellow-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{inspirationCount}</p>
+              <p className="text-sm text-gray-500">Inspiration</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <Puzzle className="w-5 h-5 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{partsCount}</p>
+              <p className="text-sm text-gray-500">Parts Source</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="flex items-center gap-3">
             <div className="p-2 bg-green-100 rounded-lg">
-              <RefreshCw className="w-5 h-5 text-green-600" />
+              <ShoppingCart className="w-5 h-5 text-green-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-900">{syncedCount}</p>
-              <p className="text-sm text-gray-500">Synced</p>
+              <p className="text-2xl font-bold text-gray-900">{procurementCount}</p>
+              <p className="text-sm text-gray-500">Procurement</p>
             </div>
           </div>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-amber-100 rounded-lg">
-              <RefreshCw className="w-5 h-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{pendingCount}</p>
-              <p className="text-sm text-gray-500">Pending Sync</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Settings className="w-5 h-5 text-blue-600" />
+            <div className="p-2 bg-indigo-100 rounded-lg">
+              <Sparkles className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900">
-                {clips.filter(c => c.designItemId).length}
+                {clips.filter(c => c.analysisStatus === 'completed').length}
               </p>
-              <p className="text-sm text-gray-500">Linked</p>
+              <p className="text-sm text-gray-500">AI Analyzed</p>
             </div>
           </div>
         </div>

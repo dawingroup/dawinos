@@ -30,9 +30,13 @@ export function useAuth(): UseAuthReturn {
 
   const signIn = async () => {
     try {
+      console.log('Starting sign in...');
+      
       // Use chrome.identity for Google OAuth
       const token = await new Promise<string>((resolve, reject) => {
+        console.log('Calling chrome.identity.getAuthToken...');
         chrome.identity.getAuthToken({ interactive: true }, (token) => {
+          console.log('getAuthToken callback:', { token: !!token, error: chrome.runtime.lastError });
           if (chrome.runtime.lastError || !token) {
             reject(new Error(chrome.runtime.lastError?.message || 'Failed to get token'));
             return;

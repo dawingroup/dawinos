@@ -12,12 +12,30 @@ import {
   Ruler, 
   Palette, 
   Package,
-  Brain,
+  Sparkles,
   Clock,
   Edit2,
   Trash2,
+  Lightbulb,
+  Image,
+  Puzzle,
+  ShoppingCart,
+  Wrench,
+  Rocket,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
-import type { DesignClip } from '../types';
+import type { DesignClip, ClipType } from '../types';
+
+const CLIP_TYPE_CONFIG: Record<ClipType, { icon: React.ElementType; label: string; color: string }> = {
+  'inspiration': { icon: Lightbulb, label: 'Inspiration', color: 'bg-yellow-100 text-yellow-700' },
+  'reference': { icon: Image, label: 'Reference', color: 'bg-blue-100 text-blue-700' },
+  'parts-source': { icon: Puzzle, label: 'Parts Source', color: 'bg-purple-100 text-purple-700' },
+  'procurement': { icon: ShoppingCart, label: 'Procurement', color: 'bg-green-100 text-green-700' },
+  'material': { icon: Palette, label: 'Material', color: 'bg-pink-100 text-pink-700' },
+  'asset': { icon: Wrench, label: 'Asset', color: 'bg-orange-100 text-orange-700' },
+  'product-idea': { icon: Rocket, label: 'Product Idea', color: 'bg-indigo-100 text-indigo-700' },
+};
 
 interface ClipDetailProps {
   clip: DesignClip;
@@ -53,6 +71,38 @@ export function ClipDetail({ clip, onClose, onEdit, onDelete, onLink }: ClipDeta
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-gray-900">{clip.title}</h2>
+                <div className="flex items-center gap-2 mt-2">
+                  {clip.clipType && CLIP_TYPE_CONFIG[clip.clipType] && (
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${CLIP_TYPE_CONFIG[clip.clipType].color}`}>
+                      {React.createElement(CLIP_TYPE_CONFIG[clip.clipType].icon, { className: 'w-3 h-3' })}
+                      {CLIP_TYPE_CONFIG[clip.clipType].label}
+                    </span>
+                  )}
+                  {clip.analysisStatus === 'pending' && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                      <Clock className="w-3 h-3" />
+                      Analysis Pending
+                    </span>
+                  )}
+                  {clip.analysisStatus === 'analyzing' && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Analyzing...
+                    </span>
+                  )}
+                  {clip.analysisStatus === 'completed' && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-700">
+                      <Sparkles className="w-3 h-3" />
+                      AI Analyzed
+                    </span>
+                  )}
+                  {clip.analysisStatus === 'failed' && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700">
+                      <AlertCircle className="w-3 h-3" />
+                      Analysis Failed
+                    </span>
+                  )}
+                </div>
                 {clip.brand && (
                   <p className="text-sm text-gray-500 mt-1">{clip.brand}</p>
                 )}
@@ -161,7 +211,7 @@ export function ClipDetail({ clip, onClose, onEdit, onDelete, onLink }: ClipDeta
             {clip.aiAnalysis && (
               <div className="bg-purple-50 rounded-lg p-4">
                 <h3 className="text-sm font-medium text-purple-800 mb-3 flex items-center gap-2">
-                  <Brain className="w-4 h-4" /> AI Analysis
+                  <Sparkles className="w-4 h-4" /> AI Analysis
                 </h3>
                 <div className="space-y-2 text-sm">
                   {clip.aiAnalysis.productType && (

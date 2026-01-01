@@ -171,7 +171,7 @@ function removeAllHighlights(): void {
 
 async function quickClip(imageUrl: string): Promise<{ success: boolean }> {
   try {
-    showToast('Clipping image...');
+    showToast('Preparing clip...');
     
     // Request image fetch through service worker (handles CORS)
     const response = await chrome.runtime.sendMessage({
@@ -187,18 +187,24 @@ async function quickClip(imageUrl: string): Promise<{ success: boolean }> {
     // Extract page metadata
     const metadata = extractPageMetadata();
     
-    // Save clip (will be implemented in Phase 3)
-    await chrome.runtime.sendMessage({
-      type: 'SAVE_CLIP',
-      clip: {
-        imageUrl,
-        sourceUrl: window.location.href,
-        title: metadata.title,
-        metadata,
-      },
-    });
+    // Store pending clip data for the popup form
+    const pendingClipData = {
+      imageUrl,
+      sourceUrl: window.location.href,
+      title: metadata.title,
+      metadata,
+      timestamp: Date.now(),
+    };
     
-    showToast('Image clipped!', 'success');
+    await chrome.storage.local.set({ pendingClip: pendingClipData });
+    
+    // Deactivate clipping mode
+    isClippingModeActive = false;
+    deactivateClippingMode();
+    
+    // Show toast with instruction
+    showToast('✓ Image captured! Click the Dawin Clipper icon to save with details.', 'success');
+    
     return { success: true };
   } catch (error) {
     console.error('Quick clip failed:', error);

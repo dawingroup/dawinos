@@ -6,6 +6,7 @@
 import { RouterProvider } from 'react-router-dom';
 import { router } from './routes/index';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { SubsidiaryProvider } from '@/contexts/SubsidiaryContext';
 
 /**
  * Error Boundary fallback
@@ -33,7 +34,9 @@ function ErrorFallback() {
 export default function App() {
   return (
     <AuthProvider>
-      <RouterProvider router={router} />
+      <SubsidiaryProvider>
+        <RouterProvider router={router} />
+      </SubsidiaryProvider>
     </AuthProvider>
   );
 }

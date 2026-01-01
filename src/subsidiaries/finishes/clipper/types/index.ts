@@ -3,6 +3,42 @@
  * Shared type definitions for the clipper module
  */
 
+/**
+ * Clip Type - Primary intent when clipping
+ */
+export type ClipType = 
+  | 'inspiration'      // General inspiration for project/design
+  | 'reference'        // Design reference image
+  | 'parts-source'     // Source for parts extraction
+  | 'procurement'      // Item to procure
+  | 'material'         // Material sample for library
+  | 'asset'            // Hardware/fitting for registry
+  | 'product-idea';    // Product ideation for launch pipeline
+
+/**
+ * Clip Context - Where the clip was created from
+ */
+export interface ClipContext {
+  module: 'clipper' | 'design-manager' | 'materials' | 'assets' | 'launch-pipeline';
+  triggeredFrom?: string;  // URL or page identifier
+}
+
+/**
+ * Clip Linkage - Links a clip to various entities
+ */
+export interface ClipLinkage {
+  type: 'project' | 'design-item' | 'material' | 'asset' | 'product';
+  targetId: string;
+  targetName?: string;  // Display name for quick reference
+  role: 'inspiration' | 'reference' | 'source' | 'procurement';
+  createdAt: Date;
+}
+
+/**
+ * Analysis Status - Tracks AI analysis progress
+ */
+export type AnalysisStatus = 'pending' | 'analyzing' | 'completed' | 'failed';
+
 export interface DesignClip {
   id: string;
   sourceUrl: string;
@@ -11,7 +47,17 @@ export interface DesignClip {
   title: string;
   description?: string;
   
-  // Extracted metadata
+  // NEW: Clip Type and Context
+  clipType: ClipType;
+  clipContext: ClipContext;
+  
+  // NEW: Linkages (one clip, multiple uses)
+  linkages: ClipLinkage[];
+  
+  // NEW: Analysis Status
+  analysisStatus: AnalysisStatus;
+  
+  // Extracted metadata (from page scraping)
   price?: {
     amount: number;
     currency: string;
@@ -31,11 +77,11 @@ export interface DesignClip {
   // Organization
   tags: string[];
   notes?: string;
-  projectId?: string;
-  designItemId?: string;
+  projectId?: string;      // Primary project (for backward compatibility)
+  designItemId?: string;   // Primary design item (for backward compatibility)
   roomType?: string;
   
-  // AI Analysis
+  // AI Analysis (populated by background Cloud Function)
   aiAnalysis?: ClipAIAnalysis;
   
   // Sync metadata

@@ -1,6 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { ClipRecord } from '../../types/database';
-import { clipService } from '../../lib/clip-service';
+
+// Simplified clip type for chrome.storage
+interface StoredClip {
+  id: string;
+  imageUrl: string;
+  sourceUrl: string;
+  title: string;
+  thumbnailDataUrl?: string;
+  createdAt: string;
+  syncStatus: 'pending' | 'synced';
+  tags?: string[];
+}
+
+// Map to ClipRecord-like structure for UI compatibility
+interface ClipRecord {
+  id: string;
+  imageUrl: string;
+  sourceUrl: string;
+  title: string;
+  thumbnailBlob?: Blob;
+  thumbnailDataUrl?: string;
+  createdAt: Date;
+  syncStatus: 'pending' | 'synced';
+  tags: string[];
+  price?: { amount: number; formatted: string };
+}
 
 interface UseClipsReturn {
   clips: ClipRecord[];
@@ -17,12 +41,26 @@ export function useClips(): UseClipsReturn {
 
   const loadClips = useCallback(async () => {
     try {
-      const allClips = await clipService.getAllClips();
+      // Load clips from chrome.storage.local
+      const result = await chrome.storage.local.get(['clips']);
+      const storedClips: StoredClip[] = result.clips || [];
+      
+      // Map to ClipRecord format
+      const mappedClips: ClipRecord[] = storedClips.map((clip) => ({
+        id: clip.id,
+        imageUrl: clip.imageUrl,
+        sourceUrl: clip.sourceUrl,
+        title: clip.title,
+        thumbnailDataUrl: clip.thumbnailDataUrl,
+        createdAt: new Date(clip.createdAt),
+        syncStatus: clip.syncStatus,
+        tags: clip.tags || [],
+      }));
+      
       // Sort by createdAt descending
-      allClips.sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      setClips(allClips);
+      mappedClips.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      setClips(mappedClips);
+      console.log('Loaded clips:', mappedClips.length);
     } catch (error) {
       console.error('Failed to load clips:', error);
     } finally {
@@ -33,14 +71,23 @@ export function useClips(): UseClipsReturn {
   useEffect(() => {
     loadClips();
 
-    // Subscribe to clip events
-    const unsubscribe = clipService.subscribe((event) => {
-      if (event.type === 'clip-saved' || event.type === 'clip-updated' || event.type === 'clip-deleted') {
+    // Listen for storage changes
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
+      if (changes.clips) {
+        console.log('Clips storage changed');
         loadClips();
       }
-    });
+    };
+    chrome.storage.onChanged.addListener(handleStorageChange);
 
-    return () => unsubscribe();
+    // Refresh clips when popup opens/focuses
+    const handleFocus = () => loadClips();
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [loadClips]);
 
   const pendingCount = clips.filter((c) => c.syncStatus === 'pending').length;
@@ -55,7 +102,11 @@ export function useClips(): UseClipsReturn {
 
   const deleteClip = async (clipId: string) => {
     try {
-      await clipService.deleteClip(clipId);
+      const result = await chrome.storage.local.get(['clips']);
+      const clips: StoredClip[] = result.clips || [];
+      const filtered = clips.filter((c) => c.id !== clipId);
+      await chrome.storage.local.set({ clips: filtered });
+      loadClips();
     } catch (error) {
       console.error('Delete failed:', error);
     }
@@ -63,7 +114,14 @@ export function useClips(): UseClipsReturn {
 
   const updateClip = async (clipId: string, updates: Partial<ClipRecord>) => {
     try {
-      await clipService.updateClip(clipId, updates);
+      const result = await chrome.storage.local.get(['clips']);
+      const clips: StoredClip[] = result.clips || [];
+      const index = clips.findIndex((c) => c.id === clipId);
+      if (index !== -1) {
+        clips[index] = { ...clips[index], ...updates, createdAt: clips[index].createdAt };
+        await chrome.storage.local.set({ clips });
+        loadClips();
+      }
     } catch (error) {
       console.error('Update failed:', error);
     }

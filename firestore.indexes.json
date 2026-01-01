@@ -1,6 +1,29 @@
 {
   "indexes": [
     {
+      "collectionGroup": "designClips",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdBy", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "designClips",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdBy", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "designClips",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "designItemId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "designItems",
       "queryScope": "COLLECTION",
       "fields": [

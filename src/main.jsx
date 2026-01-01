@@ -5,12 +5,14 @@ import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 import { ConfigProvider } from './contexts/ConfigContext.jsx'
 import { OffcutProvider } from './contexts/OffcutContext.jsx'
 import { WorkInstanceProvider } from './contexts/WorkInstanceContext.jsx'
+import { SubsidiaryProvider } from './contexts/SubsidiaryContext'
 import DesignManagerModule from './modules/design-manager/DesignManagerModule'
 import CustomerHubModule from './modules/customer-hub/CustomerHubModule'
 import LaunchPipelineModule from './modules/launch-pipeline/LaunchPipelineModule'
-import { FolderOpen, User, LogOut, Users, Layers, Cog, Wrench, AlertTriangle, Rocket, Database, Image } from 'lucide-react'
+import { FolderOpen, User, LogOut, Users, Layers, Cog, Wrench, AlertTriangle, Rocket, Database, Image, Home } from 'lucide-react'
 import { AssetRegistryPage } from './modules/assets'
 import ClipperPage from './app/pages/ClipperPage'
+import DawinOSDashboard from './app/pages/DawinOSDashboard'
 import './index.css'
 
 /**
@@ -75,14 +77,15 @@ function GlobalHeader() {
   const location = useLocation()
   const navigate = useNavigate()
   
-  const currentModule = location.pathname.startsWith('/clipper') ? 'clipper' :
+  const currentModule = location.pathname === '/' ? 'home' :
+    location.pathname.startsWith('/clipper') ? 'clipper' :
     location.pathname.startsWith('/design/katana') ? 'katana' :
     location.pathname.startsWith('/design/materials') ? 'materials' :
     location.pathname.startsWith('/design/features') ? 'features' :
     location.pathname.startsWith('/launch-pipeline') ? 'launch-pipeline' :
     location.pathname.startsWith('/design') ? 'design' : 
     location.pathname.startsWith('/customers') ? 'customers' :
-    location.pathname.startsWith('/assets') ? 'assets' : 'design'
+    location.pathname.startsWith('/assets') ? 'assets' : 'home'
 
   return (
     <header className="sticky top-0 z-50 h-16 sm:h-14 border-b border-gray-200 bg-white/95 backdrop-blur px-2 sm:px-6 lg:px-8 flex items-center justify-between gap-2">
@@ -103,6 +106,17 @@ function GlobalHeader() {
       {/* Center: Module Switcher */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1 border rounded-lg p-1 bg-gray-50 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <button
+          onClick={() => navigate('/')}
+          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
+            currentModule === 'home'
+              ? 'bg-[#1d1d1f] text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Home className="h-4 w-4" />
+          <span className="hidden sm:inline">Home</span>
+        </button>
         <button
           onClick={() => navigate('/clipper')}
           className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
@@ -266,25 +280,27 @@ function MainApp() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ConfigProvider>
-          <OffcutProvider>
-            <WorkInstanceProvider>
-              <AppLayout>
+        <SubsidiaryProvider>
+          <ConfigProvider>
+            <OffcutProvider>
+              <WorkInstanceProvider>
+                <AppLayout>
                 <Routes>
+                  <Route path="/" element={<DawinOSDashboard />} />
                   <Route path="/clipper" element={<ClipperPage />} />
                   <Route path="/design/*" element={<DesignManagerModule />} />
                   <Route path="/customers/*" element={<CustomerHubModule />} />
                   <Route path="/assets" element={<AssetRegistryPage />} />
                   <Route path="/launch-pipeline/*" element={<LaunchPipelineModule />} />
-                  {/* Redirect root and legacy cutlist routes to Design Manager */}
-                  <Route path="/" element={<Navigate to="/design" replace />} />
+                  {/* Redirect legacy cutlist routes to Design Manager */}
                   <Route path="/cutlist" element={<Navigate to="/design" replace />} />
-                  <Route path="/*" element={<Navigate to="/design" replace />} />
+                  <Route path="/*" element={<Navigate to="/" replace />} />
                 </Routes>
-              </AppLayout>
-            </WorkInstanceProvider>
-          </OffcutProvider>
-        </ConfigProvider>
+                </AppLayout>
+              </WorkInstanceProvider>
+            </OffcutProvider>
+          </ConfigProvider>
+        </SubsidiaryProvider>
       </AuthProvider>
     </BrowserRouter>
   )

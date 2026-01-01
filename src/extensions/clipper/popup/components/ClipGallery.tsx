@@ -242,19 +242,15 @@ export function ClipGallery({ clips, onDelete, onSelect, onBulkAction }: ClipGal
                 
                 {/* Thumbnail */}
                 <div className="aspect-square bg-gray-100">
-                  {clip.thumbnailBlob ? (
-                    <img
-                      src={URL.createObjectURL(clip.thumbnailBlob)}
-                      alt={clip.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <img
-                      src={clip.imageUrl}
-                      alt={clip.title}
-                      className="w-full h-full object-cover"
-                    />
-                  )}
+                  <img
+                    src={clip.thumbnailDataUrl || clip.imageUrl}
+                    alt={clip.title}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback to imageUrl if thumbnail fails
+                      (e.target as HTMLImageElement).src = clip.imageUrl;
+                    }}
+                  />
                 </div>
 
                 {/* Info overlay */}

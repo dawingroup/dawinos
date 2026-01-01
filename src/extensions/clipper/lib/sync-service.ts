@@ -138,11 +138,12 @@ class SyncService {
 
   /**
    * Process a single sync item
+   * Note: Uses flat 'designClips' collection with createdBy field for user filtering
    */
   private async processSyncItem(item: SyncQueueItem, userId: string): Promise<void> {
     const db = getDb();
     const storage = getStorageInstance();
-    const clipRef = doc(db, 'users', userId, 'clips', item.clipId);
+    const clipRef = doc(db, 'designClips', item.clipId);
 
     switch (item.operation) {
       case 'create':
@@ -169,6 +170,7 @@ class SyncService {
         }
 
         // Prepare Firestore document (without blobs)
+        // Include createdBy for user-based filtering in web app
         const firestoreDoc = {
           sourceUrl: clip.sourceUrl,
           imageUrl,
@@ -183,9 +185,12 @@ class SyncService {
           sku: clip.sku || null,
           tags: clip.tags || [],
           projectId: clip.projectId || null,
+          designItemId: clip.designItemId || null,
           roomType: clip.roomType || null,
           notes: clip.notes || null,
           aiAnalysis: clip.aiAnalysis || null,
+          syncStatus: 'synced',
+          createdBy: userId,
           version: (clip.version || 0) + 1,
           createdAt: clip.createdAt ? Timestamp.fromDate(clip.createdAt) : serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -246,17 +251,19 @@ class SyncService {
 
   /**
    * Pull remote changes from Firebase
+   * Uses flat 'designClips' collection filtered by createdBy
    */
   private async pullRemoteChanges(userId: string): Promise<void> {
     const db = getDb();
-    const clipsRef = collection(db, 'users', userId, 'clips');
+    const clipsRef = collection(db, 'designClips');
     
     // Get last sync timestamp from settings
     const lastSync = await this.getLastSyncTime();
     
-    let q = query(clipsRef, orderBy('updatedAt', 'desc'));
+    // Filter by createdBy to get only this user's clips
+    let q = query(clipsRef, where('createdBy', '==', userId), orderBy('updatedAt', 'desc'));
     if (lastSync) {
-      q = query(clipsRef, where('updatedAt', '>', Timestamp.fromDate(lastSync)), orderBy('updatedAt', 'desc'));
+      q = query(clipsRef, where('createdBy', '==', userId), where('updatedAt', '>', Timestamp.fromDate(lastSync)), orderBy('updatedAt', 'desc'));
     }
 
     const snapshot = await getDocs(q);
