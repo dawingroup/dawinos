@@ -5,6 +5,7 @@
 
 import './styles.css';
 import type { Message } from '../types/messages';
+import { metadataExtractor } from './metadata-extractor';
 
 let isClippingModeActive = false;
 let hoveredImageUrl: string | null = null;
@@ -213,15 +214,32 @@ async function quickClip(imageUrl: string): Promise<{ success: boolean }> {
   }
 }
 
-function extractPageMetadata(): { title: string; description?: string } {
-  const title = document.querySelector('h1')?.textContent?.trim() ||
+function extractPageMetadata() {
+  // Use the full metadata extractor which includes price, brand, dimensions, etc.
+  console.log('[Dawin Clipper] Extracting metadata from:', window.location.href);
+  const fullMetadata = metadataExtractor.extract();
+  console.log('[Dawin Clipper] Extracted metadata:', JSON.stringify(fullMetadata, null, 2));
+  
+  // Fallback title if not extracted
+  const title = fullMetadata.title || 
+    document.querySelector('h1')?.textContent?.trim() ||
     document.title ||
     'Untitled';
   
-  const description = document.querySelector('meta[name="description"]')?.getAttribute('content') ||
-    document.querySelector('[itemprop="description"]')?.textContent?.trim();
+  const result = {
+    title,
+    description: fullMetadata.description,
+    price: fullMetadata.price,
+    brand: fullMetadata.brand,
+    sku: fullMetadata.sku,
+    category: fullMetadata.category,
+    dimensions: fullMetadata.dimensions,
+    materials: fullMetadata.materials,
+    colors: fullMetadata.colors,
+  };
   
-  return { title, description };
+  console.log('[Dawin Clipper] Final metadata result:', JSON.stringify(result, null, 2));
+  return result;
 }
 
 // Toast notification

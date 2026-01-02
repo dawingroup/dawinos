@@ -5,7 +5,7 @@
 
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Activity, CheckSquare, History, Sparkles, Settings, Package, Trash2, DollarSign } from 'lucide-react';
+import { ArrowLeft, FileText, Activity, CheckSquare, History, Sparkles, Settings, Package, Trash2, DollarSign, Image } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useDesignItem, useProject, useRAGUpdate } from '../../hooks';
 import { StageBadge } from './StageBadge';
@@ -50,7 +50,7 @@ const DesignChat = lazy(() =>
 
 import { useAIContext } from '../../hooks/useAIContext';
 
-type Tab = 'overview' | 'rag' | 'parameters' | 'parts' | 'costing' | 'files' | 'approvals' | 'history' | 'ai';
+type Tab = 'overview' | 'rag' | 'parameters' | 'parts' | 'costing' | 'files' | 'inspiration' | 'approvals' | 'history' | 'ai';
 
 // Aspect labels for display
 const ASPECT_LABELS: Record<string, string> = {
@@ -146,6 +146,7 @@ export default function DesignItemDetail() {
     { id: 'costing' as Tab, label: 'Costing', icon: DollarSign },
     { id: 'rag' as Tab, label: 'RAG Status', icon: Activity },
     { id: 'files' as Tab, label: 'Files', icon: FileText },
+    { id: 'inspiration' as Tab, label: 'Inspiration', icon: Image },
     { id: 'approvals' as Tab, label: 'Approvals', icon: CheckSquare },
     { id: 'history' as Tab, label: 'History', icon: History },
     { id: 'ai' as Tab, label: 'AI Analysis', icon: Sparkles },
@@ -308,6 +309,10 @@ export default function DesignItemDetail() {
         {activeTab === 'ai' && (
           <AITab item={item} projectId={projectId!} itemId={itemId!} userId={user?.uid} />
         )}
+        
+        {activeTab === 'inspiration' && (
+          <InspirationTab item={item} projectId={projectId!} itemId={itemId!} />
+        )}
       </div>
 
       {/* Stage Gate Check Modal */}
@@ -359,20 +364,49 @@ function OverviewTab({
   const { user } = useAuth();
   const [isUpdatingSourcing, setIsUpdatingSourcing] = useState(false);
   const [isUpdatingDueDate, setIsUpdatingDueDate] = useState(false);
+  const [showClipGallery, setShowClipGallery] = useState(false);
+  const [InspirationPanelComponent, setInspirationPanelComponent] = useState<React.ComponentType<any> | null>(null);
+
+  // Lazy load InspirationPanel for sidebar
+  useEffect(() => {
+    import('./InspirationPanel').then((mod) => {
+      setInspirationPanelComponent(() => mod.InspirationPanel);
+    });
+  }, []);
 
   const params = (item as any).parameters || {};
   const dimensions = params.dimensions || {};
   const hasDimensions = dimensions.width || dimensions.height || dimensions.depth;
 
   const sourcingType = (item as any)?.sourcingType as ('MANUFACTURED' | 'PROCURED' | undefined);
+
+  const handleLinkClip = async (clip: any) => {
+    try {
+      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      const { db } = await import('@/shared/services/firebase');
+      
+      const clipRef = doc(db, 'designClips', clip.id);
+      await updateDoc(clipRef, {
+        projectId,
+        designItemId: item.id,
+        updatedAt: serverTimestamp(),
+      });
+      
+      setShowClipGallery(false);
+    } catch (error) {
+      console.error('Failed to link clip:', error);
+    }
+  };
   
   return (
-    <div className="space-y-6">
-      {/* Description */}
-      <div className="bg-gray-50 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">Description</h3>
-        <p className="text-gray-900">{item.description || 'No description provided.'}</p>
-      </div>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Main Content */}
+      <div className="lg:col-span-2 space-y-6">
+        {/* Description */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Description</h3>
+          <p className="text-gray-900">{item.description || 'No description provided.'}</p>
+        </div>
       
       {/* Key Info Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
@@ -525,21 +559,87 @@ function OverviewTab({
         )}
       </div>
       
-      {/* Metadata */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Created</h3>
-          <p className="text-sm font-medium text-gray-900">{formatDateTime(item.createdAt)}</p>
-          <p className="text-xs text-gray-500">by {item.createdBy}</p>
-        </div>
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Last Updated</h3>
-          <p className="text-sm font-medium text-gray-900">{formatDateTime(item.updatedAt)}</p>
-          <p className="text-xs text-gray-500">by {item.updatedBy}</p>
+        {/* Metadata */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Created</h3>
+            <p className="text-sm font-medium text-gray-900">{formatDateTime(item.createdAt)}</p>
+            <p className="text-xs text-gray-500">by {item.createdBy}</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Last Updated</h3>
+            <p className="text-sm font-medium text-gray-900">{formatDateTime(item.updatedAt)}</p>
+            <p className="text-xs text-gray-500">by {item.updatedBy}</p>
+          </div>
         </div>
       </div>
+
+      {/* Sidebar - Inspiration Clips */}
+      <div className="lg:col-span-1 space-y-4">
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          {InspirationPanelComponent ? (
+            <InspirationPanelComponent
+              designItemId={item.id}
+              projectId={projectId}
+              designItemName={item.name}
+              onOpenGallery={() => setShowClipGallery(true)}
+              compact
+              maxItems={4}
+            />
+          ) : (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#1d1d1f]"></div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Clip Gallery Modal */}
+      {showClipGallery && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Link Inspiration Clip</h3>
+              <button
+                onClick={() => setShowClipGallery(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div></div>}>
+                <ClipGalleryWrapperOverview onLinkClip={handleLinkClip} />
+              </Suspense>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+// Lazy wrapper for ClipGallery in OverviewTab
+function ClipGalleryWrapperOverview({ onLinkClip }: { onLinkClip: (clip: any) => void }) {
+  const [ClipGallery, setClipGallery] = useState<React.ComponentType<any> | null>(null);
+
+  useEffect(() => {
+    import('@/subsidiaries/finishes/clipper/components').then((mod) => {
+      setClipGallery(() => mod.ClipGallery);
+    });
+  }, []);
+
+  if (!ClipGallery) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
+      </div>
+    );
+  }
+
+  return <ClipGallery onLinkClip={onLinkClip} selectable />;
 }
 
 interface FilesTabProps {
@@ -990,12 +1090,21 @@ function CostingTab({
   
   // Read standard and special parts from manufacturing (managed in Parts tab)
   const standardParts: any[] = manufacturing.standardParts || [];
-  const specialParts: any[] = manufacturing.specialParts || [];
+  const [specialParts, setSpecialParts] = useState<any[]>(manufacturing.specialParts || []);
   
-  // Special parts rate overrides (per product)
-  const [specialPartsRateOverrides, setSpecialPartsRateOverrides] = useState<Record<string, number>>(
-    manufacturing.specialPartsRateOverrides || {}
-  );
+  // Track which special part is being edited for costing
+  const [editingPartId, setEditingPartId] = useState<string | null>(null);
+  
+  // Default exchange rates and currencies
+  const [defaultTargetCurrency] = useState<string>('UGX');
+  const exchangeRates: Record<string, number> = {
+    'USD': 3700,
+    'EUR': 4000,
+    'GBP': 4600,
+    'AED': 1000,
+    'CNY': 510,
+    'KES': 29,
+  };
   
   // Labor state
   const [laborHours, setLaborHours] = useState<number>(manufacturing.laborHours || 0);
@@ -1009,13 +1118,9 @@ function CostingTab({
   const partsLastUpdated = partsSummary?.lastUpdated?.seconds ? partsSummary.lastUpdated.seconds * 1000 : 0;
   const partsChanged = partsLastUpdated > lastCalcTime && sheetMaterials.length > 0;
 
-  // Calculate totals (with rate overrides for special parts)
+  // Calculate totals (special parts use costing.totalLandedCost)
   const standardPartsCost = standardParts.reduce((sum, p) => sum + (p.quantity * p.unitCost), 0);
-  const specialPartsCost = specialParts.reduce((sum, p) => {
-    const overrideRate = specialPartsRateOverrides[p.id];
-    const rate = overrideRate !== undefined ? overrideRate : p.unitCost;
-    return sum + (p.quantity * rate);
-  }, 0);
+  const specialPartsCost = specialParts.reduce((sum, p) => sum + (p.costing?.totalLandedCost || 0), 0);
   const totalMaterialCost = sheetMaterialsCost + standardPartsCost + specialPartsCost;
   const laborCost = laborHours * laborRate;
   const totalCost = totalMaterialCost + laborCost;
@@ -1047,12 +1152,11 @@ function CostingTab({
     }
   };
 
-  // Update special part rate override
-  const updateSpecialPartRate = (partId: string, newRate: number) => {
-    setSpecialPartsRateOverrides(prev => ({
-      ...prev,
-      [partId]: newRate,
-    }));
+  // Update special part costing
+  const updateSpecialPartCosting = (partId: string, costing: any) => {
+    setSpecialParts(prev => prev.map(p => 
+      p.id === partId ? { ...p, costing } : p
+    ));
   };
 
   // Recursively remove undefined values from objects/arrays for Firestore
@@ -1087,7 +1191,7 @@ function CostingTab({
         ...manufacturing,
         sheetMaterials: cleanSheetMaterials,
         sheetMaterialsCost: sheetMaterialsCost || 0,
-        specialPartsRateOverrides: specialPartsRateOverrides,
+        specialParts: specialParts,
         standardPartsCost: standardPartsCost || 0,
         specialPartsCost: specialPartsCost || 0,
         materialCost: totalMaterialCost || 0,
@@ -1262,65 +1366,208 @@ function CostingTab({
         )}
       </div>
 
-      {/* Special Parts with Rate Overrides (for luxury projects) */}
+      {/* Special Parts Costing (procurement-style with exchange rates) */}
       <div className="bg-white border border-gray-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-            ✨ Special Parts
-            <span className="text-xs font-normal text-gray-500">(rate overrides for this product)</span>
+            ✨ Special Parts Costing
+            <span className="text-xs font-normal text-gray-500">(price, exchange rate, transport)</span>
           </h3>
           {specialPartsCost > 0 && (
             <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-1">
-              <span className="font-bold text-purple-800">UGX {formatCurrency(specialPartsCost)}</span>
+              <span className="font-bold text-purple-800">{defaultTargetCurrency} {formatCurrency(specialPartsCost)}</span>
             </div>
           )}
         </div>
 
         {specialParts.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-purple-50 border-b border-purple-200">
-                <tr>
-                  <th className="px-2 py-1.5 text-left font-medium text-purple-800">Part</th>
-                  <th className="px-2 py-1.5 text-center font-medium text-purple-800">Qty</th>
-                  <th className="px-2 py-1.5 text-right font-medium text-purple-800">Base Rate</th>
-                  <th className="px-2 py-1.5 text-right font-medium text-purple-800">Override Rate</th>
-                  <th className="px-2 py-1.5 text-right font-medium text-purple-800">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-purple-100">
-                {specialParts.map((part) => {
-                  const overrideRate = specialPartsRateOverrides[part.id];
-                  const effectiveRate = overrideRate !== undefined ? overrideRate : part.unitCost;
-                  return (
-                    <tr key={part.id} className="hover:bg-purple-50/50">
-                      <td className="px-2 py-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded capitalize">{part.category}</span>
-                          <span className="font-medium">{part.name}</span>
-                          {part.supplier && <span className="text-xs text-gray-500">({part.supplier})</span>}
+          <div className="space-y-3">
+            {specialParts.map((part) => {
+              const costing = part.costing || {};
+              const currency = costing.currency || 'USD';
+              const unitCost = costing.unitCost || 0;
+              const rate = costing.exchangeRate || exchangeRates[currency] || 1;
+              const transport = costing.transportCost || 0;
+              const logistics = costing.logisticsCost || 0;
+              const customs = costing.customsCost || 0;
+              const totalSource = (unitCost + transport + logistics + customs) * part.quantity;
+              const totalLanded = totalSource * rate;
+              
+              return (
+                <div key={part.id} className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs bg-purple-300 text-purple-900 px-1.5 py-0.5 rounded capitalize">{part.category}</span>
+                      <span className="font-medium text-gray-900">{part.name}</span>
+                      {part.supplier && <span className="text-xs text-gray-500">({part.supplier})</span>}
+                      <span className="text-xs text-gray-400">×{part.quantity}</span>
+                    </div>
+                    {part.costing ? (
+                      <span className="text-sm font-bold text-purple-800">
+                        {defaultTargetCurrency} {formatCurrency(part.costing.totalLandedCost)}
+                      </span>
+                    ) : (
+                      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">Not priced</span>
+                    )}
+                  </div>
+                  
+                  {editingPartId === part.id ? (
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-2 p-2 bg-white rounded border border-purple-200">
+                      <div>
+                        <label className="text-xs text-gray-500">Unit Cost</label>
+                        <div className="flex gap-1">
+                          <select
+                            value={currency}
+                            onChange={(e) => {
+                              const newCurrency = e.target.value;
+                              const newRate = exchangeRates[newCurrency] || 1;
+                              updateSpecialPartCosting(part.id, {
+                                ...costing,
+                                currency: newCurrency,
+                                exchangeRate: newRate,
+                              });
+                            }}
+                            className="w-16 text-xs border border-gray-300 rounded px-1 py-1"
+                          >
+                            {Object.keys(exchangeRates).map(c => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            value={unitCost || ''}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              const newTotal = (val + transport + logistics + customs) * part.quantity;
+                              updateSpecialPartCosting(part.id, {
+                                ...costing,
+                                unitCost: val,
+                                currency,
+                                exchangeRate: rate,
+                                targetCurrency: defaultTargetCurrency,
+                                transportCost: transport,
+                                logisticsCost: logistics,
+                                customsCost: customs,
+                                totalSourceCost: newTotal,
+                                landedUnitCost: (newTotal / part.quantity) * rate,
+                                totalLandedCost: newTotal * rate,
+                                pricedAt: { seconds: Date.now() / 1000, nanoseconds: 0 },
+                                pricedBy: user?.email,
+                              });
+                            }}
+                            placeholder="0"
+                            className="flex-1 text-sm border border-gray-300 rounded px-2 py-1"
+                          />
                         </div>
-                      </td>
-                      <td className="px-2 py-1.5 text-center text-gray-700">{part.quantity}</td>
-                      <td className="px-2 py-1.5 text-right text-gray-500">UGX {formatCurrency(part.unitCost)}</td>
-                      <td className="px-2 py-1.5 text-right">
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Exchange Rate</label>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-gray-400">1 {currency} =</span>
+                          <input
+                            type="number"
+                            value={rate || ''}
+                            onChange={(e) => {
+                              const newRate = parseFloat(e.target.value) || 1;
+                              updateSpecialPartCosting(part.id, {
+                                ...costing,
+                                exchangeRate: newRate,
+                                totalLandedCost: totalSource * newRate,
+                                landedUnitCost: (totalSource / part.quantity) * newRate,
+                              });
+                            }}
+                            className="w-20 text-sm border border-gray-300 rounded px-2 py-1"
+                          />
+                          <span className="text-xs text-gray-400">{defaultTargetCurrency}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Transport ({currency})</label>
                         <input
                           type="number"
-                          value={overrideRate !== undefined ? overrideRate : ''}
-                          onChange={(e) => updateSpecialPartRate(part.id, parseFloat(e.target.value) || 0)}
-                          placeholder={String(part.unitCost)}
-                          min="0"
-                          className="w-24 px-2 py-1 text-sm border border-purple-300 rounded text-right focus:ring-1 focus:ring-purple-500"
+                          value={transport || ''}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            const newTotal = (unitCost + val + logistics + customs) * part.quantity;
+                            updateSpecialPartCosting(part.id, {
+                              ...costing,
+                              transportCost: val,
+                              totalSourceCost: newTotal,
+                              totalLandedCost: newTotal * rate,
+                              landedUnitCost: (newTotal / part.quantity) * rate,
+                            });
+                          }}
+                          placeholder="0"
+                          className="w-full text-sm border border-gray-300 rounded px-2 py-1"
                         />
-                      </td>
-                      <td className="px-2 py-1.5 text-right font-medium text-purple-900">
-                        UGX {formatCurrency(part.quantity * effectiveRate)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Logistics ({currency})</label>
+                        <input
+                          type="number"
+                          value={logistics || ''}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            const newTotal = (unitCost + transport + val + customs) * part.quantity;
+                            updateSpecialPartCosting(part.id, {
+                              ...costing,
+                              logisticsCost: val,
+                              totalSourceCost: newTotal,
+                              totalLandedCost: newTotal * rate,
+                              landedUnitCost: (newTotal / part.quantity) * rate,
+                            });
+                          }}
+                          placeholder="0"
+                          className="w-full text-sm border border-gray-300 rounded px-2 py-1"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Taxes/Customs ({currency})</label>
+                        <input
+                          type="number"
+                          value={customs || ''}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            const newTotal = (unitCost + transport + logistics + val) * part.quantity;
+                            updateSpecialPartCosting(part.id, {
+                              ...costing,
+                              customsCost: val,
+                              totalSourceCost: newTotal,
+                              totalLandedCost: newTotal * rate,
+                              landedUnitCost: (newTotal / part.quantity) * rate,
+                            });
+                          }}
+                          placeholder="0"
+                          className="w-full text-sm border border-gray-300 rounded px-2 py-1"
+                        />
+                      </div>
+                      <div className="col-span-2 md:col-span-5 flex justify-between items-center pt-2 border-t">
+                        <div className="text-xs text-gray-500">
+                          Source: {currency} {totalSource.toFixed(2)} → Landed: {defaultTargetCurrency} {formatCurrency(totalLanded)}
+                        </div>
+                        <button
+                          onClick={() => setEditingPartId(null)}
+                          className="text-xs text-purple-600 hover:underline"
+                        >
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setEditingPartId(part.id)}
+                      className={`mt-2 px-3 py-1.5 text-xs font-medium rounded-lg ${
+                        part.costing 
+                          ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
+                          : 'bg-amber-500 text-white hover:bg-amber-600'
+                      }`}
+                    >
+                      {part.costing ? '✏️ Edit Costing' : '💰 Add Costing'}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-gray-500 text-center py-3">
@@ -1453,4 +1700,122 @@ function CostingTab({
       </div>
     </div>
   );
+}
+
+// Inspiration Tab - Shows design clips linked to this item
+interface InspirationTabProps {
+  item: DesignItem;
+  projectId: string;
+  itemId: string;
+}
+
+function InspirationTab({ item, projectId, itemId }: InspirationTabProps) {
+  const [showGallery, setShowGallery] = useState(false);
+  const [InspirationPanelComponent, setInspirationPanelComponent] = useState<React.ComponentType<any> | null>(null);
+
+  // Lazy load InspirationPanel
+  useEffect(() => {
+    import('./InspirationPanel').then((mod) => {
+      setInspirationPanelComponent(() => mod.InspirationPanel);
+    });
+  }, []);
+
+  const handleLinkClip = async (clip: any) => {
+    try {
+      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      const { db } = await import('@/shared/services/firebase');
+      
+      const clipRef = doc(db, 'designClips', clip.id);
+      await updateDoc(clipRef, {
+        projectId,
+        designItemId: itemId,
+        updatedAt: serverTimestamp(),
+      });
+      
+      setShowGallery(false);
+    } catch (error) {
+      console.error('Failed to link clip:', error);
+      alert('Failed to link clip. Please try again.');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Design Inspiration</h3>
+          <p className="text-sm text-gray-500">
+            Reference images and inspiration clips for {item.name}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowGallery(true)}
+          className="px-4 py-2 bg-[#1d1d1f] text-white rounded-lg text-sm font-medium hover:bg-[#424245] flex items-center gap-2"
+        >
+          <Image className="w-4 h-4" />
+          Link Clip
+        </button>
+      </div>
+
+      {/* Inspiration Panel */}
+      {InspirationPanelComponent ? (
+        <InspirationPanelComponent
+          designItemId={itemId}
+          projectId={projectId}
+          designItemName={item.name}
+          onOpenGallery={() => setShowGallery(true)}
+        />
+      ) : (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
+        </div>
+      )}
+
+      {/* Clip Gallery Modal */}
+      {showGallery && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Select Inspiration Clip</h3>
+              <button
+                onClick={() => setShowGallery(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div></div>}>
+                <ClipGalleryWrapper onLinkClip={handleLinkClip} />
+              </Suspense>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Lazy wrapper for ClipGallery to avoid circular deps
+function ClipGalleryWrapper({ onLinkClip }: { onLinkClip: (clip: any) => void }) {
+  const [ClipGallery, setClipGallery] = useState<React.ComponentType<any> | null>(null);
+
+  useEffect(() => {
+    import('@/subsidiaries/finishes/clipper/components').then((mod) => {
+      setClipGallery(() => mod.ClipGallery);
+    });
+  }, []);
+
+  if (!ClipGallery) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
+      </div>
+    );
+  }
+
+  return <ClipGallery onLinkClip={onLinkClip} selectable />;
 }

@@ -5,12 +5,13 @@
  */
 
 import { useState } from 'react';
-import { Plus, Upload, Trash2, Edit2, Package, AlertCircle, Wrench, Sparkles, Save, Check } from 'lucide-react';
+import { Plus, Upload, Trash2, Edit2, Package, AlertCircle, Wrench, Sparkles, Save, Check, Library } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useParts } from '../../hooks/useParts';
-import type { DesignItem, PartEntry, StandardPartEntry, SpecialPartEntry } from '../../types';
+import type { DesignItem, PartEntry, StandardPartEntry, SpecialPartEntry, ProjectPart } from '../../types';
 import { PartForm } from './PartForm';
 import { PartsImportDialog } from './PartsImportDialog';
+import { ProjectPartsPicker } from './ProjectPartsPicker';
 import { updateDesignItem } from '../../services/firestore';
 
 interface PartsTabProps {
@@ -34,19 +35,22 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
   const [standardParts, setStandardParts] = useState<StandardPartEntry[]>(manufacturing.standardParts || []);
   const [newStandardPart, setNewStandardPart] = useState({ name: '', category: 'hinge', quantity: 1, unitCost: 0 });
   
-  // Special parts state (for luxury projects)
+  // Special parts state (for luxury projects) - Parts Tab only captures ID + quantity
   const [specialParts, setSpecialParts] = useState<SpecialPartEntry[]>(manufacturing.specialParts || []);
-  const [newSpecialPart, setNewSpecialPart] = useState({ name: '', category: 'handle', quantity: 1, unitCost: 0, supplier: '' });
+  const [newSpecialPart, setNewSpecialPart] = useState({ name: '', category: 'handle', quantity: 1, supplier: '' });
+  const [editingSpecialPartId, setEditingSpecialPartId] = useState<string | null>(null);
   
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showPartsPicker, setShowPartsPicker] = useState(false);
 
   const partsList: PartEntry[] = (item as any).parts || [];
   const summary = (item as any).partsSummary;
   
   // Calculate totals
   const standardPartsCost = standardParts.reduce((sum, p) => sum + (p.quantity * p.unitCost), 0);
-  const specialPartsCost = specialParts.reduce((sum, p) => sum + (p.quantity * p.unitCost), 0);
+  // Special parts cost is calculated from costing data (managed in Costing Tab)
+  const specialPartsCost = specialParts.reduce((sum, p) => sum + (p.costing?.totalLandedCost || 0), 0);
 
   const handleDelete = async (partId: string) => {
     if (!confirm('Delete this part?')) return;
@@ -102,26 +106,68 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
     setStandardParts(standardParts.filter(p => p.id !== id));
   };
 
-  // Add special part
+  // Add special part (identification only - costing handled in Costing Tab)
   const addSpecialPart = () => {
-    if (!newSpecialPart.name || newSpecialPart.unitCost <= 0) return;
+    if (!newSpecialPart.name) return;
     setSpecialParts([...specialParts, {
       id: `xp-${Date.now()}`,
       name: newSpecialPart.name,
       category: newSpecialPart.category as SpecialPartEntry['category'],
       quantity: newSpecialPart.quantity,
-      unitCost: newSpecialPart.unitCost,
-      totalCost: newSpecialPart.quantity * newSpecialPart.unitCost,
       supplier: newSpecialPart.supplier,
       approvedBy: user?.email,
       approvedAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any,
     }]);
-    setNewSpecialPart({ name: '', category: 'handle', quantity: 1, unitCost: 0, supplier: '' });
+    setNewSpecialPart({ name: '', category: 'handle', quantity: 1, supplier: '' });
   };
 
   // Remove special part
   const removeSpecialPart = (id: string) => {
     setSpecialParts(specialParts.filter(p => p.id !== id));
+  };
+
+  // Update special part
+  const updateSpecialPart = (id: string, updates: Partial<SpecialPartEntry>) => {
+    setSpecialParts(specialParts.map(p => p.id === id ? { ...p, ...updates } : p));
+  };
+
+  // Add special part from project parts library - auto-populate costing from clip price
+  const addPartFromLibrary = (part: ProjectPart, quantity: number) => {
+    // Default exchange rates
+    const exchangeRates: Record<string, number> = {
+      'USD': 3700, 'EUR': 4000, 'GBP': 4600, 'AED': 1000, 'CNY': 510, 'KES': 29,
+    };
+    const targetCurrency = 'UGX';
+    const exchangeRate = exchangeRates[part.currency] || 1;
+    const totalSourceCost = part.unitCost * quantity;
+    const totalLandedCost = totalSourceCost * exchangeRate;
+    
+    const newPart: SpecialPartEntry = {
+      id: `xp-lib-${Date.now()}`,
+      name: part.name,
+      category: part.category,
+      quantity: quantity,
+      supplier: part.supplier,
+      referenceImageUrl: part.referenceImageUrl,
+      purchaseUrl: part.purchaseUrl,
+      projectPartId: part.id,
+      approvedBy: user?.email,
+      approvedAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any,
+      // Auto-populate costing from clip price data
+      costing: part.unitCost > 0 ? {
+        unitCost: part.unitCost,
+        currency: part.currency,
+        exchangeRate: exchangeRate,
+        targetCurrency: targetCurrency,
+        totalSourceCost: totalSourceCost,
+        landedUnitCost: (totalSourceCost / quantity) * exchangeRate,
+        totalLandedCost: totalLandedCost,
+        pricedAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as any,
+        pricedBy: user?.email,
+      } : undefined,
+    };
+    setSpecialParts([...specialParts, newPart]);
+    setShowPartsPicker(false);
   };
 
   // Save standard and special parts to Firestore
@@ -505,12 +551,21 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
       {activeSection === 'special' && (
         <div className="space-y-4">
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <div className="flex items-start gap-3 mb-4">
-              <Sparkles className="w-5 h-5 text-purple-600 mt-0.5" />
-              <div>
-                <h3 className="font-semibold text-purple-900">Special Parts</h3>
-                <p className="text-sm text-purple-700">Custom handles, locks, and accessories for luxury projects (requires approval)</p>
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-start gap-3">
+                <Sparkles className="w-5 h-5 text-purple-600 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-purple-900">Special Parts</h3>
+                  <p className="text-sm text-purple-700">Custom handles, locks, and accessories for luxury projects (requires approval)</p>
+                </div>
               </div>
+              <button
+                onClick={() => setShowPartsPicker(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700"
+              >
+                <Library className="w-4 h-4" />
+                Select from Library
+              </button>
             </div>
 
             {specialParts.length > 0 && (
@@ -522,8 +577,7 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
                       <th className="px-3 py-2 text-left font-medium text-purple-800">Name</th>
                       <th className="px-3 py-2 text-left font-medium text-purple-800">Supplier</th>
                       <th className="px-3 py-2 text-right font-medium text-purple-800">Qty</th>
-                      <th className="px-3 py-2 text-right font-medium text-purple-800">Unit Cost</th>
-                      <th className="px-3 py-2 text-right font-medium text-purple-800">Total</th>
+                      <th className="px-3 py-2 text-center font-medium text-purple-800">Costing</th>
                       <th className="px-3 py-2 text-right font-medium text-purple-800">Actions</th>
                     </tr>
                   </thead>
@@ -531,17 +585,95 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
                     {specialParts.map((part) => (
                       <tr key={part.id} className="hover:bg-purple-50/50">
                         <td className="px-3 py-2">
-                          <span className="text-xs bg-purple-200 text-purple-800 px-2 py-0.5 rounded capitalize">{part.category}</span>
+                          {editingSpecialPartId === part.id ? (
+                            <select
+                              value={part.category}
+                              onChange={(e) => updateSpecialPart(part.id, { category: e.target.value as any })}
+                              className="text-xs border border-purple-300 rounded px-1 py-0.5"
+                            >
+                              <option value="handle">Handle</option>
+                              <option value="lock">Lock</option>
+                              <option value="hinge">Hinge</option>
+                              <option value="pull">Pull</option>
+                              <option value="knob">Knob</option>
+                              <option value="fitting">Fitting</option>
+                              <option value="accessory">Accessory</option>
+                              <option value="other">Other</option>
+                            </select>
+                          ) : (
+                            <span className="text-xs bg-purple-200 text-purple-800 px-2 py-0.5 rounded capitalize">{part.category}</span>
+                          )}
                         </td>
-                        <td className="px-3 py-2 font-medium text-gray-900">{part.name}</td>
-                        <td className="px-3 py-2 text-gray-600">{part.supplier || '-'}</td>
-                        <td className="px-3 py-2 text-right text-gray-700">{part.quantity}</td>
-                        <td className="px-3 py-2 text-right text-gray-700">UGX {formatCurrency(part.unitCost)}</td>
-                        <td className="px-3 py-2 text-right font-medium text-gray-900">UGX {formatCurrency(part.quantity * part.unitCost)}</td>
+                        <td className="px-3 py-2">
+                          {editingSpecialPartId === part.id ? (
+                            <input
+                              type="text"
+                              value={part.name}
+                              onChange={(e) => updateSpecialPart(part.id, { name: e.target.value })}
+                              className="w-full text-sm border border-purple-300 rounded px-2 py-0.5"
+                            />
+                          ) : (
+                            <span className="font-medium text-gray-900">{part.name}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          {editingSpecialPartId === part.id ? (
+                            <input
+                              type="text"
+                              value={part.supplier || ''}
+                              onChange={(e) => updateSpecialPart(part.id, { supplier: e.target.value })}
+                              className="w-full text-sm border border-purple-300 rounded px-2 py-0.5"
+                              placeholder="Supplier"
+                            />
+                          ) : (
+                            <span className="text-gray-600">{part.supplier || '-'}</span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-right">
-                          <button onClick={() => removeSpecialPart(part.id)} className="text-red-500 hover:text-red-700">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {editingSpecialPartId === part.id ? (
+                            <input
+                              type="number"
+                              value={part.quantity}
+                              onChange={(e) => updateSpecialPart(part.id, { quantity: parseInt(e.target.value) || 1 })}
+                              min="1"
+                              className="w-16 text-sm border border-purple-300 rounded px-2 py-0.5 text-right"
+                            />
+                          ) : (
+                            <span className="text-gray-700">{part.quantity}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {part.costing ? (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                              {part.costing.targetCurrency} {formatCurrency(part.costing.totalLandedCost)}
+                            </span>
+                          ) : (
+                            <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
+                              Pending (Costing Tab)
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {editingSpecialPartId === part.id ? (
+                              <button 
+                                onClick={() => setEditingSpecialPartId(null)} 
+                                className="text-green-600 hover:text-green-800 text-xs font-medium"
+                              >
+                                Done
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => setEditingSpecialPartId(part.id)} 
+                                className="text-blue-500 hover:text-blue-700"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button onClick={() => removeSpecialPart(part.id)} className="text-red-500 hover:text-red-700">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -550,8 +682,8 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
               </div>
             )}
 
-            {/* Add Special Part Form */}
-            <div className="grid grid-cols-6 gap-2 bg-white p-3 rounded-lg border border-purple-200">
+            {/* Add Special Part Form - Identification only, costing in Costing Tab */}
+            <div className="grid grid-cols-5 gap-2 bg-white p-3 rounded-lg border border-purple-200">
               <select
                 value={newSpecialPart.category}
                 onChange={(e) => setNewSpecialPart({ ...newSpecialPart, category: e.target.value })}
@@ -586,23 +718,16 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
                 placeholder="Qty"
                 className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg"
               />
-              <input
-                type="number"
-                value={newSpecialPart.unitCost}
-                onChange={(e) => setNewSpecialPart({ ...newSpecialPart, unitCost: parseFloat(e.target.value) || 0 })}
-                placeholder="Unit cost"
-                min="0"
-                className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg"
-              />
               <button
                 onClick={addSpecialPart}
-                disabled={!newSpecialPart.name || newSpecialPart.unitCost <= 0}
+                disabled={!newSpecialPart.name}
                 className="px-3 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
               >
                 <Plus className="w-4 h-4" />
                 Add
               </button>
             </div>
+            <p className="text-xs text-purple-600 mt-1">💡 Costing details (price, exchange rate, transport) are managed in the Costing Tab</p>
 
             {specialPartsCost > 0 && (
               <div className="flex justify-between items-center pt-3 mt-3 border-t border-purple-300">
@@ -668,6 +793,16 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
           }}
           onClose={() => setShowImport(false)}
           loading={parts.loading}
+        />
+      )}
+
+      {/* Project Parts Picker */}
+      {showPartsPicker && (
+        <ProjectPartsPicker
+          projectId={projectId}
+          onSelect={addPartFromLibrary}
+          onClose={() => setShowPartsPicker(false)}
+          excludePartIds={specialParts.filter(p => p.projectPartId).map(p => p.projectPartId!)}
         />
       )}
     </div>

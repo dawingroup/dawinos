@@ -7,7 +7,8 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, LayoutGrid, List, FolderOpen, Calendar, User, Clock, 
-  CheckCircle, AlertTriangle, Package, Edit2, Scissors, Sparkles, Calculator, Upload 
+  CheckCircle, AlertTriangle, Package, Edit2, Scissors, Sparkles, Calculator, Upload,
+  X, Library
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -26,6 +27,8 @@ import { ProductionTab } from './ProductionTab';
 import { StrategyCanvas } from '../strategy';
 import type { Project } from '@/shared/types';
 import { BulkImporter } from '../ProjectEstimation/BulkImporter';
+import { ProjectInspirationSummary } from './ProjectInspirationSummary';
+import { ProjectPartsLibrary } from './ProjectPartsLibrary';
 
 type ViewMode = 'kanban' | 'list';
 type ProjectTab = 'items' | 'cutlist' | 'estimate' | 'production';
@@ -42,6 +45,7 @@ export default function ProjectView() {
   const [showStrategy, setShowStrategy] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [activeTab, setActiveTab] = useState<ProjectTab>('items');
+  const [showPartsDrawer, setShowPartsDrawer] = useState(false);
 
   const { items, loading: itemsLoading } = useDesignItems(projectId, {
     stage: stageFilter === 'all' ? undefined : stageFilter,
@@ -243,6 +247,52 @@ export default function ProjectView() {
           </div>
         </div>
       </div>
+
+      {/* Inspiration - Full Width */}
+      {projectId && (
+        <div className="relative">
+          <ProjectInspirationSummary projectId={projectId} />
+          {/* Parts Library Button */}
+          <button
+            onClick={() => setShowPartsDrawer(true)}
+            className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#0A7C8E] bg-white border border-[#0A7C8E] rounded-lg hover:bg-[#0A7C8E] hover:text-white transition-colors shadow-sm"
+          >
+            <Library className="w-4 h-4" />
+            Parts Library
+          </button>
+        </div>
+      )}
+
+      {/* Parts Library Drawer */}
+      {showPartsDrawer && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/30 transition-opacity"
+            onClick={() => setShowPartsDrawer(false)}
+          />
+          {/* Drawer */}
+          <div className="absolute inset-y-0 right-0 w-full max-w-lg bg-white shadow-xl flex flex-col animate-in slide-in-from-right duration-300">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Library className="w-5 h-5 text-[#0A7C8E]" />
+                Project Parts Library
+              </h2>
+              <button
+                onClick={() => setShowPartsDrawer(false)}
+                className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {projectId && <ProjectPartsLibrary projectId={projectId} />}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Project Tabs */}
       <div className="border-b border-gray-200">

@@ -1,23 +1,22 @@
 /**
  * Design Dashboard
  * Main dashboard for the Design Manager module
+ * Optimized UX - bigger project cards with inline info to reduce clicks
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, FolderOpen, AlertCircle, CheckCircle, Clock, TrendingUp, Trash2, MoreVertical } from 'lucide-react';
+import { Plus, FolderOpen, AlertCircle, CheckCircle, TrendingUp, Trash2, MoreVertical, Package, ChevronRight } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
-import type { DesignProject, DesignStage } from '../../types';
-import { subscribeToProjects, deleteProject } from '../../services/firestore';
-import { STAGE_LABELS, STAGE_ICONS } from '../../utils/formatting';
-import { STAGE_ORDER } from '../../utils/stage-gate';
+import type { DesignProject, DesignItem } from '../../types';
+import { subscribeToProjects, deleteProject, subscribeToDesignItems } from '../../services/firestore';
 import { NewProjectDialog } from '../project/NewProjectDialog';
-import { useEffect } from 'react';
 
 export default function DesignDashboard() {
   const { user, isAuthenticated } = useAuth();
   const [projects, setProjects] = useState<DesignProject[]>([]);
+  const [projectItems, setProjectItems] = useState<Record<string, DesignItem[]>>({});
   const [loading, setLoading] = useState(true);
   const [showNewProject, setShowNewProject] = useState(false);
 
@@ -30,6 +29,13 @@ export default function DesignDashboard() {
     const unsubscribe = subscribeToProjects((data) => {
       setProjects(data);
       setLoading(false);
+      
+      // Subscribe to items for each project
+      data.forEach(project => {
+        subscribeToDesignItems(project.id, (items) => {
+          setProjectItems(prev => ({ ...prev, [project.id]: items }));
+        });
+      });
     });
 
     return () => unsubscribe();
@@ -48,10 +54,14 @@ export default function DesignDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0A7C8E]"></div>
       </div>
     );
   }
+
+  // Calculate totals
+  const totalItems = Object.values(projectItems).flat().length;
+  const readyItems = Object.values(projectItems).flat().filter(i => i.overallReadiness >= 80).length;
 
   return (
     <div className="space-y-6">
@@ -60,12 +70,12 @@ export default function DesignDashboard() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Design Manager</h1>
           <p className="text-gray-600 mt-1">
-            Track designs through manufacturing stages with traffic light status
+            Track designs through manufacturing stages
           </p>
         </div>
         <button
           onClick={() => setShowNewProject(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#1d1d1f] text-white rounded-lg hover:bg-[#424245] transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#086a7a] transition-colors"
         >
           <Plus className="w-4 h-4" />
           New Project
@@ -78,63 +88,54 @@ export default function DesignDashboard() {
           icon={<FolderOpen className="w-5 h-5" />}
           label="Active Projects"
           value={projects.filter(p => p.status === 'active').length}
+          color="bg-[#0A7C8E]"
+        />
+        <StatCard
+          icon={<Package className="w-5 h-5" />}
+          label="Total Items"
+          value={totalItems}
           color="bg-blue-500"
         />
         <StatCard
-          icon={<Clock className="w-5 h-5" />}
-          label="In Progress"
-          value={projects.filter(p => p.status === 'active').length}
-          color="bg-amber-500"
-        />
-        <StatCard
           icon={<CheckCircle className="w-5 h-5" />}
-          label="Completed"
-          value={projects.filter(p => p.status === 'completed').length}
+          label="Production Ready"
+          value={readyItems}
           color="bg-green-500"
         />
         <StatCard
           icon={<TrendingUp className="w-5 h-5" />}
-          label="This Month"
-          value={projects.length}
+          label="Completion Rate"
+          value={totalItems > 0 ? Math.round((readyItems / totalItems) * 100) : 0}
+          suffix="%"
           color="bg-purple-500"
         />
       </div>
 
-      {/* Stage Overview */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Workflow Stages</h2>
-        <div className="grid grid-cols-5 gap-2">
-          {STAGE_ORDER.map((stage) => (
-            <StageColumn key={stage} stage={stage} />
+      {/* Projects Grid - Bigger Cards */}
+      {projects.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <FolderOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
+          <p className="text-gray-500 mb-4">Create your first project to start tracking design items</p>
+          <button
+            onClick={() => setShowNewProject(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#086a7a] transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Create Project
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {projects.map((project) => (
+            <ProjectCard 
+              key={project.id} 
+              project={project} 
+              items={projectItems[project.id] || []}
+            />
           ))}
         </div>
-      </div>
-
-      {/* Projects List */}
-      <div className="bg-white rounded-lg border border-gray-200">
-        <div className="p-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Projects</h2>
-        </div>
-        
-        {projects.length === 0 ? (
-          <div className="p-8 text-center">
-            <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">No projects yet</p>
-            <button
-              onClick={() => setShowNewProject(true)}
-              className="mt-4 text-[#1d1d1f] font-medium hover:underline"
-            >
-              Create your first project
-            </button>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-200">
-            {projects.map((project) => (
-              <ProjectRow key={project.id} project={project} />
-            ))}
-          </div>
-        )}
-      </div>
+      )}
 
       {/* New Project Dialog */}
       <NewProjectDialog
@@ -150,10 +151,11 @@ interface StatCardProps {
   icon: React.ReactNode;
   label: string;
   value: number;
+  suffix?: string;
   color: string;
 }
 
-function StatCard({ icon, label, value, color }: StatCardProps) {
+function StatCard({ icon, label, value, suffix = '', color }: StatCardProps) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
       <div className="flex items-center gap-3">
@@ -161,7 +163,7 @@ function StatCard({ icon, label, value, color }: StatCardProps) {
           {icon}
         </div>
         <div>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
+          <p className="text-2xl font-bold text-gray-900">{value}{suffix}</p>
           <p className="text-sm text-gray-500">{label}</p>
         </div>
       </div>
@@ -169,34 +171,30 @@ function StatCard({ icon, label, value, color }: StatCardProps) {
   );
 }
 
-interface StageColumnProps {
-  stage: DesignStage;
-}
-
-function StageColumn({ stage }: StageColumnProps) {
-  return (
-    <div className="text-center p-3 bg-gray-50 rounded-lg">
-      <span className="text-2xl">{STAGE_ICONS[stage]}</span>
-      <p className="text-xs font-medium text-gray-700 mt-1">{STAGE_LABELS[stage]}</p>
-    </div>
-  );
-}
-
-interface ProjectRowProps {
+interface ProjectCardProps {
   project: DesignProject;
+  items: DesignItem[];
 }
 
-function ProjectRow({ project }: ProjectRowProps) {
+function ProjectCard({ project, items }: ProjectCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const statusColors = {
-    active: 'bg-green-100 text-green-700',
-    'on-hold': 'bg-amber-100 text-amber-700',
-    completed: 'bg-blue-100 text-blue-700',
-    cancelled: 'bg-gray-100 text-gray-700',
+    active: 'bg-green-100 text-green-700 border-green-200',
+    'on-hold': 'bg-amber-100 text-amber-700 border-amber-200',
+    completed: 'bg-blue-100 text-blue-700 border-blue-200',
+    cancelled: 'bg-gray-100 text-gray-700 border-gray-200',
   };
+
+  // Calculate item stats
+  const readyCount = items.filter(i => i.overallReadiness >= 80).length;
+  const inProgressCount = items.filter(i => i.overallReadiness > 0 && i.overallReadiness < 80).length;
+  const pendingCount = items.filter(i => i.overallReadiness === 0).length;
+  const avgReadiness = items.length > 0 
+    ? Math.round(items.reduce((sum, i) => sum + i.overallReadiness, 0) / items.length) 
+    : 0;
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -213,42 +211,99 @@ function ProjectRow({ project }: ProjectRowProps) {
   };
 
   return (
-    <div className="relative">
+    <div className="relative group">
       <Link
         to={`project/${project.id}`}
-        className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+        className="block bg-white rounded-xl border border-gray-200 hover:border-[#0A7C8E] hover:shadow-lg transition-all duration-200 overflow-hidden"
       >
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-[#1d1d1f] rounded-lg flex items-center justify-center">
-            <FolderOpen className="w-5 h-5 text-white" />
+        {/* Card Header */}
+        <div className="p-6 border-b border-gray-100">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-gradient-to-br from-[#0A7C8E] to-[#0A9A8E] rounded-2xl flex items-center justify-center shadow-md">
+                <FolderOpen className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900 text-xl">{project.name}</h3>
+                <p className="text-sm text-gray-500 mt-0.5">{project.code}</p>
+              </div>
+            </div>
+            <span className={cn(
+              'text-sm px-3 py-1.5 rounded-full font-medium border',
+              statusColors[project.status]
+            )}>
+              {project.status}
+            </span>
           </div>
-          <div>
-            <h3 className="font-medium text-gray-900">{project.name}</h3>
-            <p className="text-sm text-gray-500">{project.code}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
           {project.customerName && (
-            <span className="text-sm text-gray-500">{project.customerName}</span>
+            <p className="text-base text-gray-600 mt-2">
+              <span className="text-gray-400">Customer:</span> {project.customerName}
+            </p>
           )}
-          <span className={cn(
-            'text-xs px-2 py-1 rounded-full font-medium',
-            statusColors[project.status]
-          )}>
-            {project.status}
+        </div>
+
+        {/* Item Stats */}
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-base font-semibold text-gray-700">Design Items</span>
+            <span className="text-base text-gray-500">{items.length} total</span>
+          </div>
+          
+          {items.length > 0 ? (
+            <>
+              {/* Progress Bar */}
+              <div className="h-3 bg-gray-100 rounded-full overflow-hidden mb-5">
+                <div 
+                  className="h-full bg-gradient-to-r from-[#0A7C8E] to-green-500 rounded-full transition-all duration-500"
+                  style={{ width: `${avgReadiness}%` }}
+                />
+              </div>
+              
+              {/* Stats Row */}
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="bg-green-50 rounded-xl py-4 px-2">
+                  <p className="text-2xl font-bold text-green-600">{readyCount}</p>
+                  <p className="text-sm text-green-600 mt-1">Ready</p>
+                </div>
+                <div className="bg-amber-50 rounded-xl py-4 px-2">
+                  <p className="text-2xl font-bold text-amber-600">{inProgressCount}</p>
+                  <p className="text-sm text-amber-600 mt-1">In Progress</p>
+                </div>
+                <div className="bg-gray-100 rounded-xl py-4 px-2">
+                  <p className="text-2xl font-bold text-gray-600">{pendingCount}</p>
+                  <p className="text-sm text-gray-600 mt-1">Pending</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-8 text-gray-400">
+              No items yet
+            </div>
+          )}
+        </div>
+
+        {/* Card Footer */}
+        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+          <span className="text-sm text-gray-500">
+            {avgReadiness}% complete
           </span>
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setShowMenu(!showMenu);
-            }}
-            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
-          >
-            <MoreVertical className="w-4 h-4" />
-          </button>
+          <span className="text-sm text-[#0A7C8E] font-semibold flex items-center gap-1 group-hover:gap-2 transition-all">
+            View Project <ChevronRight className="w-4 h-4" />
+          </span>
         </div>
       </Link>
+
+      {/* Menu Button */}
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setShowMenu(!showMenu);
+        }}
+        className="absolute top-4 right-4 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <MoreVertical className="w-4 h-4" />
+      </button>
 
       {/* Dropdown Menu */}
       {showMenu && (
@@ -307,3 +362,4 @@ function ProjectRow({ project }: ProjectRowProps) {
     </div>
   );
 }
+

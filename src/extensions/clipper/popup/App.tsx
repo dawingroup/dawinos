@@ -14,10 +14,32 @@ import type { ClipRecord } from '../types/database';
 
 type View = 'gallery' | 'detail' | 'settings' | 'clip-form';
 
+interface PendingClipMetadata {
+  price?: {
+    amount: number;
+    currency: string;
+    formatted: string;
+    confidence: number;
+  };
+  brand?: string;
+  sku?: string;
+  category?: string;
+  dimensions?: {
+    width: number;
+    height: number;
+    depth?: number;
+    unit: string;
+  };
+  materials?: string[];
+  colors?: string[];
+  description?: string;
+}
+
 interface PendingClip {
   imageUrl: string;
   sourceUrl: string;
   pageTitle: string;
+  metadata?: PendingClipMetadata;
 }
 
 export default function App() {
@@ -42,6 +64,7 @@ export default function App() {
               imageUrl: clipData.imageUrl,
               sourceUrl: clipData.sourceUrl,
               pageTitle: clipData.title || 'Untitled',
+              metadata: clipData.metadata,
             });
             setCurrentView('clip-form');
           } else {
@@ -95,6 +118,14 @@ export default function App() {
           projectId: data.projectId,
           designItemId: data.designItemId,
           notes: data.notes,
+          // Include metadata with price, brand, etc.
+          price: pendingClip.metadata?.price,
+          brand: pendingClip.metadata?.brand,
+          sku: pendingClip.metadata?.sku,
+          dimensions: pendingClip.metadata?.dimensions,
+          materials: pendingClip.metadata?.materials,
+          colors: pendingClip.metadata?.colors,
+          description: pendingClip.metadata?.description,
         },
       });
       // Clear pending clip from storage after successful save

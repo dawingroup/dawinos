@@ -238,6 +238,7 @@ export async function createDesignItem(
     ...itemData,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
+    stageEnteredAt: serverTimestamp(), // Track when item entered initial stage
   });
   
   return docRef.id;
@@ -426,6 +427,7 @@ export async function transitionStage(
   
   await updateDesignItem(projectId, itemId, {
     currentStage: targetStage,
+    stageEnteredAt: serverTimestamp() as any, // FieldValue converted to Timestamp by Firestore
     stageHistory: [...item.stageHistory, transition],
   }, userId);
 }

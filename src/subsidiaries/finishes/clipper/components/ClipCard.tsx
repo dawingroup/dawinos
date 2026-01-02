@@ -22,15 +22,18 @@ interface ClipCardProps {
   onClick?: () => void;
   onLink?: () => void;
   selected?: boolean;
+  linkMode?: boolean;
 }
 
-export function ClipCard({ clip, onClick, onLink, selected }: ClipCardProps) {
+export function ClipCard({ clip, onClick, onLink, selected, linkMode }: ClipCardProps) {
+  const isLinked = !!clip.designItemId;
+  
   return (
     <div 
       className={`group relative bg-white rounded-lg border overflow-hidden cursor-pointer transition-all hover:shadow-md ${
         selected ? 'ring-2 ring-primary border-primary' : 'border-gray-200'
-      }`}
-      onClick={onClick}
+      } ${isLinked && linkMode ? 'opacity-50' : ''}`}
+      onClick={linkMode && onLink && !isLinked ? onLink : onClick}
     >
       {/* Image */}
       <div className="aspect-square bg-gray-100 relative overflow-hidden">
@@ -130,6 +133,24 @@ export function ClipCard({ clip, onClick, onLink, selected }: ClipCardProps) {
           <div className="flex items-center gap-1 mt-2 text-xs text-green-600">
             <Link2 className="w-3 h-3" />
             Linked to design
+          </div>
+        )}
+        
+        {/* Link button for link mode */}
+        {linkMode && onLink && !isLinked && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onLink(); }}
+            className="w-full mt-2 px-3 py-1.5 bg-[#1d1d1f] text-white text-xs font-medium rounded-lg hover:bg-[#424245] flex items-center justify-center gap-1"
+          >
+            <Link2 className="w-3 h-3" />
+            Link to Design
+          </button>
+        )}
+        
+        {/* Already linked indicator for link mode */}
+        {linkMode && isLinked && (
+          <div className="mt-2 px-3 py-1.5 bg-gray-100 text-gray-500 text-xs rounded-lg text-center">
+            Already linked
           </div>
         )}
       </div>

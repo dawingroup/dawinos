@@ -57,6 +57,14 @@ interface DetailedClipData {
   projectId?: string;
   designItemId?: string;
   notes?: string;
+  // Extracted metadata
+  price?: { amount: number; currency: string; formatted?: string; confidence?: number };
+  brand?: string;
+  sku?: string;
+  description?: string;
+  dimensions?: { width: number; height: number; depth?: number; unit: string };
+  materials?: string[];
+  colors?: string[];
 }
 
 interface StoredClip {
@@ -73,6 +81,14 @@ interface StoredClip {
   designItemId?: string;
   notes?: string;
   analysisStatus?: 'pending' | 'analyzing' | 'completed' | 'failed';
+  // Extracted metadata
+  price?: { amount: number; currency: string; formatted: string };
+  brand?: string;
+  sku?: string;
+  description?: string;
+  dimensions?: { width: number; height: number; depth?: number; unit: string };
+  materials?: string[];
+  colors?: string[];
 }
 
 async function toggleClippingMode(): Promise<{ success: boolean }> {
@@ -205,6 +221,18 @@ async function saveDetailedClipToStorage(clipData: DetailedClipData): Promise<{ 
       designItemId: clipData.designItemId,
       notes: clipData.notes,
       analysisStatus: 'pending',
+      // Extracted metadata - include price!
+      price: clipData.price ? {
+        amount: clipData.price.amount,
+        currency: clipData.price.currency,
+        formatted: clipData.price.formatted || `${clipData.price.currency} ${clipData.price.amount.toFixed(2)}`,
+      } : undefined,
+      brand: clipData.brand,
+      sku: clipData.sku,
+      description: clipData.description,
+      dimensions: clipData.dimensions,
+      materials: clipData.materials,
+      colors: clipData.colors,
     };
     
     // Try to get thumbnail
@@ -353,6 +381,56 @@ async function syncClipToFirestore(clip: StoredClip): Promise<void> {
     
     if (clip.notes) {
       fields.notes = { stringValue: clip.notes };
+    }
+    
+    // Add price if present
+    if (clip.price) {
+      fields.price = {
+        mapValue: {
+          fields: {
+            amount: { doubleValue: clip.price.amount },
+            currency: { stringValue: clip.price.currency },
+            formatted: { stringValue: clip.price.formatted },
+          }
+        }
+      };
+    }
+    
+    // Add other metadata fields
+    if (clip.brand) {
+      fields.brand = { stringValue: clip.brand };
+    }
+    if (clip.sku) {
+      fields.sku = { stringValue: clip.sku };
+    }
+    if (clip.description) {
+      fields.description = { stringValue: clip.description };
+    }
+    if (clip.dimensions) {
+      fields.dimensions = {
+        mapValue: {
+          fields: {
+            width: { doubleValue: clip.dimensions.width },
+            height: { doubleValue: clip.dimensions.height },
+            ...(clip.dimensions.depth ? { depth: { doubleValue: clip.dimensions.depth } } : {}),
+            unit: { stringValue: clip.dimensions.unit },
+          }
+        }
+      };
+    }
+    if (clip.materials && clip.materials.length > 0) {
+      fields.materials = {
+        arrayValue: {
+          values: clip.materials.map(m => ({ stringValue: m }))
+        }
+      };
+    }
+    if (clip.colors && clip.colors.length > 0) {
+      fields.colors = {
+        arrayValue: {
+          values: clip.colors.map(c => ({ stringValue: c }))
+        }
+      };
     }
     
     const firestoreDoc = { fields };

@@ -204,20 +204,96 @@ export interface StandardPartEntry {
 }
 
 /**
+ * Part category type for special/project parts
+ */
+export type PartCategory = 'handle' | 'lock' | 'hinge' | 'accessory' | 'lighting' | 'drawer-slide' | 'bracket' | 'connector' | 'other';
+
+/**
+ * Project-level part entry (shared across design items in a project)
+ * Created from clips or manually added
+ */
+export interface ProjectPart {
+  id: string;
+  name: string;                   // e.g., "Custom brass handle - Italian"
+  supplier: string;               // e.g., "Colonial Bronze"
+  partNumber?: string;            // SKU/part number
+  category: PartCategory;
+  unitCost: number;
+  currency: string;               // e.g., "USD", "KES"
+  referenceImageUrl?: string;     // Image from clip
+  purchaseUrl?: string;           // Source URL for purchasing
+  clipId?: string;                // Original clip ID if created from clip
+  description?: string;
+  specifications?: Record<string, string>; // e.g., { "finish": "brass", "size": "4 inch" }
+  lastPriceCheck?: Timestamp;
+  notes?: string;
+  promotedToMaterialId?: string;  // If promoted to global materials database
+  createdBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+/**
+ * Design item reference to a project part (with quantity)
+ */
+export interface DesignItemPartUsage {
+  projectPartId: string;          // Reference to ProjectPart
+  quantity: number;
+  notes?: string;
+}
+
+/**
  * Special/approved part entry (custom handles, locks for luxury projects)
+ * Parts Tab: captures identification + quantity only
+ * Costing Tab: handles all pricing, exchange rates, transport, landed cost
  */
 export interface SpecialPartEntry {
   id: string;
+  
+  // Identification (managed in Parts Tab)
   name: string;                   // e.g., "Custom brass handle - Italian"
   supplier?: string;
   partNumber?: string;
-  category: 'handle' | 'lock' | 'hinge' | 'accessory' | 'lighting' | 'other';
+  category: PartCategory;
   quantity: number;
-  unitCost: number;
-  totalCost: number;
+  referenceImageUrl?: string;     // Image for visual reference
+  purchaseUrl?: string;           // URL to purchase the part
+  projectPartId?: string;         // Reference to ProjectPart if from library
   approvedBy?: string;
   approvedAt?: Timestamp;
   notes?: string;
+  
+  // Costing (managed in Costing Tab - similar to procurement)
+  costing?: SpecialPartCosting;
+}
+
+/**
+ * Costing details for a special part (similar to ProcurementPricing)
+ */
+export interface SpecialPartCosting {
+  // Source pricing
+  unitCost: number;               // Cost per unit in source currency
+  currency: string;               // Source currency (USD, EUR, AED, etc.)
+  
+  // Exchange rate
+  exchangeRate: number;           // Rate to convert to project currency
+  targetCurrency: string;         // Project currency (UGX, KES, etc.)
+  
+  // Additional costs (allocated per part)
+  transportCost?: number;         // Shipping/freight allocated (source currency)
+  logisticsCost?: number;         // Handling, clearing (source currency)
+  customsCost?: number;           // Import duties (source currency)
+  
+  // Calculated totals
+  totalSourceCost: number;        // (unitCost + transport + logistics + customs) * quantity
+  landedUnitCost: number;         // totalSourceCost / quantity * exchangeRate
+  totalLandedCost: number;        // totalSourceCost * exchangeRate
+  
+  // Tracking
+  pricedAt?: Timestamp;
+  pricedBy?: string;
+  priceValidUntil?: Timestamp;
+  priceNotes?: string;
 }
 
 /**
@@ -300,6 +376,7 @@ export interface DesignItem {
   
   // Status
   currentStage: DesignStage;
+  stageEnteredAt?: Timestamp; // When the current stage was entered (for delay tracking)
   ragStatus: RAGStatus;
   overallReadiness: number; // 0-100 percentage
   

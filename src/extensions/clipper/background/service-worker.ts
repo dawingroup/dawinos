@@ -37,6 +37,9 @@ async function handleMessage(
     case 'SAVE_CLIP':
       return handleSaveClip(message as SaveClipMessage);
     
+    case 'SAVE_DETAILED_CLIP':
+      return handleSaveDetailedClip(message);
+    
     default:
       console.warn('Unknown message type:', message.type);
       return { success: false, error: 'Unknown message type' };
@@ -166,6 +169,113 @@ async function handleSaveClip(message: SaveClipMessage): Promise<{ success: bool
     return { success: true, clipId: clip.id };
   } catch (error) {
     console.error('Failed to save clip:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
+  }
+}
+
+/**
+ * Handle detailed clip save with all metadata including price
+ */
+async function handleSaveDetailedClip(message: { data: {
+  imageUrl: string;
+  sourceUrl: string;
+  title: string;
+  clipType?: string;
+  projectId?: string;
+  designItemId?: string;
+  notes?: string;
+  price?: { amount: number; currency: string; formatted?: string; confidence?: number };
+  brand?: string;
+  sku?: string;
+  dimensions?: { width: number; height: number; depth?: number; unit: string };
+  materials?: string[];
+  colors?: string[];
+  description?: string;
+}}): Promise<{ success: boolean; clipId?: string; error?: string }> {
+  try {
+    const { data } = message;
+    console.log('[Service Worker] SAVE_DETAILED_CLIP received:', JSON.stringify(data, null, 2));
+    
+    // Fetch image
+    const imageResponse = await fetch(data.imageUrl, { mode: 'cors', credentials: 'omit' });
+    if (!imageResponse.ok) {
+      throw new Error(`Failed to fetch image: HTTP ${imageResponse.status}`);
+    }
+    const imageBlob = await imageResponse.blob();
+    
+    // Generate thumbnail
+    const bitmap = await createImageBitmap(imageBlob);
+    const maxSize = 200;
+    const ratio = bitmap.width / bitmap.height;
+    const thumbWidth = bitmap.width > bitmap.height ? maxSize : Math.round(maxSize * ratio);
+    const thumbHeight = bitmap.height > bitmap.width ? maxSize : Math.round(maxSize / ratio);
+    
+    const canvas = new OffscreenCanvas(thumbWidth, thumbHeight);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get canvas context');
+    ctx.drawImage(bitmap, 0, 0, thumbWidth, thumbHeight);
+    bitmap.close();
+    
+    const thumbnailBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
+    
+    // Create clip record with all metadata including price
+    const clip: ClipRecord = {
+      id: generateClipId(),
+      sourceUrl: data.sourceUrl,
+      imageUrl: data.imageUrl,
+      imageBlob,
+      thumbnailBlob,
+      title: data.title || 'Untitled',
+      description: data.description,
+      brand: data.brand,
+      tags: [],
+      projectId: data.projectId,
+      designItemId: data.designItemId,
+      notes: data.notes,
+      // Price and other extracted metadata - ensure formatted is always set
+      price: data.price ? {
+        amount: data.price.amount,
+        currency: data.price.currency,
+        formatted: data.price.formatted || `${data.price.currency} ${data.price.amount.toFixed(2)}`,
+      } : undefined,
+      sku: data.sku,
+      dimensions: data.dimensions ? {
+        width: data.dimensions.width,
+        height: data.dimensions.height,
+        depth: data.dimensions.depth,
+        unit: (data.dimensions.unit as 'in' | 'cm' | 'mm') || 'in',
+      } : undefined,
+      materials: data.materials,
+      colors: data.colors,
+      syncStatus: 'pending',
+      version: 1,
+      lastModified: new Date(),
+      createdAt: new Date(),
+    };
+    
+    // Save to IndexedDB
+    await dbSaveClip(clip);
+    
+    // Add to sync queue (without blobs)
+    const syncPayload = { ...clip };
+    delete (syncPayload as Partial<ClipRecord>).imageBlob;
+    delete (syncPayload as Partial<ClipRecord>).thumbnailBlob;
+    
+    await addToSyncQueue({
+      clipId: clip.id,
+      operation: 'create',
+      payload: syncPayload,
+      retryCount: 0,
+      createdAt: new Date(),
+    });
+    
+    console.log('Detailed clip saved with price:', clip.id, data.price);
+    return { success: true, clipId: clip.id };
+  } catch (error) {
+    console.error('Failed to save detailed clip:', error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 

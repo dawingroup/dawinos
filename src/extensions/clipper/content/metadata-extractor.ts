@@ -3,12 +3,37 @@
  */
 
 import type { ExtractedMetadata } from '../types/database';
+import { parserRegistry } from './parsers';
 
 export class MetadataExtractor {
   /**
    * Extract all available metadata from the current page
    */
   extract(): ExtractedMetadata {
+    // First try site-specific parser
+    try {
+      const parserResult = parserRegistry.parse(window.location.href);
+      if (parserResult.metadata && (parserResult.metadata.title || parserResult.metadata.price)) {
+        console.log('Using site-specific parser:', parserRegistry.getParser().name);
+        // Merge with generic extraction for any missing fields
+        const genericMetadata = this.extractGeneric();
+        return {
+          ...genericMetadata,
+          ...parserResult.metadata,
+        };
+      }
+    } catch (e) {
+      console.warn('Site parser failed, falling back to generic:', e);
+    }
+
+    // Fall back to generic extraction
+    return this.extractGeneric();
+  }
+
+  /**
+   * Generic extraction logic
+   */
+  private extractGeneric(): ExtractedMetadata {
     const metadata: ExtractedMetadata = {};
 
     // Try structured data first (most reliable)

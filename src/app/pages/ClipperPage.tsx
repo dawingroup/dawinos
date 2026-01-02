@@ -9,10 +9,13 @@ import { ClipGallery } from '@/subsidiaries/finishes/clipper/components';
 import { useClips } from '@/subsidiaries/finishes/clipper/hooks';
 import type { DesignClip } from '@/subsidiaries/finishes/clipper/types';
 import { ClipDetail } from '@/subsidiaries/finishes/clipper/components/ClipDetail';
+import { ClipEditModal } from '@/subsidiaries/finishes/clipper/components/ClipEditModal';
 
 export default function ClipperPage() {
-  const { clips, loading } = useClips();
+  const { clips, loading, deleteClip, updateClip } = useClips();
   const [selectedClip, setSelectedClip] = useState<DesignClip | null>(null);
+  const [editingClip, setEditingClip] = useState<DesignClip | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const inspirationCount = clips.filter(c => c.clipType === 'inspiration').length;
   const partsCount = clips.filter(c => c.clipType === 'parts-source').length;
@@ -151,6 +154,41 @@ export default function ClipperPage() {
         <ClipDetail
           clip={selectedClip}
           onClose={() => setSelectedClip(null)}
+          onEdit={() => {
+            setEditingClip(selectedClip);
+            setSelectedClip(null);
+          }}
+          onDelete={async () => {
+            if (window.confirm('Are you sure you want to delete this clip?')) {
+              setIsDeleting(true);
+              try {
+                await deleteClip(selectedClip.id);
+                setSelectedClip(null);
+              } catch (error) {
+                console.error('Failed to delete clip:', error);
+                alert('Failed to delete clip');
+              } finally {
+                setIsDeleting(false);
+              }
+            }
+          }}
+        />
+      )}
+
+      {/* Edit Modal */}
+      {editingClip && (
+        <ClipEditModal
+          clip={editingClip}
+          onClose={() => setEditingClip(null)}
+          onSave={async (updates) => {
+            try {
+              await updateClip(editingClip.id, updates);
+              setEditingClip(null);
+            } catch (error) {
+              console.error('Failed to update clip:', error);
+              alert('Failed to update clip');
+            }
+          }}
         />
       )}
     </div>

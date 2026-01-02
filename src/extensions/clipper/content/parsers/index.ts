@@ -8,12 +8,14 @@ import { wayfairParser } from './wayfair';
 import { westElmParser } from './westelm';
 import { pinterestParser } from './pinterest';
 import { houzzParser } from './houzz';
+import { workspaceParser } from './workspace';
 
 class ParserRegistry {
   private parsers: SiteParser[] = [];
 
   constructor() {
     // Register parsers in priority order (specific first, generic last)
+    this.register(workspaceParser);
     this.register(wayfairParser);
     this.register(westElmParser);
     this.register(pinterestParser);
@@ -89,5 +91,5 @@ class ParserRegistry {
 }
 
 export const parserRegistry = new ParserRegistry();
-export { genericParser, wayfairParser, westElmParser, pinterestParser, houzzParser };
+export { genericParser, wayfairParser, westElmParser, pinterestParser, houzzParser, workspaceParser };
 export type { SiteParser, ParserResult };

@@ -364,23 +364,52 @@ function OverviewTab({
   const { user } = useAuth();
   const [isUpdatingSourcing, setIsUpdatingSourcing] = useState(false);
   const [isUpdatingDueDate, setIsUpdatingDueDate] = useState(false);
+  const [showClipGallery, setShowClipGallery] = useState(false);
+  const [InspirationPanelComponent, setInspirationPanelComponent] = useState<React.ComponentType<any> | null>(null);
+
+  // Lazy load InspirationPanel for sidebar
+  useEffect(() => {
+    import('./InspirationPanel').then((mod) => {
+      setInspirationPanelComponent(() => mod.InspirationPanel);
+    });
+  }, []);
 
   const params = (item as any).parameters || {};
   const dimensions = params.dimensions || {};
   const hasDimensions = dimensions.width || dimensions.height || dimensions.depth;
 
   const sourcingType = (item as any)?.sourcingType as ('MANUFACTURED' | 'PROCURED' | undefined);
+
+  const handleLinkClip = async (clip: any) => {
+    try {
+      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      const { db } = await import('@/shared/services/firebase');
+      
+      const clipRef = doc(db, 'designClips', clip.id);
+      await updateDoc(clipRef, {
+        projectId,
+        designItemId: item.id,
+        updatedAt: serverTimestamp(),
+      });
+      
+      setShowClipGallery(false);
+    } catch (error) {
+      console.error('Failed to link clip:', error);
+    }
+  };
   
   return (
-    <div className="space-y-6">
-      {/* Description */}
-      <div className="bg-gray-50 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">Description</h3>
-        <p className="text-gray-900">{item.description || 'No description provided.'}</p>
-      </div>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Main Content */}
+      <div className="lg:col-span-2 space-y-6">
+        {/* Description */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Description</h3>
+          <p className="text-gray-900">{item.description || 'No description provided.'}</p>
+        </div>
       
-      {/* Key Info Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Key Info Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Priority</h3>
           <p className="text-lg font-semibold text-gray-900 capitalize">{item.priority || 'Not set'}</p>
@@ -530,21 +559,87 @@ function OverviewTab({
         )}
       </div>
       
-      {/* Metadata */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Created</h3>
-          <p className="text-sm font-medium text-gray-900">{formatDateTime(item.createdAt)}</p>
-          <p className="text-xs text-gray-500">by {item.createdBy}</p>
-        </div>
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Last Updated</h3>
-          <p className="text-sm font-medium text-gray-900">{formatDateTime(item.updatedAt)}</p>
-          <p className="text-xs text-gray-500">by {item.updatedBy}</p>
+        {/* Metadata */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Created</h3>
+            <p className="text-sm font-medium text-gray-900">{formatDateTime(item.createdAt)}</p>
+            <p className="text-xs text-gray-500">by {item.createdBy}</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Last Updated</h3>
+            <p className="text-sm font-medium text-gray-900">{formatDateTime(item.updatedAt)}</p>
+            <p className="text-xs text-gray-500">by {item.updatedBy}</p>
+          </div>
         </div>
       </div>
+
+      {/* Sidebar - Inspiration Clips */}
+      <div className="lg:col-span-1 space-y-4">
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          {InspirationPanelComponent ? (
+            <InspirationPanelComponent
+              designItemId={item.id}
+              projectId={projectId}
+              designItemName={item.name}
+              onOpenGallery={() => setShowClipGallery(true)}
+              compact
+              maxItems={4}
+            />
+          ) : (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#1d1d1f]"></div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Clip Gallery Modal */}
+      {showClipGallery && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Link Inspiration Clip</h3>
+              <button
+                onClick={() => setShowClipGallery(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div></div>}>
+                <ClipGalleryWrapperForOverview onLinkClip={handleLinkClip} />
+              </Suspense>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+// Lazy wrapper for ClipGallery in OverviewTab
+function ClipGalleryWrapperForOverview({ onLinkClip }: { onLinkClip: (clip: any) => void }) {
+  const [ClipGallery, setClipGallery] = useState<React.ComponentType<any> | null>(null);
+
+  useEffect(() => {
+    import('@/subsidiaries/finishes/clipper/components').then((mod) => {
+      setClipGallery(() => mod.ClipGallery);
+    });
+  }, []);
+
+  if (!ClipGallery) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
+      </div>
+    );
+  }
+
+  return <ClipGallery onLinkClip={onLinkClip} selectable />;
 }
 
 interface FilesTabProps {
@@ -1469,39 +1564,14 @@ interface InspirationTabProps {
 
 function InspirationTab({ item, projectId, itemId }: InspirationTabProps) {
   const [showGallery, setShowGallery] = useState(false);
-  const [selectedClip, setSelectedClip] = useState<any>(null);
-  const [linkedClips, setLinkedClips] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [InspirationPanelComponent, setInspirationPanelComponent] = useState<React.ComponentType<any> | null>(null);
 
-  // Subscribe to clips linked to this design item
+  // Lazy load InspirationPanel
   useEffect(() => {
-    const loadLinkedClips = async () => {
-      setLoading(true);
-      try {
-        const { collection, query, where, onSnapshot } = await import('firebase/firestore');
-        const { db } = await import('@/shared/services/firebase');
-        
-        const clipsRef = collection(db, 'designClips');
-        const q = query(clipsRef, where('designItemId', '==', itemId));
-        
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-          const clips = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          setLinkedClips(clips);
-          setLoading(false);
-        });
-        
-        return unsubscribe;
-      } catch (error) {
-        console.error('Failed to load linked clips:', error);
-        setLoading(false);
-      }
-    };
-    
-    loadLinkedClips();
-  }, [itemId]);
+    import('./InspirationPanel').then((mod) => {
+      setInspirationPanelComponent(() => mod.InspirationPanel);
+    });
+  }, []);
 
   const handleLinkClip = async (clip: any) => {
     try {
@@ -1522,32 +1592,6 @@ function InspirationTab({ item, projectId, itemId }: InspirationTabProps) {
     }
   };
 
-  const handleUnlinkClip = async (clipId: string) => {
-    if (!confirm('Unlink this clip from the design item?')) return;
-    
-    try {
-      const { doc, updateDoc, serverTimestamp, deleteField } = await import('firebase/firestore');
-      const { db } = await import('@/shared/services/firebase');
-      
-      const clipRef = doc(db, 'designClips', clipId);
-      await updateDoc(clipRef, {
-        designItemId: deleteField(),
-        updatedAt: serverTimestamp(),
-      });
-    } catch (error) {
-      console.error('Failed to unlink clip:', error);
-      alert('Failed to unlink clip. Please try again.');
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -1567,57 +1611,17 @@ function InspirationTab({ item, projectId, itemId }: InspirationTabProps) {
         </button>
       </div>
 
-      {/* Linked Clips Grid */}
-      {linkedClips.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-          <Image className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <h3 className="text-lg font-medium text-gray-900">No inspiration clips yet</h3>
-          <p className="text-sm text-gray-500 mt-1 max-w-md mx-auto">
-            Link design clips from your Clipper library to use as reference for this design item
-          </p>
-          <button
-            onClick={() => setShowGallery(true)}
-            className="mt-4 px-4 py-2 bg-[#1d1d1f] text-white rounded-lg text-sm font-medium hover:bg-[#424245]"
-          >
-            Browse Clips
-          </button>
-        </div>
+      {/* Inspiration Panel */}
+      {InspirationPanelComponent ? (
+        <InspirationPanelComponent
+          designItemId={itemId}
+          projectId={projectId}
+          designItemName={item.name}
+          onOpenGallery={() => setShowGallery(true)}
+        />
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          {linkedClips.map((clip) => (
-            <div
-              key={clip.id}
-              className="group relative bg-white rounded-lg border border-gray-200 overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => setSelectedClip(clip)}
-            >
-              <div className="aspect-square bg-gray-100">
-                <img
-                  src={clip.thumbnailUrl || clip.imageUrl}
-                  alt={clip.title}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="p-3">
-                <h4 className="font-medium text-gray-900 text-sm truncate">{clip.title}</h4>
-                {clip.brand && (
-                  <p className="text-xs text-gray-500 truncate">{clip.brand}</p>
-                )}
-              </div>
-              {/* Unlink button on hover */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleUnlinkClip(clip.id);
-                }}
-                className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                title="Unlink clip"
-              >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          ))}
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
         </div>
       )}
 
@@ -1640,45 +1644,6 @@ function InspirationTab({ item, projectId, itemId }: InspirationTabProps) {
               <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div></div>}>
                 <ClipGalleryWrapper onLinkClip={handleLinkClip} />
               </Suspense>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Clip Detail Modal */}
-      {selectedClip && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold">{selectedClip.title}</h3>
-              <button
-                onClick={() => setSelectedClip(null)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-4">
-              <img
-                src={selectedClip.imageUrl}
-                alt={selectedClip.title}
-                className="w-full max-h-[60vh] object-contain rounded-lg"
-              />
-              {selectedClip.description && (
-                <p className="mt-4 text-gray-600">{selectedClip.description}</p>
-              )}
-              {selectedClip.sourceUrl && (
-                <a
-                  href={selectedClip.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 text-sm text-blue-600 hover:underline inline-block"
-                >
-                  View original source →
-                </a>
-              )}
             </div>
           </div>
         </div>

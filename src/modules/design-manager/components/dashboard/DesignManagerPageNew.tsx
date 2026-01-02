@@ -5,36 +5,24 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { Package, LayoutGrid, List, Plus, Search, Filter, FolderOpen, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Package, Plus, FolderOpen, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/shared/components/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { subscribeToProjects, subscribeToDesignItems } from '../../services/firestore';
 import type { DesignProject, DesignItem } from '../../types';
-import { DesignItemCard } from '../design-item/DesignItemCard';
-import { StageKanban } from './StageKanban';
 import { ProjectDialog } from '../project/ProjectDialog';
-import { ProjectDashboardCard } from '../project/ProjectDashboardCard';
 import { isAtFinalStageForItem } from '../../utils/stage-gate';
 
 export default function DesignManagerPageNew() {
-  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'kanban'>('grid');
-  const [searchQuery, setSearchQuery] = useState('');
   const [showProjectDialog, setShowProjectDialog] = useState(false);
   const [editingProject, setEditingProject] = useState<DesignProject | null>(null);
-  const [selectedProject, setSelectedProject] = useState<DesignProject | null>(null);
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   // Open dialog to create new project
   const handleNewProject = () => {
     setEditingProject(null);
-    setShowProjectDialog(true);
-  };
-
-  // Open dialog to edit existing project
-  const handleEditProject = (project: DesignProject) => {
-    setEditingProject(project);
     setShowProjectDialog(true);
   };
 
@@ -91,32 +79,16 @@ export default function DesignManagerPageNew() {
     };
   }, [projects]);
 
-  // Filter design items based on search query
-  const filteredItems = useMemo(() => {
-    if (!searchQuery) return allDesignItems;
-    const query = searchQuery.toLowerCase();
-    return allDesignItems.filter(item => 
-      item.name.toLowerCase().includes(query) ||
-      item.itemCode.toLowerCase().includes(query) ||
-      item.category.toLowerCase().includes(query)
-    );
-  }, [allDesignItems, searchQuery]);
-
   // Get stats for dashboard
   const stats = useMemo(() => {
-    const total = filteredItems.length;
-    const inProgress = filteredItems.filter(i => !isAtFinalStageForItem(i)).length;
-    const productionReady = filteredItems.filter(i => isAtFinalStageForItem(i)).length;
-    const needsAttention = filteredItems.filter(i => 
+    const total = allDesignItems.length;
+    const inProgress = allDesignItems.filter(i => !isAtFinalStageForItem(i)).length;
+    const productionReady = allDesignItems.filter(i => isAtFinalStageForItem(i)).length;
+    const needsAttention = allDesignItems.filter(i => 
       i.overallReadiness < 50 || i.priority === 'urgent'
     ).length;
     return { total, inProgress, productionReady, needsAttention };
-  }, [filteredItems]);
-
-  // Handle item click - navigate to detail page
-  const handleItemClick = (item: DesignItem) => {
-    navigate(`project/${item.projectId}/item/${item.id}`);
-  };
+  }, [allDesignItems]);
 
   // If not authenticated, show login prompt
   if (!isAuthenticated) {
@@ -190,143 +162,113 @@ export default function DesignManagerPageNew() {
         </div>
       </div>
 
-      {/* Projects Section */}
+      {/* Projects Section - Large Cards */}
       {projects.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-900">Projects</h2>
-            <span className="text-xs text-gray-500">{projects.length} project{projects.length !== 1 ? 's' : ''}</span>
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Projects</h2>
+            <span className="text-sm text-gray-500">{projects.length} project{projects.length !== 1 ? 's' : ''}</span>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {projects.map((project) => (
-              <button
-                key={project.id}
-                onClick={() => setSelectedProject(selectedProject?.id === project.id ? null : project)}
-                className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm transition-colors ${
-                  selectedProject?.id === project.id
-                    ? 'bg-primary/10 border-primary text-primary'
-                    : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <FolderOpen className="h-3.5 w-3.5" />
-                <span className="font-medium">{project.name}</span>
-                <span className="text-xs opacity-70">({project.code})</span>
-              </button>
-            ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {projects.map((project) => {
+              const projectItems = allDesignItems.filter(i => i.projectId === project.id);
+              const readyCount = projectItems.filter(i => isAtFinalStageForItem(i)).length;
+              const inProgressCount = projectItems.filter(i => !isAtFinalStageForItem(i) && i.overallReadiness > 0).length;
+              const pendingCount = projectItems.filter(i => i.overallReadiness === 0).length;
+              const avgReadiness = projectItems.length > 0 
+                ? Math.round(projectItems.reduce((sum, i) => sum + i.overallReadiness, 0) / projectItems.length) 
+                : 0;
+              
+              return (
+                <div
+                  key={project.id}
+                  onClick={() => navigate(`project/${project.id}`)}
+                  className="bg-white rounded-xl border border-gray-200 hover:border-primary hover:shadow-lg transition-all duration-200 cursor-pointer overflow-hidden group"
+                >
+                  {/* Card Header */}
+                  <div className="p-6 border-b border-gray-100">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 bg-gradient-to-br from-primary to-primary/80 rounded-2xl flex items-center justify-center shadow-md">
+                          <FolderOpen className="w-7 h-7 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-900 text-xl">{project.name}</h3>
+                          <p className="text-sm text-gray-500 mt-0.5">{project.code}</p>
+                        </div>
+                      </div>
+                      <span className={`text-sm px-3 py-1.5 rounded-full font-medium border ${
+                        project.status === 'active' ? 'bg-green-100 text-green-700 border-green-200' :
+                        project.status === 'on-hold' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                        project.status === 'completed' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                        'bg-gray-100 text-gray-700 border-gray-200'
+                      }`}>
+                        {project.status}
+                      </span>
+                    </div>
+                    {project.customerName && (
+                      <p className="text-base text-gray-600">
+                        <span className="text-gray-400">Customer:</span> {project.customerName}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Item Stats */}
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-base font-semibold text-gray-700">Design Items</span>
+                      <span className="text-base text-gray-500">{projectItems.length} total</span>
+                    </div>
+                    
+                    {projectItems.length > 0 ? (
+                      <>
+                        {/* Progress Bar */}
+                        <div className="h-3 bg-gray-100 rounded-full overflow-hidden mb-5">
+                          <div 
+                            className="h-full bg-gradient-to-r from-primary to-green-500 rounded-full transition-all duration-500"
+                            style={{ width: `${avgReadiness}%` }}
+                          />
+                        </div>
+                        
+                        {/* Stats Row */}
+                        <div className="grid grid-cols-3 gap-4 text-center">
+                          <div className="bg-green-50 rounded-xl py-4 px-2">
+                            <p className="text-2xl font-bold text-green-600">{readyCount}</p>
+                            <p className="text-sm text-green-600 mt-1">Ready</p>
+                          </div>
+                          <div className="bg-amber-50 rounded-xl py-4 px-2">
+                            <p className="text-2xl font-bold text-amber-600">{inProgressCount}</p>
+                            <p className="text-sm text-amber-600 mt-1">In Progress</p>
+                          </div>
+                          <div className="bg-gray-100 rounded-xl py-4 px-2">
+                            <p className="text-2xl font-bold text-gray-600">{pendingCount}</p>
+                            <p className="text-sm text-gray-600 mt-1">Pending</p>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center py-6 text-gray-400">
+                        No items yet
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card Footer */}
+                  <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                    <span className="text-sm text-gray-500">
+                      {avgReadiness}% complete
+                    </span>
+                    <span className="text-sm text-primary font-semibold flex items-center gap-1 group-hover:gap-2 transition-all">
+                      View Project →
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Selected Project Dashboard Card */}
-      {selectedProject && (
-        <ProjectDashboardCard
-          project={selectedProject}
-          items={allDesignItems}
-          onEdit={() => handleEditProject(selectedProject)}
-          onClose={() => setSelectedProject(null)}
-          onViewItem={handleItemClick}
-        />
-      )}
-
-      {/* Filters and View Controls */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          <div className="flex-1 w-full sm:w-auto flex gap-2">
-            <div className="relative flex-1 sm:max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search designs..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              />
-            </div>
-            <button className="hidden sm:inline-flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-              <Filter className="h-4 w-4" />
-              Filter
-            </button>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <div className="flex bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                <List className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('kanban')}
-                className={`p-2 rounded-md transition-colors ${viewMode === 'kanban' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                <Package className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Design Items - Different Views */}
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      ) : filteredItems.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-          <FolderOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No design items found</h3>
-          <p className="text-gray-500 mb-4">
-            {searchQuery ? 'Try adjusting your search query' : 'Create a project to get started'}
-          </p>
-          {!searchQuery && (
-            <button 
-              onClick={handleNewProject}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              Create Project
-            </button>
-          )}
-        </div>
-      ) : (
-        <>
-          {viewMode === 'grid' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredItems.map((item) => (
-                <DesignItemCard 
-                  key={item.id} 
-                  item={item} 
-                  onClick={handleItemClick}
-                />
-              ))}
-            </div>
-          )}
-
-          {viewMode === 'list' && (
-            <div className="space-y-2">
-              {filteredItems.map((item) => (
-                <DesignItemCard 
-                  key={item.id} 
-                  item={item} 
-                  onClick={handleItemClick}
-                  compact
-                />
-              ))}
-            </div>
-          )}
-
-          {viewMode === 'kanban' && projects.length > 0 && (
-            <StageKanban items={filteredItems} projectId={projects[0].id} />
-          )}
-        </>
-      )}
 
       {/* Project Dialog (Create/Edit) */}
       <ProjectDialog

@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Search, Grid, List, RefreshCw, Image, Lightbulb, Puzzle, ShoppingCart, Palette, Wrench, Rocket } from 'lucide-react';
+import { Search, Grid, List, RefreshCw, Image, Lightbulb, Puzzle, ShoppingCart, Palette, Wrench, Rocket, Link2 } from 'lucide-react';
 import { ClipCard } from './ClipCard';
 import { useClips } from '../hooks/useClips';
 import type { DesignClip, ClipType } from '../types';
@@ -137,6 +137,7 @@ export function ClipGallery({
               onClick={() => handleClipClick(clip)}
               onLink={onLinkClip ? () => onLinkClip(clip) : undefined}
               selected={selectedClip === clip.id}
+              linkMode={!!onLinkClip}
             />
           ))}
         </div>
@@ -145,10 +146,10 @@ export function ClipGallery({
           {filteredClips.map(clip => (
             <div
               key={clip.id}
-              onClick={() => handleClipClick(clip)}
+              onClick={() => onLinkClip && !clip.designItemId ? onLinkClip(clip) : handleClipClick(clip)}
               className={`flex items-center gap-4 p-3 bg-white rounded-lg border cursor-pointer hover:shadow-sm ${
                 selectedClip === clip.id ? 'ring-2 ring-primary border-primary' : 'border-gray-200'
-              }`}
+              } ${clip.designItemId && onLinkClip ? 'opacity-50' : ''}`}
             >
               <img 
                 src={clip.thumbnailUrl || clip.imageUrl} 
@@ -172,6 +173,15 @@ export function ClipGallery({
               </div>
               {clip.designItemId && (
                 <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">Linked</span>
+              )}
+              {onLinkClip && !clip.designItemId && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onLinkClip(clip); }}
+                  className="px-3 py-1.5 bg-[#1d1d1f] text-white text-xs font-medium rounded-lg hover:bg-[#424245] flex items-center gap-1"
+                >
+                  <Link2 className="w-3 h-3" />
+                  Link
+                </button>
               )}
             </div>
           ))}
