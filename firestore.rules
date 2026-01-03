@@ -282,5 +282,140 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && 
         resource.data.createdBy == request.auth.uid;
     }
+    
+    // ============================================
+    // MATFLOW - Dawin Advisory
+    // Construction Material Management
+    // ============================================
+    
+    // Helper: Get user's organization ID
+    function getUserOrg() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationId;
+    }
+    
+    // Helper: Check if user is org member
+    function isOrgMember(orgId) {
+      return isAuthenticated() && getUserOrg() == orgId;
+    }
+    
+    // Helper: Check if user is MatFlow project member
+    function isMatFlowProjectMember(orgId, projectId) {
+      let project = get(/databases/$(database)/documents/organizations/$(orgId)/matflow_projects/$(projectId)).data;
+      let userId = request.auth.uid;
+      let userEmail = request.auth.token.email;
+      
+      return isOrgMember(orgId) && (
+        project.createdBy == userId ||
+        userId in project.memberIds
+      );
+    }
+    
+    // Helper: Check MatFlow capability
+    function hasMatFlowCapability(orgId, projectId, capability) {
+      let project = get(/databases/$(database)/documents/organizations/$(orgId)/matflow_projects/$(projectId)).data;
+      let userId = request.auth.uid;
+      
+      // Check if user has capability in their member entry
+      return userId in project.memberCapabilities && 
+        capability in project.memberCapabilities[userId];
+    }
+    
+    // ----------------------------------------
+    // Global MatFlow Collections
+    // ----------------------------------------
+    
+    // Standard Formulas - Read by all authenticated, write by admins
+    match /matflow/data/formulas/{formulaId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Material Rates - Read by all authenticated, write by admins
+    match /matflow/data/material_rates/{rateId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Role Definitions - Read by all authenticated, write by admins
+    match /matflow/data/roles/{roleId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // ----------------------------------------
+    // Organization MatFlow Projects
+    // ----------------------------------------
+    
+    match /organizations/{orgId}/matflow_projects/{projectId} {
+      // Read: Org members can list, project members can read details
+      allow list: if isOrgMember(orgId);
+      allow get: if isMatFlowProjectMember(orgId, projectId);
+      
+      // Create: Org members can create projects
+      allow create: if isOrgMember(orgId) && 
+        request.resource.data.createdBy == request.auth.uid;
+      
+      // Update: Project members with edit capability
+      allow update: if isMatFlowProjectMember(orgId, projectId) &&
+        hasMatFlowCapability(orgId, projectId, 'project:edit');
+      
+      // Delete: Only admins or project owners
+      allow delete: if isAdmin() || 
+        (isMatFlowProjectMember(orgId, projectId) && 
+         resource.data.createdBy == request.auth.uid);
+      
+      // ----------------------------------------
+      // BOQ Items Subcollection
+      // ----------------------------------------
+      
+      match /boq_items/{itemId} {
+        allow read: if isMatFlowProjectMember(orgId, projectId) &&
+          hasMatFlowCapability(orgId, projectId, 'boq:view');
+        
+        allow create: if isMatFlowProjectMember(orgId, projectId) &&
+          hasMatFlowCapability(orgId, projectId, 'boq:create');
+        
+        allow update: if isMatFlowProjectMember(orgId, projectId) &&
+          hasMatFlowCapability(orgId, projectId, 'boq:edit');
+        
+        allow delete: if isMatFlowProjectMember(orgId, projectId) &&
+          hasMatFlowCapability(orgId, projectId, 'boq:delete');
+      }
+      
+      // ----------------------------------------
+      // Procurement Entries Subcollection
+      // ----------------------------------------
+      
+      match /procurement_entries/{entryId} {
+        allow read: if isMatFlowProjectMember(orgId, projectId) &&
+          hasMatFlowCapability(orgId, projectId, 'procurement:view');
+        
+        allow create: if isMatFlowProjectMember(orgId, projectId) &&
+          hasMatFlowCapability(orgId, projectId, 'procurement:create');
+        
+        allow update: if isMatFlowProjectMember(orgId, projectId) &&
+          hasMatFlowCapability(orgId, projectId, 'procurement:edit');
+        
+        allow delete: if isMatFlowProjectMember(orgId, projectId) &&
+          hasMatFlowCapability(orgId, projectId, 'procurement:delete');
+      }
+      
+      // ----------------------------------------
+      // Parsing Jobs Subcollection
+      // ----------------------------------------
+      
+      match /parsing_jobs/{jobId} {
+        allow read: if isMatFlowProjectMember(orgId, projectId);
+        
+        allow create: if isMatFlowProjectMember(orgId, projectId) &&
+          hasMatFlowCapability(orgId, projectId, 'boq:import');
+        
+        allow update: if isMatFlowProjectMember(orgId, projectId) &&
+          hasMatFlowCapability(orgId, projectId, 'boq:import');
+        
+        // Jobs are never deleted, only marked as completed/failed
+        allow delete: if false;
+      }
+    }
   }
 }

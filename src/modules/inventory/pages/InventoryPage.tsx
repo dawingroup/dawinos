@@ -17,6 +17,17 @@ export function InventoryPage() {
   const [detailItem, setDetailItem] = useState<InventoryListItem | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // All hooks must be called before any early returns
+  const handleEditItem = useCallback((item: InventoryListItem) => {
+    setEditItemId(item.id);
+    setModalOpen(true);
+  }, []);
+
+  const handleViewItem = useCallback((item: InventoryListItem) => {
+    setDetailItem(item);
+  }, []);
+
+  // Early return AFTER all hooks
   if (!user?.email) {
     return (
       <div className="p-6 text-center text-gray-500">
@@ -48,15 +59,6 @@ export function InventoryPage() {
     setEditItemId(undefined);
     setModalOpen(true);
   };
-
-  const handleEditItem = useCallback((item: InventoryListItem) => {
-    setEditItemId(item.id);
-    setModalOpen(true);
-  }, []);
-
-  const handleViewItem = useCallback((item: InventoryListItem) => {
-    setDetailItem(item);
-  }, []);
 
   const handleModalClose = () => {
     setModalOpen(false);

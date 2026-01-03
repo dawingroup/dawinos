@@ -98,6 +98,26 @@ exports.pullFromKatana = pullFromKatana;
 exports.pushToKatana = pushToKatana;
 exports.triggerKatanaSync = triggerKatanaSync;
 
+// Push Notifications
+const { 
+  sendPushNotification, 
+  onDeliveryCreated, 
+  onProcurementStatusChange,
+  checkCriticalItems,
+} = require('./src/notifications/pushNotifications');
+exports.sendPushNotification = sendPushNotification;
+exports.onDeliveryCreated = onDeliveryCreated;
+exports.onProcurementStatusChange = onProcurementStatusChange;
+exports.checkCriticalItems = checkCriticalItems;
+
+// EFRIS Tax Invoice Validation
+const { 
+  validateEFRISInvoice, 
+  verifySupplierTIN,
+} = require('./src/advisory/matflow/validateEFRISInvoice');
+exports.validateEFRISInvoice = validateEFRISInvoice;
+exports.verifySupplierTIN = verifySupplierTIN;
+
 // API Keys configuration
 const NOTION_API_KEY = defineString('NOTION_API_KEY');
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');

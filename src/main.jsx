@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
@@ -9,12 +9,19 @@ import { SubsidiaryProvider } from './contexts/SubsidiaryContext'
 import DesignManagerModule from './modules/design-manager/DesignManagerModule'
 import CustomerHubModule from './modules/customer-hub/CustomerHubModule'
 import LaunchPipelineModule from './modules/launch-pipeline/LaunchPipelineModule'
-import { FolderOpen, User, LogOut, Users, Layers, Cog, Wrench, AlertTriangle, Rocket, Database, Image, Home, Package } from 'lucide-react'
+import { FolderOpen, User, LogOut, Users, Layers, Cog, Wrench, AlertTriangle, Rocket, Database, Image, Home, Package, HardHat, Building2, ChevronDown, Check } from 'lucide-react'
+import { useSubsidiary } from './contexts/SubsidiaryContext'
 import { AssetRegistryPage } from './modules/assets'
 import ClipperPage from './app/pages/ClipperPage'
 import DawinOSDashboard from './app/pages/DawinOSDashboard'
+import SettingsPage from './app/pages/SettingsPage'
 import InventoryPage from './modules/inventory/pages/InventoryPage'
+import { AdvisoryRoutes } from './subsidiaries/advisory/AdvisoryModule'
 import './index.css'
+
+// PWA initialization
+import { initPWA } from './pwa/initPWA'
+initPWA()
 
 /**
  * Error Boundary to catch and display runtime errors
@@ -71,14 +78,32 @@ class ErrorBoundary extends React.Component {
 
 /**
  * Global Header with Module Switcher
- * Apple-inspired black theme (#1d1d1f)
+ * Dynamic navigation based on current subsidiary
  */
 function GlobalHeader() {
   const { user, isAuthenticated, signInWithGoogle, signOut } = useAuth()
+  const { currentSubsidiary, subsidiaries, setCurrentSubsidiary } = useSubsidiary()
   const location = useLocation()
   const navigate = useNavigate()
+  const [showSubsidiaryMenu, setShowSubsidiaryMenu] = useState(false)
+  const menuRef = useRef(null)
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowSubsidiaryMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+  
+  const isAdvisory = currentSubsidiary?.id === 'dawin-advisory'
   
   const currentModule = location.pathname === '/' ? 'home' :
+    location.pathname.startsWith('/advisory/matflow') ? 'matflow' :
+    location.pathname.startsWith('/advisory') ? 'advisory' :
     location.pathname.startsWith('/clipper') ? 'clipper' :
     location.pathname.startsWith('/inventory') ? 'inventory' :
     location.pathname.startsWith('/design/features') ? 'features' :
@@ -87,117 +112,116 @@ function GlobalHeader() {
     location.pathname.startsWith('/customers') ? 'customers' :
     location.pathname.startsWith('/assets') ? 'assets' : 'home'
 
+  // Navigation items for Finishes
+  const finishesNav = [
+    { id: 'home', path: '/', icon: Home, label: 'Home', shortLabel: 'Home' },
+    { id: 'clipper', path: '/clipper', icon: Image, label: 'Clipper', shortLabel: 'Clipper' },
+    { id: 'design', path: '/design', icon: FolderOpen, label: 'Design Manager', shortLabel: 'Designs' },
+    { id: 'customers', path: '/customers', icon: Users, label: 'Customers', shortLabel: 'CRM' },
+    { id: 'inventory', path: '/inventory', icon: Package, label: 'Inventory', shortLabel: 'Inv' },
+    { id: 'features', path: '/design/features', icon: Cog, label: 'Features', shortLabel: 'Feat' },
+    { id: 'assets', path: '/assets', icon: Wrench, label: 'Assets', shortLabel: 'Assets' },
+    { id: 'launch-pipeline', path: '/launch-pipeline', icon: Rocket, label: 'Launch', shortLabel: 'Launch' },
+  ]
+  
+  // Navigation items for Advisory
+  const advisoryNav = [
+    { id: 'home', path: '/', icon: Home, label: 'Home', shortLabel: 'Home' },
+    { id: 'matflow', path: '/advisory/matflow', icon: HardHat, label: 'MatFlow', shortLabel: 'MatFlow' },
+  ]
+  
+  const navItems = isAdvisory ? advisoryNav : finishesNav
+  const brandColor = currentSubsidiary?.color || '#872E5C'
+
   return (
     <header className="sticky top-0 z-50 h-16 sm:h-14 border-b border-gray-200 bg-white/95 backdrop-blur px-2 sm:px-6 lg:px-8 flex items-center justify-between gap-2">
-      {/* Left: Logo and Brand */}
-      <div className="flex items-center gap-2">
-        <div 
-          className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#872E5C] to-[#E18425] cursor-pointer"
-          onClick={() => navigate('/design')}
+      {/* Left: Logo with Subsidiary Switcher */}
+      <div className="relative" ref={menuRef}>
+        <button
+          onClick={() => setShowSubsidiaryMenu(!showSubsidiaryMenu)}
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
         >
-          <FolderOpen className="h-5 w-5 text-white" />
-        </div>
-        <div className="hidden sm:block">
-          <h1 className="text-sm font-semibold text-gray-900">Dawin Finishes</h1>
-          <p className="text-[10px] text-gray-500">Manufacturing Tools</p>
-        </div>
+          <div 
+            className="flex h-9 w-9 items-center justify-center rounded-lg"
+            style={{ background: `linear-gradient(135deg, ${brandColor}, #E18425)` }}
+          >
+            {isAdvisory ? (
+              <HardHat className="h-5 w-5 text-white" />
+            ) : (
+              <FolderOpen className="h-5 w-5 text-white" />
+            )}
+          </div>
+          <div className="hidden sm:flex items-center gap-1">
+            <span className="text-sm font-semibold text-gray-900">{currentSubsidiary?.name || 'DawinOS'}</span>
+            <ChevronDown className="h-4 w-4 text-gray-500" />
+          </div>
+        </button>
+        
+        {/* Subsidiary Dropdown */}
+        {showSubsidiaryMenu && (
+          <div className="absolute top-full left-0 mt-1 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+            <div className="px-3 py-2 border-b border-gray-100">
+              <p className="text-xs font-medium text-gray-500 uppercase">Switch Subsidiary</p>
+            </div>
+            {subsidiaries?.map((sub) => (
+              <button
+                key={sub.id}
+                onClick={() => {
+                  setCurrentSubsidiary(sub)
+                  setShowSubsidiaryMenu(false)
+                  navigate('/')
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors ${
+                  currentSubsidiary?.id === sub.id ? 'bg-gray-50' : ''
+                }`}
+              >
+                <div 
+                  className="flex h-8 w-8 items-center justify-center rounded-lg"
+                  style={{ background: `linear-gradient(135deg, ${sub.color}, #E18425)` }}
+                >
+                  {sub.id === 'dawin-advisory' ? (
+                    <HardHat className="h-4 w-4 text-white" />
+                  ) : (
+                    <FolderOpen className="h-4 w-4 text-white" />
+                  )}
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-medium text-gray-900">{sub.name}</p>
+                  <p className="text-xs text-gray-500">{sub.description}</p>
+                </div>
+                {currentSubsidiary?.id === sub.id && (
+                  <Check className="h-4 w-4 text-green-600" />
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Center: Module Switcher */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1 border rounded-lg p-1 bg-gray-50 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <button
-          onClick={() => navigate('/')}
-          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
-            currentModule === 'home'
-              ? 'bg-[#1d1d1f] text-white'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <Home className="h-4 w-4" />
-          <span className="hidden sm:inline">Home</span>
-        </button>
-        <button
-          onClick={() => navigate('/clipper')}
-          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
-            currentModule === 'clipper'
-              ? 'bg-[#1d1d1f] text-white'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <Image className="h-4 w-4" />
-          <span className="hidden sm:inline">Clipper</span>
-        </button>
-        <button
-          onClick={() => navigate('/design')}
-          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
-            currentModule === 'design'
-              ? 'bg-[#1d1d1f] text-white'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <FolderOpen className="h-4 w-4" />
-          <span className="hidden sm:inline">Design Manager</span>
-          <span className="sm:hidden">Designs</span>
-        </button>
-        <button
-          onClick={() => navigate('/customers')}
-          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
-            currentModule === 'customers'
-              ? 'bg-[#1d1d1f] text-white'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <Users className="h-4 w-4" />
-          <span className="hidden sm:inline">Customers</span>
-          <span className="sm:hidden">CRM</span>
-        </button>
-        <button
-          onClick={() => navigate('/inventory')}
-          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
-            currentModule === 'inventory'
-              ? 'bg-[#1d1d1f] text-white'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <Package className="h-4 w-4" />
-          <span className="hidden sm:inline">Inventory</span>
-          <span className="sm:hidden">Inv</span>
-        </button>
-        <button
-          onClick={() => navigate('/design/features')}
-          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
-            currentModule === 'features'
-              ? 'bg-[#1d1d1f] text-white'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <Cog className="h-4 w-4" />
-          <span className="hidden sm:inline">Features</span>
-          <span className="sm:hidden">Feat</span>
-        </button>
-        <button
-          onClick={() => navigate('/assets')}
-          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
-            currentModule === 'assets'
-              ? 'bg-[#1d1d1f] text-white'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <Wrench className="h-4 w-4" />
-          <span className="hidden sm:inline">Assets</span>
-        </button>
-        <button
-          onClick={() => navigate('/launch-pipeline')}
-          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
-            currentModule === 'launch-pipeline'
-              ? 'bg-[#1d1d1f] text-white'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <Rocket className="h-4 w-4" />
-          <span className="hidden sm:inline">Launch</span>
-        </button>
+          {navItems.map((item) => {
+            const Icon = item.icon
+            const isActive = currentModule === item.id
+            return (
+              <button
+                key={item.id}
+                onClick={() => navigate(item.path)}
+                className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-[#1d1d1f] text-white'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span className="hidden sm:inline">{item.label}</span>
+                {item.shortLabel !== item.label && (
+                  <span className="sm:hidden">{item.shortLabel}</span>
+                )}
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -221,6 +245,13 @@ function GlobalHeader() {
                 {user.displayName || user.email}
               </span>
             </div>
+            <button
+              onClick={() => navigate('/settings')}
+              className="p-2 min-h-[44px] min-w-[44px] text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+              title="Settings"
+            >
+              <Cog className="w-4 h-4" />
+            </button>
             <button
               onClick={() => signOut()}
               className="p-2 min-h-[44px] min-w-[44px] text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
@@ -281,6 +312,8 @@ function MainApp() {
                   <Route path="/assets" element={<AssetRegistryPage />} />
                   <Route path="/inventory" element={<InventoryPage />} />
                   <Route path="/launch-pipeline/*" element={<LaunchPipelineModule />} />
+                  <Route path="/advisory/*" element={<AdvisoryRoutes />} />
+                  <Route path="/settings" element={<SettingsPage />} />
                   {/* Redirect legacy cutlist routes to Design Manager */}
                   <Route path="/cutlist" element={<Navigate to="/design" replace />} />
                   <Route path="/*" element={<Navigate to="/" replace />} />

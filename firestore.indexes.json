@@ -9,6 +9,156 @@
       ]
     },
     {
+      "collectionGroup": "matflow_projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "matflow_projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "boq_items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "stage", "order": "ASCENDING" },
+        { "fieldPath": "itemCode", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "boq_items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "isVerified", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procurement_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "deliveryDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procurement_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "materialId", "order": "ASCENDING" },
+        { "fieldPath": "deliveryDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procurement_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "syncStatus", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procurement_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "deliveryDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procurement_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "deliveryDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procurement_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "materialId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procurement_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "stageId", "order": "ASCENDING" },
+        { "fieldPath": "deliveryDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procurement_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "efrisValidated", "order": "ASCENDING" },
+        { "fieldPath": "deliveryDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procurement_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "supplierName", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procurement_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdAt", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "purchase_orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "stock_adjustments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "materialId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "parsing_jobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "projectId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "formulas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "usageCount", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "designClips",
       "queryScope": "COLLECTION",
       "fields": [
@@ -115,5 +265,20 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "formulas",
+      "fieldPath": "keywords",
+      "indexes": [
+        { "arrayConfig": "CONTAINS", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
+      "collectionGroup": "boq_items",
+      "fieldPath": "materialRequirements",
+      "indexes": [
+        { "arrayConfig": "CONTAINS", "queryScope": "COLLECTION" }
+      ]
+    }
+  ]
 }

@@ -24,7 +24,8 @@ export type SubsidiaryModule =
   | 'feature-library'
   | 'launch-pipeline'
   | 'procurement'
-  | 'production';
+  | 'production'
+  | 'matflow';
 
 export interface SubsidiaryStats {
   activeProjects: number;
@@ -52,10 +53,10 @@ export const DEFAULT_SUBSIDIARIES: Subsidiary[] = [
     id: 'dawin-advisory',
     name: 'Dawin Advisory',
     shortName: 'Advisory',
-    color: '#2563EB',
-    description: 'Strategic consulting and business advisory services',
-    modules: ['clipper'],
-    status: 'coming-soon',
+    color: '#D97706',
+    description: 'Construction consulting and project management',
+    modules: ['matflow'],
+    status: 'active',
     createdAt: new Date(),
     updatedAt: new Date(),
   },

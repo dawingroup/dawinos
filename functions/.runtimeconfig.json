@@ -1,0 +1,7 @@
+{
+  "vapid": {
+    "public_key": "BGx6tTtEYFmWt89X_EYPlMdg1gXzcO64Jbfv6ojrSnJhfV-G9muaV-0NUJwVWEB9RRRRmzYQC3fAvsvDzLsYVJQ",
+    "private_key": "wRyT3udjoB-xOctLTB3Q4Pxye_xNvewS-98FsERw8MY",
+    "subject": "mailto:admin@dawinos.com"
+  }
+}
