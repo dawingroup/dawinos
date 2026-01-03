@@ -1,11 +1,17 @@
 /**
  * Strategy Research Hook
  * Manages strategy research state and API calls
+ * Now with persistent chat history via aiChatHistoryService
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { doc, onSnapshot, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/firebase/config';
+import {
+  getOrCreateChat,
+  addMessage as addChatMessage,
+  subscribeToChat,
+} from '../../services/aiChatHistoryService';
 
 const API_BASE = 'https://api-okekivpl2a-uc.a.run.app';
 
@@ -49,7 +55,7 @@ export interface ResearchMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  sources?: Array<{ url: string; title: string; domain: string }>;
+  sources?: Array<{ url: string; title: string; domain?: string }>;
   timestamp: Date;
 }
 
@@ -84,6 +90,8 @@ export function useStrategyResearch(projectId: string, userId?: string): UseStra
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chatId, setChatId] = useState<string | null>(null);
+  const chatInitialized = useRef(false);
 
   // Load strategy from Firestore
   useEffect(() => {
@@ -125,6 +133,60 @@ export function useStrategyResearch(projectId: string, userId?: string): UseStra
     return () => unsubscribe();
   }, [projectId]);
 
+  // Initialize or load chat history (non-blocking - failures won't affect core functionality)
+  useEffect(() => {
+    if (!projectId || !userId || chatInitialized.current) return;
+    
+    const initChat = async () => {
+      try {
+        const chat = await getOrCreateChat({
+          type: 'strategy-research',
+          title: `Strategy Research - ${projectId}`,
+          projectId,
+        }, userId);
+        
+        setChatId(chat.id);
+        chatInitialized.current = true;
+        
+        // Load existing messages
+        if (chat.messages.length > 0) {
+          setMessages(chat.messages.map(m => ({
+            id: m.id,
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+            sources: m.sources,
+            timestamp: m.timestamp,
+          })));
+        }
+      } catch (err) {
+        // Chat history is optional - don't break the UI if it fails
+        console.warn('Chat history unavailable:', err);
+        chatInitialized.current = true; // Prevent retries
+      }
+    };
+    
+    initChat();
+  }, [projectId, userId]);
+
+  // Subscribe to chat updates for real-time sync
+  useEffect(() => {
+    if (!chatId) return;
+    
+    const unsubscribe = subscribeToChat(chatId, (chat) => {
+      if (chat && chat.messages.length > 0) {
+        setMessages(chat.messages.map(m => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          sources: m.sources,
+          timestamp: m.timestamp,
+        })));
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [chatId]);
+
   const updateStrategy = useCallback(async (updates: Partial<ProjectStrategy>) => {
     if (!projectId) return;
 
@@ -146,7 +208,7 @@ export function useStrategyResearch(projectId: string, userId?: string): UseStra
     setIsSending(true);
     setError(null);
 
-    // Add user message
+    // Add user message to local state first for immediate UI feedback
     const userMessage: ResearchMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
@@ -154,6 +216,15 @@ export function useStrategyResearch(projectId: string, userId?: string): UseStra
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, userMessage]);
+
+    // Persist user message to Firestore
+    if (chatId) {
+      try {
+        await addChatMessage(chatId, { role: 'user', content: query });
+      } catch (err) {
+        console.warn('Failed to persist user message:', err);
+      }
+    }
 
     try {
       const response = await fetch(`${API_BASE}/ai/strategy-research`, {
@@ -178,7 +249,7 @@ export function useStrategyResearch(projectId: string, userId?: string): UseStra
         throw new Error(result.error || 'Research query failed');
       }
 
-      // Add assistant response
+      // Add assistant response to local state
       const assistantMessage: ResearchMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
@@ -188,6 +259,19 @@ export function useStrategyResearch(projectId: string, userId?: string): UseStra
       };
       setMessages(prev => [...prev, assistantMessage]);
 
+      // Persist assistant message to Firestore
+      if (chatId) {
+        try {
+          await addChatMessage(chatId, {
+            role: 'assistant',
+            content: result.text,
+            sources: result.sources,
+          });
+        } catch (err) {
+          console.warn('Failed to persist assistant message:', err);
+        }
+      }
+
     } catch (err: any) {
       console.error('Error sending query:', err);
       setError(err.message || 'Failed to process research query');
@@ -195,7 +279,7 @@ export function useStrategyResearch(projectId: string, userId?: string): UseStra
     } finally {
       setIsSending(false);
     }
-  }, [projectId, strategy, userId]);
+  }, [projectId, strategy, userId, chatId]);
 
   const saveFinding = useCallback(async (finding: Omit<ResearchFinding, 'id' | 'createdAt'>) => {
     if (!projectId || !strategy) return;

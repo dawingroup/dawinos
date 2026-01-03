@@ -10,7 +10,7 @@
  * Uses the designItemEnhancement Cloud Function.
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Sparkles, 
   AlertCircle, 
@@ -22,8 +22,13 @@ import {
   ShoppingCart,
   Ruler,
   Palette,
+  History,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import {
+  getOrCreateChat,
+  addMessage as addChatMessage,
+} from '../../services/aiChatHistoryService';
 
 const API_BASE = 'https://api-okekivpl2a-uc.a.run.app';
 
@@ -87,30 +92,73 @@ export interface DesignItemEnhancementAIProps {
     sourcingType?: 'MANUFACTURED' | 'PROCURED';
     quantity?: number;
   };
+  projectId?: string;
   projectContext?: {
     projectType?: string;
     budgetTier?: string;
     location?: string;
   };
+  userId?: string;
   onEnhancementComplete?: (result: EnhancementResult) => void;
   className?: string;
 }
 
 export function DesignItemEnhancementAI({
   designItem,
+  projectId,
   projectContext,
+  userId,
   onEnhancementComplete,
   className,
 }: DesignItemEnhancementAIProps) {
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [result, setResult] = useState<EnhancementResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [chatId, setChatId] = useState<string | null>(null);
+  const [previousEnhancements, setPreviousEnhancements] = useState<Array<{ timestamp: Date; summary: string }>>([]);
   const [expandedSections, setExpandedSections] = useState({
     specs: true,
     dfm: false,
     suppliers: false,
     alternatives: false,
   });
+  const chatInitialized = useRef(false);
+
+  // Initialize chat history
+  useEffect(() => {
+    if (!designItem.id || !userId || chatInitialized.current) return;
+    
+    const initChat = async () => {
+      try {
+        const chat = await getOrCreateChat({
+          type: 'design-item-enhancement',
+          title: `Enhancement - ${designItem.name}`,
+          designItemId: designItem.id,
+          projectId,
+        }, userId);
+        
+        setChatId(chat.id);
+        chatInitialized.current = true;
+        
+        // Load previous enhancement summaries
+        if (chat.messages.length > 0) {
+          const enhancements = chat.messages
+            .filter(m => m.role === 'assistant')
+            .map(m => ({
+              timestamp: m.timestamp,
+              summary: m.content.substring(0, 100) + (m.content.length > 100 ? '...' : ''),
+            }));
+          setPreviousEnhancements(enhancements);
+        }
+      } catch (err) {
+        // Chat history is optional - don't break the UI if it fails
+        console.warn('Chat history unavailable:', err);
+        chatInitialized.current = true; // Prevent retries
+      }
+    };
+    
+    initChat();
+  }, [designItem.id, designItem.name, projectId, userId]);
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -120,6 +168,18 @@ export function DesignItemEnhancementAI({
     setIsEnhancing(true);
     setError(null);
     setResult(null);
+
+    // Persist user request to chat history
+    if (chatId) {
+      try {
+        await addChatMessage(chatId, {
+          role: 'user',
+          content: `Enhance design item: ${designItem.name} (${designItem.sourcingType || 'MANUFACTURED'})`,
+        });
+      } catch (err) {
+        console.warn('Failed to persist user message:', err);
+      }
+    }
 
     try {
       const response = await fetch(`${API_BASE}/ai/design-item-enhancement`, {
@@ -146,6 +206,20 @@ export function DesignItemEnhancementAI({
       const data: EnhancementResult = await response.json();
       setResult(data);
       onEnhancementComplete?.(data);
+
+      // Persist AI response to chat history
+      if (chatId) {
+        try {
+          const summary = `Enhanced ${data.name}: ${data.specifications?.dimensions ? `${data.specifications.dimensions.width}x${data.specifications.dimensions.height}x${data.specifications.dimensions.depth}mm` : 'N/A'}, Material: ${data.specifications?.material?.type || 'N/A'}, DfM: ${data.dfmValidation?.passed ? 'Passed' : 'Issues found'}`;
+          await addChatMessage(chatId, {
+            role: 'assistant',
+            content: summary,
+            metadata: data,
+          });
+        } catch (err) {
+          console.warn('Failed to persist assistant message:', err);
+        }
+      }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Enhancement failed';
       setError(errorMessage);
@@ -189,6 +263,25 @@ export function DesignItemEnhancementAI({
           )}
         </button>
       </div>
+
+      {/* Previous Enhancements */}
+      {previousEnhancements.length > 0 && (
+        <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <History className="w-4 h-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Previous Enhancements</span>
+          </div>
+          <div className="space-y-1">
+            {previousEnhancements.slice(-3).map((enh, idx) => (
+              <div key={idx} className="text-xs text-gray-600">
+                <span className="text-gray-400">{enh.timestamp.toLocaleDateString()}</span>
+                {' - '}
+                {enh.summary}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -361,7 +454,7 @@ export function DesignItemEnhancementAI({
                         </div>
                         <span className={cn(
                           'font-medium',
-                          alt.costDiff.startsWith('-') ? 'text-green-600' : 'text-amber-600'
+                          alt.costDiff?.startsWith('-') ? 'text-green-600' : 'text-amber-600'
                         )}>
                           {alt.costDiff}
                         </span>

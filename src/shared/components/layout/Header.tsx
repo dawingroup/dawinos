@@ -6,7 +6,7 @@
 
 import { useAuth } from '@/shared/hooks';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LogOut, User, Scissors, FolderOpen, Wrench, Layers, Rocket, Image } from 'lucide-react';
+import { LogOut, User, Scissors, FolderOpen, Wrench, Layers, Rocket, Image, Package } from 'lucide-react';
 
 export interface HeaderProps {
   title?: string;
@@ -23,6 +23,7 @@ export function Header({ title = 'Dawin Finishes' }: HeaderProps) {
     if (location.pathname.startsWith('/design')) return 'design';
     if (location.pathname.startsWith('/assets')) return 'assets';
     if (location.pathname.startsWith('/features')) return 'features';
+    if (location.pathname.startsWith('/inventory')) return 'inventory';
     return 'cutlist';
   };
   const currentModule = getCurrentModule();
@@ -101,6 +102,17 @@ export function Header({ title = 'Dawin Finishes' }: HeaderProps) {
         >
           <Layers className="h-4 w-4" />
           <span className="hidden sm:inline">Features</span>
+        </button>
+        <button
+          onClick={() => navigate('/inventory')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors min-h-[36px] sm:min-h-auto ${
+            currentModule === 'inventory'
+              ? 'bg-[#1d1d1f] text-white'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          }`}
+        >
+          <Package className="h-4 w-4" />
+          <span className="hidden sm:inline">Inventory</span>
         </button>
         <button
           onClick={() => navigate('/launch-pipeline')}

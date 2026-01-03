@@ -15,6 +15,7 @@ const AssetRegistryPage = lazy(() => import('../pages/AssetRegistryPage'));
 const FeatureLibraryPage = lazy(() => import('../pages/FeatureLibraryPage'));
 const LaunchPipelineModule = lazy(() => import('@/modules/launch-pipeline/LaunchPipelineModule'));
 const ClipperPage = lazy(() => import('../pages/ClipperPage'));
+const InventoryPage = lazy(() => import('@/modules/inventory/pages/InventoryPage'));
 // AI tools are now embedded in Strategy Canvas and Design Item Detail pages
 // const AIToolsPage = lazy(() => import('@/modules/design-manager/pages/AIToolsPage'));
 
@@ -51,6 +52,7 @@ export const ROUTES = {
   DESIGN: '/design',
   ASSETS: '/assets',
   FEATURES: '/features',
+  INVENTORY: '/inventory',
   LAUNCH_PIPELINE: '/launch-pipeline',
   AI_TOOLS: '/ai-tools',
   PROCUREMENT: '/procurement',
@@ -90,6 +92,10 @@ export const routeConfig: RouteObject[] = [
       {
         path: 'features',
         element: withSuspense(FeatureLibraryPage),
+      },
+      {
+        path: 'inventory',
+        element: withSuspense(InventoryPage),
       },
       {
         path: 'launch-pipeline/*',

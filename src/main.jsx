@@ -9,10 +9,11 @@ import { SubsidiaryProvider } from './contexts/SubsidiaryContext'
 import DesignManagerModule from './modules/design-manager/DesignManagerModule'
 import CustomerHubModule from './modules/customer-hub/CustomerHubModule'
 import LaunchPipelineModule from './modules/launch-pipeline/LaunchPipelineModule'
-import { FolderOpen, User, LogOut, Users, Layers, Cog, Wrench, AlertTriangle, Rocket, Database, Image, Home } from 'lucide-react'
+import { FolderOpen, User, LogOut, Users, Layers, Cog, Wrench, AlertTriangle, Rocket, Database, Image, Home, Package } from 'lucide-react'
 import { AssetRegistryPage } from './modules/assets'
 import ClipperPage from './app/pages/ClipperPage'
 import DawinOSDashboard from './app/pages/DawinOSDashboard'
+import InventoryPage from './modules/inventory/pages/InventoryPage'
 import './index.css'
 
 /**
@@ -79,8 +80,7 @@ function GlobalHeader() {
   
   const currentModule = location.pathname === '/' ? 'home' :
     location.pathname.startsWith('/clipper') ? 'clipper' :
-    location.pathname.startsWith('/design/katana') ? 'katana' :
-    location.pathname.startsWith('/design/materials') ? 'materials' :
+    location.pathname.startsWith('/inventory') ? 'inventory' :
     location.pathname.startsWith('/design/features') ? 'features' :
     location.pathname.startsWith('/launch-pipeline') ? 'launch-pipeline' :
     location.pathname.startsWith('/design') ? 'design' : 
@@ -153,28 +153,16 @@ function GlobalHeader() {
           <span className="sm:hidden">CRM</span>
         </button>
         <button
-          onClick={() => navigate('/design/materials')}
+          onClick={() => navigate('/inventory')}
           className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
-            currentModule === 'materials'
+            currentModule === 'inventory'
               ? 'bg-[#1d1d1f] text-white'
               : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
           }`}
         >
-          <Layers className="h-4 w-4" />
-          <span className="hidden sm:inline">Materials</span>
-          <span className="sm:hidden">Mat</span>
-        </button>
-        <button
-          onClick={() => navigate('/design/katana')}
-          className={`flex items-center gap-1.5 px-3 py-2 min-h-[44px] rounded-md text-sm font-medium transition-colors ${
-            currentModule === 'katana'
-              ? 'bg-[#1d1d1f] text-white'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <Database className="h-4 w-4" />
-          <span className="hidden sm:inline">Katana</span>
-          <span className="sm:hidden">Ktn</span>
+          <Package className="h-4 w-4" />
+          <span className="hidden sm:inline">Inventory</span>
+          <span className="sm:hidden">Inv</span>
         </button>
         <button
           onClick={() => navigate('/design/features')}
@@ -291,6 +279,7 @@ function MainApp() {
                   <Route path="/design/*" element={<DesignManagerModule />} />
                   <Route path="/customers/*" element={<CustomerHubModule />} />
                   <Route path="/assets" element={<AssetRegistryPage />} />
+                  <Route path="/inventory" element={<InventoryPage />} />
                   <Route path="/launch-pipeline/*" element={<LaunchPipelineModule />} />
                   {/* Redirect legacy cutlist routes to Design Manager */}
                   <Route path="/cutlist" element={<Navigate to="/design" replace />} />

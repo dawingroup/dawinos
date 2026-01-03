@@ -92,6 +92,12 @@ exports.onFeatureLibraryWritten = onFeatureLibraryWritten;
 const { onDesignClipCreated } = require('./src/triggers/analyzeNewClip');
 exports.onDesignClipCreated = onDesignClipCreated;
 
+// Inventory Katana Sync
+const { pullFromKatana, pushToKatana, triggerKatanaSync } = require('./src/inventory/katanaSync');
+exports.pullFromKatana = pullFromKatana;
+exports.pushToKatana = pushToKatana;
+exports.triggerKatanaSync = triggerKatanaSync;
+
 // API Keys configuration
 const NOTION_API_KEY = defineString('NOTION_API_KEY');
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');

@@ -25,6 +25,7 @@ import { DEFAULT_ESTIMATE_CONFIG } from '../types/estimate';
 import type { ConsolidatedCutlist, DesignItem, ProcurementPricing, ManufacturingCost, PartEntry, SheetMaterialBreakdown } from '../types';
 import type { EstimationResult, MaterialPaletteEntry } from '@/shared/types';
 import { getMaterial } from './materialService';
+import { getMaterialPriceByName } from '@/modules/inventory/services/inventoryPriceService';
 
 // Default sheet size for material estimation (mm)
 const DEFAULT_SHEET_SIZE = { length: 2440, width: 1220 };
@@ -76,11 +77,24 @@ export async function calculateSheetMaterialsFromParts(
     // Estimate sheets required (with 15% waste factor)
     const sheetsRequired = Math.ceil((group.totalArea * 1.15) / sheetArea);
     
-    // Get unit cost from material library or palette
+    // Get unit cost from unified inventory (single source of truth)
     let unitCost = 0;
     
-    // Try material palette first
-    if (materialPalette) {
+    // 1. Try centralized inventory pricing (includes Katana-synced prices)
+    try {
+      const priceResult = await getMaterialPriceByName(
+        group.materialName,
+        group.thickness
+      );
+      if (priceResult.found && priceResult.price) {
+        unitCost = priceResult.price.costPerUnit;
+      }
+    } catch {
+      // Inventory price lookup failed
+    }
+    
+    // 2. Fallback to material palette if provided
+    if (unitCost === 0 && materialPalette) {
       const paletteEntry = materialPalette.find(
         entry => entry.designName === group.materialName || 
                  entry.normalizedName === group.materialName.toLowerCase().trim()
@@ -90,7 +104,7 @@ export async function calculateSheetMaterialsFromParts(
       }
     }
     
-    // Try material library if no palette price
+    // 3. Fallback to old material service
     if (unitCost === 0 && group.materialId) {
       try {
         const material = await getMaterial(group.materialId, 'global', undefined);
@@ -102,8 +116,9 @@ export async function calculateSheetMaterialsFromParts(
       }
     }
     
-    // Fallback pricing based on thickness
+    // 4. Last resort fallback pricing (to be deprecated)
     if (unitCost === 0) {
+      console.warn(`[Estimate] No price found for ${group.materialName}, using fallback`);
       const defaultPrices: Record<number, number> = {
         3: 45000, 6: 65000, 9: 85000, 12: 105000, 15: 125000,
         16: 135000, 18: 155000, 22: 185000, 25: 210000,
@@ -144,8 +159,8 @@ export function calculateLaborFromParts(
     
     // Add time for edge banding
     const edges = part.edgeBanding;
-    const edgeCount = [edges.top, edges.bottom, edges.left, edges.right]
-      .filter(e => e && e !== 'none').length;
+    const edgeCount = [edges?.top, edges?.bottom, edges?.left, edges?.right]
+      .filter(e => e && typeof e === 'string' && e !== 'none').length;
     minutesPerPart += edgeCount * 2; // 2 minutes per edge
     
     // Add time for CNC operations
