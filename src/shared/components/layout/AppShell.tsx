@@ -13,7 +13,7 @@ import {
   User,
 } from 'lucide-react';
 import { Button } from '@/core/components/ui/button';
-import { ScrollArea } from '@/core/components/ui/scroll-area';
+// import { ScrollArea } from '@/core/components/ui/scroll-area';
 import {
   DropdownMenu,
   DropdownMenuContent,
