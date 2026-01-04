@@ -102,6 +102,7 @@ function GlobalHeader() {
   const isAdvisory = currentSubsidiary?.id === 'dawin-advisory'
   
   const currentModule = location.pathname === '/' ? 'home' :
+    location.pathname.startsWith('/advisory/investment') ? 'investment' :
     location.pathname.startsWith('/advisory/matflow') ? 'matflow' :
     location.pathname.startsWith('/advisory/delivery') ? 'delivery' :
     location.pathname.startsWith('/advisory') ? 'advisory' :
