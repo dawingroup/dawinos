@@ -38,21 +38,34 @@ const ClientDetailPage = lazy(() => import('@/pages/clients/ClientDetailPage'));
 const DeliveryDashboardPage = lazy(() => import('@/pages/delivery/DeliveryDashboardPage'));
 const ProjectListPage = lazy(() => import('@/pages/delivery/ProjectListPage'));
 const ProjectDetailPage = lazy(() => import('@/pages/delivery/ProjectDetailPage'));
+const ProgramListPage = lazy(() => import('@/pages/delivery/ProgramListPage'));
+const IPCListPage = lazy(() => import('@/pages/delivery/IPCListPage'));
+const RequisitionListPage = lazy(() => import('@/pages/delivery/RequisitionListPage'));
+const AccountabilityListPage = lazy(() => import('@/pages/delivery/AccountabilityListPage'));
+const ApprovalQueuePage = lazy(() => import('@/pages/delivery/ApprovalQueuePage'));
 
 // Investment Pages
 const InvestmentDashboardPage = lazy(() => import('@/pages/investment/InvestmentDashboardPage'));
 const DealPipelinePage = lazy(() => import('@/pages/investment/DealPipelinePage'));
+const InvestmentPipelinePage = lazy(() => import('@/pages/investment/InvestmentPipelinePage'));
+const DealListPage = lazy(() => import('@/pages/investment/DealListPage'));
+const InvestmentCommitteePage = lazy(() => import('@/pages/investment/InvestmentCommitteePage'));
+const InvestmentReportsPage = lazy(() => import('@/pages/investment/InvestmentReportsPage'));
 
 // Advisory Pages
 const AdvisoryDashboardPage = lazy(() => import('@/pages/advisory/AdvisoryDashboardPage'));
 const PortfolioListPage = lazy(() => import('@/pages/advisory/PortfolioListPage'));
+const MandateListPage = lazy(() => import('@/pages/advisory/MandateListPage'));
 
 // MatFlow Pages
 const MatFlowDashboardPage = lazy(() => import('@/pages/matflow/MatFlowDashboardPage'));
 const BOQListPage = lazy(() => import('@/pages/matflow/BOQListPage'));
+const MatFlowProjectListPage = lazy(() => import('@/pages/matflow/MatFlowProjectListPage'));
 const MaterialCatalogPage = lazy(() => import('@/pages/matflow/MaterialCatalogPage'));
 const ProcurementListPage = lazy(() => import('@/pages/matflow/ProcurementListPage'));
 const SupplierListPage = lazy(() => import('@/pages/matflow/SupplierListPage'));
+const MatFlowReportsPage = lazy(() => import('@/pages/matflow/MatFlowReportsPage'));
+const MatFlowSettingsPage = lazy(() => import('@/pages/matflow/MatFlowSettingsPage'));
 
 // AI Assistant
 const AIAssistantPage = lazy(() => import('@/pages/ai/AIAssistantPage'));

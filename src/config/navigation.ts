@@ -117,7 +117,8 @@ export const moduleNavItems: NavItem[] = [
     module: 'infrastructure_delivery',
     children: [
       { id: 'delivery-dashboard', label: 'Dashboard', href: '/delivery', icon: LayoutDashboard },
-      { id: 'projects', label: 'Projects', href: '/delivery/projects', icon: FolderOpen },
+      { id: 'programs', label: 'Programs', href: '/delivery/programs', icon: FolderOpen },
+      { id: 'projects', label: 'Projects', href: '/delivery/projects', icon: FileText },
       { id: 'ipcs', label: 'Payment Certificates', href: '/delivery/ipcs', icon: Receipt },
       { id: 'requisitions', label: 'Requisitions', href: '/delivery/requisitions', icon: ClipboardList },
       { id: 'accountability', label: 'Accountability', href: '/delivery/accountability', icon: FileText },
@@ -132,8 +133,11 @@ export const moduleNavItems: NavItem[] = [
     module: 'infrastructure_investment',
     children: [
       { id: 'investment-dashboard', label: 'Dashboard', href: '/investment', icon: LayoutDashboard },
-      { id: 'deals', label: 'Deal Pipeline', href: '/investment/deals', icon: Kanban },
+      { id: 'pipeline', label: 'Pipeline', href: '/investment/pipeline', icon: Kanban },
+      { id: 'deals', label: 'Deal List', href: '/investment/deals', icon: FileText },
       { id: 'committee', label: 'Investment Committee', href: '/investment/committee', icon: Scale },
+      { id: 'reports', label: 'Reports', href: '/investment/reports', icon: PieChart },
+      { id: 'settings', label: 'Settings', href: '/investment/settings', icon: Settings },
     ],
   },
   {
@@ -156,10 +160,15 @@ export const moduleNavItems: NavItem[] = [
     module: 'matflow',
     children: [
       { id: 'matflow-dashboard', label: 'Dashboard', href: '/matflow', icon: LayoutDashboard },
+      { id: 'matflow-projects', label: 'Projects', href: '/matflow/projects', icon: FolderOpen },
       { id: 'boq', label: 'Bills of Quantities', href: '/matflow/boq', icon: FileText },
       { id: 'materials', label: 'Material Catalog', href: '/matflow/materials', icon: Boxes },
       { id: 'procurement', label: 'Procurement', href: '/matflow/procurement', icon: ShoppingCart },
+      { id: 'deliveries', label: 'Deliveries', href: '/matflow/deliveries', icon: Truck },
+      { id: 'budget', label: 'Budget', href: '/matflow/budget', icon: Wallet },
       { id: 'suppliers', label: 'Suppliers', href: '/matflow/suppliers', icon: Truck },
+      { id: 'reports', label: 'Reports', href: '/matflow/reports', icon: PieChart },
+      { id: 'settings', label: 'Settings', href: '/matflow/settings', icon: Settings },
     ],
   },
 ];

@@ -3,3 +3,8 @@ export { default as BOQListPage } from './BOQListPage';
 export { default as MaterialCatalogPage } from './MaterialCatalogPage';
 export { default as ProcurementListPage } from './ProcurementListPage';
 export { default as SupplierListPage } from './SupplierListPage';
+export { default as MatFlowProjectListPage } from './MatFlowProjectListPage';
+export { default as MatFlowReportsPage } from './MatFlowReportsPage';
+export { default as MatFlowSettingsPage } from './MatFlowSettingsPage';
+export { default as BudgetTrackingPage } from './BudgetTrackingPage';
+export { default as DeliveriesPage } from './DeliveriesPage';
