@@ -50,6 +50,9 @@ const PortfolioListPage = lazy(() => import('@/pages/advisory/PortfolioListPage'
 // MatFlow Pages
 const MatFlowDashboardPage = lazy(() => import('@/pages/matflow/MatFlowDashboardPage'));
 const BOQListPage = lazy(() => import('@/pages/matflow/BOQListPage'));
+const MaterialCatalogPage = lazy(() => import('@/pages/matflow/MaterialCatalogPage'));
+const ProcurementListPage = lazy(() => import('@/pages/matflow/ProcurementListPage'));
+const SupplierListPage = lazy(() => import('@/pages/matflow/SupplierListPage'));
 
 // AI Assistant
 const AIAssistantPage = lazy(() => import('@/pages/ai/AIAssistantPage'));
