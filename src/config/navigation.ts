@@ -30,6 +30,10 @@ import {
   ShoppingCart,
   Truck,
   LucideIcon,
+  Image,
+  Wrench,
+  Layers,
+  Rocket,
 } from 'lucide-react';
 
 export interface NavItem {

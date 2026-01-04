@@ -60,9 +60,23 @@ const AIAssistantPage = lazy(() => import('@/pages/ai/AIAssistantPage'));
 // Admin Pages
 const AdminDashboardPage = lazy(() => import('@/pages/admin/AdminDashboardPage'));
 const UserManagementPage = lazy(() => import('@/pages/admin/UserManagementPage'));
+const RoleManagementPage = lazy(() => import('@/pages/admin/RoleManagementPage'));
+const MigrationDashboardPage = lazy(() => import('@/pages/admin/MigrationDashboardPage'));
+const AuditLogPage = lazy(() => import('@/pages/admin/AuditLogPage'));
+const SystemSettingsPage = lazy(() => import('@/pages/admin/SystemSettingsPage'));
+
+// Legacy Modules
+const DesignManagerModule = lazy(() => import('@/modules/design-manager/DesignManagerModule'));
+const CustomerHubModule = lazy(() => import('@/modules/customer-hub/CustomerHubModule'));
+const LaunchPipelineModule = lazy(() => import('@/modules/launch-pipeline/LaunchPipelineModule'));
+const AssetRegistryPage = lazy(() => import('@/modules/assets').then(module => ({ default: module.AssetRegistryPage })));
+const ClipperPage = lazy(() => import('@/app/pages/ClipperPage'));
+const InventoryPage = lazy(() => import('@/modules/inventory/pages/InventoryPage'));
+const FeatureLibraryPage = lazy(() => import('@/modules/design-manager/components/feature-library/FeatureLibraryPage'));
 
 // Profile Pages
 const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'));
+const NotificationSettingsPage = lazy(() => import('@/pages/profile/NotificationSettingsPage'));
 
 // Error Pages
 const NotFoundPage = lazy(() => import('@/pages/errors/NotFoundPage'));
