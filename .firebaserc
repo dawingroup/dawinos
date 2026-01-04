@@ -1,8 +1,6 @@
 {
   "projects": {
-    "default": "dawinos",
-    "production": "dawinos",
-    "legacy": "dawin-cutlist-processor"
+    "default": "dawinos"
   },
   "targets": {},
   "etags": {}

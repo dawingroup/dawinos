@@ -58,6 +58,26 @@ const ROOM_ONTOLOGY = {
       { type: 'luggage_rack', category: 'MANUFACTURED', subcategory: 'accessories', quantity: 2 },
     ],
   },
+  kitchen: {
+    name: 'Kitchen',
+    items: [
+      { type: 'base_cabinet', category: 'MANUFACTURED', subcategory: 'casework', quantity: 6 },
+      { type: 'wall_cabinet', category: 'MANUFACTURED', subcategory: 'casework', quantity: 4 },
+      { type: 'tall_cabinet', category: 'MANUFACTURED', subcategory: 'casework', quantity: 2 },
+      { type: 'island', category: 'MANUFACTURED', subcategory: 'casework', quantity: 1 },
+      { type: 'countertop', category: 'PROCURED', subcategory: 'surfaces', quantity: 1 },
+    ],
+  },
+  office: {
+    name: 'Office',
+    items: [
+      { type: 'desk_workstation', category: 'MANUFACTURED', subcategory: 'furniture', quantity: 1 },
+      { type: 'credenza', category: 'MANUFACTURED', subcategory: 'casework', quantity: 1 },
+      { type: 'bookshelf', category: 'MANUFACTURED', subcategory: 'casework', quantity: 1 },
+      { type: 'meeting_table', category: 'MANUFACTURED', subcategory: 'furniture', quantity: 0.25 },
+      { type: 'office_chair', category: 'PROCURED', subcategory: 'seating', quantity: 1 },
+    ],
+  },
 };
 
 /**
@@ -91,26 +111,69 @@ function extractEntities(briefText) {
     }
   }
 
-  // Room group extraction with multipliers
+  // Room group extraction with multipliers - more flexible patterns
   const roomPatterns = [
+    // Guest rooms - multiple pattern variations
     { regex: /(\d+)\s*(?:standard\s+)?(?:guest\s+)?rooms?/gi, type: 'guest_room_standard' },
-    { regex: /(\d+)\s*suites?/gi, type: 'guest_room_suite' },
-    { regex: /restaurant\s*(?:with|seating)?\s*(\d+)\s*(?:seats|covers|pax)/gi, type: 'restaurant', countType: 'seats' },
-    { regex: /(\d+)\s*seat\s*restaurant/gi, type: 'restaurant', countType: 'seats' },
-    { regex: /lobby|reception/gi, type: 'lobby', quantity: 1 },
+    { regex: /(?:guest\s+)?rooms?\s*[:\-]?\s*(\d+)/gi, type: 'guest_room_standard' },
+    { regex: /(\d+)\s*bedrooms?/gi, type: 'guest_room_standard' },
+    { regex: /bedrooms?\s*[:\-]?\s*(\d+)/gi, type: 'guest_room_standard' },
+    // Suites
+    { regex: /(\d+)\s*(?:junior\s+)?suites?/gi, type: 'guest_room_suite' },
+    { regex: /suites?\s*[:\-]?\s*(\d+)/gi, type: 'guest_room_suite' },
+    // Restaurant
+    { regex: /restaurant\s*(?:with|seating|for)?\s*(\d+)\s*(?:seats|covers|pax|guests|people)?/gi, type: 'restaurant', countType: 'seats' },
+    { regex: /(\d+)\s*(?:seat|cover|pax)\s*restaurant/gi, type: 'restaurant', countType: 'seats' },
+    { regex: /dining\s*(?:area|room|space)?\s*(?:for)?\s*(\d+)/gi, type: 'restaurant', countType: 'seats' },
+    // Lobby/reception - always 1
+    { regex: /lobby|reception\s*(?:area|desk)?/gi, type: 'lobby', quantity: 1 },
+    // Kitchen
+    { regex: /(\d+)?\s*kitchens?/gi, type: 'kitchen', quantity: 1 },
+    // Offices
+    { regex: /(\d+)\s*offices?/gi, type: 'office' },
+    { regex: /offices?\s*[:\-]?\s*(\d+)/gi, type: 'office' },
   ];
+
+  // Track what we've already added to avoid duplicates
+  const addedGroups = new Set();
 
   for (const pattern of roomPatterns) {
     let match;
     while ((match = pattern.regex.exec(briefText)) !== null) {
-      const quantity = match[1] ? parseInt(match[1], 10) : 1;
-      entities.roomGroups.push({
-        type: pattern.type,
-        quantity,
-        countType: pattern.countType || 'units',
-      });
+      const quantity = pattern.quantity || (match[1] ? parseInt(match[1], 10) : 1);
+      const groupKey = `${pattern.type}-${quantity}`;
+      
+      // Avoid duplicates
+      if (!addedGroups.has(groupKey) && quantity > 0) {
+        addedGroups.add(groupKey);
+        entities.roomGroups.push({
+          type: pattern.type,
+          quantity,
+          countType: pattern.countType || 'units',
+        });
+      }
     }
     pattern.regex.lastIndex = 0;
+  }
+
+  // If no room groups found but we detected a project type, add a default
+  if (entities.roomGroups.length === 0 && entities.projectType) {
+    console.log('No specific room groups found, adding defaults for project type:', entities.projectType);
+    switch (entities.projectType) {
+      case 'hotel':
+        entities.roomGroups.push({ type: 'guest_room_standard', quantity: 10, countType: 'units' });
+        entities.roomGroups.push({ type: 'lobby', quantity: 1, countType: 'units' });
+        break;
+      case 'restaurant':
+        entities.roomGroups.push({ type: 'restaurant', quantity: 40, countType: 'seats' });
+        break;
+      case 'office':
+        entities.roomGroups.push({ type: 'office', quantity: 5, countType: 'units' });
+        break;
+      case 'residential':
+        entities.roomGroups.push({ type: 'guest_room_standard', quantity: 3, countType: 'units' });
+        break;
+    }
   }
 
   // Quality level detection

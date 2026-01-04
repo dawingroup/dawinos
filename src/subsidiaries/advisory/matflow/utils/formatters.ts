@@ -123,6 +123,51 @@ export function formatNumber(
 }
 
 /**
+ * Format currency in compact form (K, M, B)
+ */
+export function formatCurrencyCompact(
+  amount: number,
+  currency: string = 'UGX'
+): string {
+  if (amount >= 1e9) {
+    return `${currency} ${(amount / 1e9).toFixed(1)}B`;
+  }
+  if (amount >= 1e6) {
+    return `${currency} ${(amount / 1e6).toFixed(1)}M`;
+  }
+  if (amount >= 1e3) {
+    return `${currency} ${(amount / 1e3).toFixed(0)}K`;
+  }
+  return formatCurrency(amount, currency);
+}
+
+/**
+ * Format percentage (alias for formatPercent)
+ */
+export function formatPercentage(value: number, decimals: number = 1): string {
+  return formatPercent(value, decimals);
+}
+
+/**
+ * Format quantity with unit
+ */
+export function formatQuantity(quantity: number, unit: string): string {
+  return `${formatNumber(quantity)} ${unit}`;
+}
+
+/**
+ * Truncate text with ellipsis
+ */
+export function truncateText(
+  text: string,
+  maxLength: number,
+  suffix: string = '...'
+): string {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength - suffix.length) + suffix;
+}
+
+/**
  * Format file size
  */
 export function formatFileSize(bytes: number): string {

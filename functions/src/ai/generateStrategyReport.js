@@ -115,19 +115,35 @@ exports.generateStrategyReport = onCall(
 
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY.value());
       
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-2.0-flash-exp',
-        generationConfig: {
-          temperature: 0.7,
-          topP: 0.9,
-          topK: 40,
-          maxOutputTokens: 4096,
-        },
-        // Enable Google Search grounding for trend research
-        tools: [{
-          googleSearch: {}
-        }]
-      });
+      // Try with Google Search grounding first, fallback to non-grounded if it fails
+      let model;
+      let useGrounding = true;
+      
+      try {
+        model = genAI.getGenerativeModel({
+          model: 'gemini-2.0-flash',
+          generationConfig: {
+            temperature: 0.7,
+            topP: 0.9,
+            topK: 40,
+            maxOutputTokens: 4096,
+          },
+          // Enable Google Search grounding for trend research
+          tools: [{ googleSearch: {} }]
+        });
+      } catch (groundingError) {
+        console.warn('Google Search grounding not available, using standard model:', groundingError.message);
+        useGrounding = false;
+        model = genAI.getGenerativeModel({
+          model: 'gemini-2.0-flash',
+          generationConfig: {
+            temperature: 0.7,
+            topP: 0.9,
+            topK: 40,
+            maxOutputTokens: 4096,
+          },
+        });
+      }
 
       // Build context sections
       const constraintsSection = constraints.length > 0 
@@ -251,9 +267,28 @@ Return ONLY valid JSON matching this exact schema:
   ]
 }`;
 
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      const text = response.text();
+      let result;
+      let text;
+      
+      try {
+        result = await model.generateContent(prompt);
+        const response = result.response;
+        text = response.text();
+      } catch (genError) {
+        console.warn('Generation with grounding failed, retrying without:', genError.message);
+        // Retry without grounding
+        const fallbackModel = genAI.getGenerativeModel({
+          model: 'gemini-2.0-flash',
+          generationConfig: {
+            temperature: 0.7,
+            topP: 0.9,
+            topK: 40,
+            maxOutputTokens: 4096,
+          },
+        });
+        result = await fallbackModel.generateContent(prompt);
+        text = result.response.text();
+      }
 
       console.log('AI response received, length:', text.length);
       console.log('AI response preview:', text.substring(0, 500));

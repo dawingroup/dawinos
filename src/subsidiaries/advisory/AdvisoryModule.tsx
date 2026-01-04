@@ -3,7 +3,7 @@
  * Main entry point for Advisory subsidiary
  */
 
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useNavigate, Outlet } from 'react-router-dom';
 import {
   HardHat,
@@ -12,14 +12,44 @@ import {
   TrendingUp,
   Receipt,
   ChevronRight,
+  Building2,
+  Briefcase,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
 // MatFlow Routes
 import { MatFlowRoutes } from './matflow/routes';
 
+// Delivery Routes
+import { DeliveryRoutes } from './delivery/routes';
+
+// Investment Pages (lazy loaded)
+const InvestmentDashboard = lazy(() => import('./investment/pages/InvestmentDashboard'));
+const PipelineKanban = lazy(() => import('./investment/pages/PipelineKanban'));
+const DealDetail = lazy(() => import('./investment/pages/DealDetail'));
+const DealList = lazy(() => import('./investment/pages/DealList'));
+const NewDeal = lazy(() => import('./investment/pages/NewDeal'));
+const Reports = lazy(() => import('./investment/pages/Reports'));
+const InvestmentLayout = lazy(() => import('./investment/components/InvestmentLayout'));
+
+// Loading component
+const PageLoader = () => (
+  <div className="flex items-center justify-center h-64">
+    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+  </div>
+);
+
 // Navigation items for Advisory
 const advisoryModules = [
+  {
+    id: 'investment',
+    name: 'Investment',
+    description: 'Deal pipeline & portfolio management',
+    icon: Briefcase,
+    path: '/advisory/investment',
+    color: 'bg-emerald-600',
+  },
   {
     id: 'matflow',
     name: 'MatFlow',
@@ -28,15 +58,14 @@ const advisoryModules = [
     path: '/advisory/matflow',
     color: 'bg-amber-500',
   },
-  // Future modules can be added here
-  // {
-  //   id: 'consulting',
-  //   name: 'Consulting',
-  //   description: 'Project consulting tools',
-  //   icon: Briefcase,
-  //   path: '/advisory/consulting',
-  //   color: 'bg-blue-500',
-  // },
+  {
+    id: 'delivery',
+    name: 'Delivery',
+    description: 'Infrastructure delivery management',
+    icon: Building2,
+    path: '/advisory/delivery',
+    color: 'bg-blue-600',
+  },
 ];
 
 // Advisory Dashboard
@@ -129,8 +158,45 @@ export const AdvisoryRoutes: React.FC = () => {
     <Routes>
       <Route element={<AdvisoryLayout />}>
         <Route index element={<AdvisoryDashboard />} />
+        {/* Investment Module with nested layout */}
+        <Route path="investment" element={
+          <Suspense fallback={<PageLoader />}>
+            <InvestmentLayout />
+          </Suspense>
+        }>
+          <Route index element={
+            <Suspense fallback={<PageLoader />}>
+              <InvestmentDashboard />
+            </Suspense>
+          } />
+          <Route path="pipeline" element={
+            <Suspense fallback={<PageLoader />}>
+              <PipelineKanban />
+            </Suspense>
+          } />
+          <Route path="deals" element={
+            <Suspense fallback={<PageLoader />}>
+              <DealList />
+            </Suspense>
+          } />
+          <Route path="deals/new" element={
+            <Suspense fallback={<PageLoader />}>
+              <NewDeal />
+            </Suspense>
+          } />
+          <Route path="deals/:dealId" element={
+            <Suspense fallback={<PageLoader />}>
+              <DealDetail />
+            </Suspense>
+          } />
+          <Route path="reports" element={
+            <Suspense fallback={<PageLoader />}>
+              <Reports />
+            </Suspense>
+          } />
+        </Route>
         <Route path="matflow/*" element={<MatFlowRoutes />} />
-        {/* Future modules */}
+        <Route path="delivery/*" element={<DeliveryRoutes />} />
         <Route path="*" element={<Navigate to="/advisory" replace />} />
       </Route>
     </Routes>

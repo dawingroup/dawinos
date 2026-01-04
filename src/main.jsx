@@ -9,7 +9,7 @@ import { SubsidiaryProvider } from './contexts/SubsidiaryContext'
 import DesignManagerModule from './modules/design-manager/DesignManagerModule'
 import CustomerHubModule from './modules/customer-hub/CustomerHubModule'
 import LaunchPipelineModule from './modules/launch-pipeline/LaunchPipelineModule'
-import { FolderOpen, User, LogOut, Users, Layers, Cog, Wrench, AlertTriangle, Rocket, Database, Image, Home, Package, HardHat, Building2, ChevronDown, Check } from 'lucide-react'
+import { FolderOpen, User, LogOut, Users, Layers, Cog, Wrench, AlertTriangle, Rocket, Database, Image, Home, Package, HardHat, Building2, ChevronDown, Check, FolderKanban } from 'lucide-react'
 import { useSubsidiary } from './contexts/SubsidiaryContext'
 import { AssetRegistryPage } from './modules/assets'
 import ClipperPage from './app/pages/ClipperPage'
@@ -103,6 +103,7 @@ function GlobalHeader() {
   
   const currentModule = location.pathname === '/' ? 'home' :
     location.pathname.startsWith('/advisory/matflow') ? 'matflow' :
+    location.pathname.startsWith('/advisory/delivery') ? 'delivery' :
     location.pathname.startsWith('/advisory') ? 'advisory' :
     location.pathname.startsWith('/clipper') ? 'clipper' :
     location.pathname.startsWith('/inventory') ? 'inventory' :
@@ -127,7 +128,10 @@ function GlobalHeader() {
   // Navigation items for Advisory
   const advisoryNav = [
     { id: 'home', path: '/', icon: Home, label: 'Home', shortLabel: 'Home' },
+    { id: 'advisory', path: '/advisory', icon: FolderKanban, label: 'Advisory', shortLabel: 'Advisory' },
+    { id: 'investment', path: '/advisory/investment', icon: Database, label: 'Investment', shortLabel: 'Invest' },
     { id: 'matflow', path: '/advisory/matflow', icon: HardHat, label: 'MatFlow', shortLabel: 'MatFlow' },
+    { id: 'delivery', path: '/advisory/delivery', icon: Building2, label: 'Delivery', shortLabel: 'Delivery' },
   ]
   
   const navItems = isAdvisory ? advisoryNav : finishesNav

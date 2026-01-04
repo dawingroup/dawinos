@@ -110,13 +110,13 @@ exports.onDeliveryCreated = onDeliveryCreated;
 exports.onProcurementStatusChange = onProcurementStatusChange;
 exports.checkCriticalItems = checkCriticalItems;
 
-// EFRIS Tax Invoice Validation
-const { 
-  validateEFRISInvoice, 
-  verifySupplierTIN,
-} = require('./src/advisory/matflow/validateEFRISInvoice');
-exports.validateEFRISInvoice = validateEFRISInvoice;
-exports.verifySupplierTIN = verifySupplierTIN;
+// EFRIS Tax Invoice Validation - Disabled until EFRIS API key is configured
+// const { 
+//   validateEFRISInvoice, 
+//   verifySupplierTIN,
+// } = require('./src/advisory/matflow/validateEFRISInvoice');
+// exports.validateEFRISInvoice = validateEFRISInvoice;
+// exports.verifySupplierTIN = verifySupplierTIN;
 
 // API Keys configuration
 const NOTION_API_KEY = defineString('NOTION_API_KEY');

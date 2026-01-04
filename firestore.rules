@@ -417,5 +417,315 @@ service cloud.firestore {
         allow delete: if false;
       }
     }
+    
+    // ============================================
+    // DAWIN ADVISORY PLATFORM
+    // Engagement-centric architecture
+    // ============================================
+    
+    // ----------------------------------------
+    // Advisory Helper Functions
+    // ----------------------------------------
+    
+    // Get user document for advisory
+    function getAdvisoryUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // Check platform role
+    function hasPlatformRole(role) {
+      return isAuthenticated() && getAdvisoryUserDoc().platformRole == role;
+    }
+    
+    // Check if user is platform admin
+    function isPlatformAdmin() {
+      return hasPlatformRole('super_admin') || hasPlatformRole('admin');
+    }
+    
+    // Check if user is platform staff (any staff role)
+    function isPlatformStaff() {
+      let user = getAdvisoryUserDoc();
+      return user.platformRole in ['super_admin', 'admin', 'manager', 'staff'];
+    }
+    
+    // Get user's role in an engagement
+    function getEngagementRole(engagementId) {
+      let user = getAdvisoryUserDoc();
+      return user.engagementRoles[engagementId];
+    }
+    
+    // Check if user has role in engagement
+    function hasEngagementRole(engagementId, allowedRoles) {
+      let role = getEngagementRole(engagementId);
+      return role != null && role in allowedRoles;
+    }
+    
+    // Check if user is engagement owner or lead
+    function isEngagementLeadership(engagementId) {
+      return hasEngagementRole(engagementId, ['engagement_owner', 'engagement_lead']);
+    }
+    
+    // Check if user can read engagement
+    function canReadEngagement(engagementId) {
+      return isPlatformAdmin() || getEngagementRole(engagementId) != null;
+    }
+    
+    // Check if user can write to engagement
+    function canWriteEngagement(engagementId) {
+      return isPlatformAdmin() || hasEngagementRole(engagementId, [
+        'engagement_owner', 
+        'engagement_lead',
+        'program_manager',
+        'deal_lead',
+        'portfolio_manager',
+        'project_manager',
+        'finance_officer',
+        'compliance_officer'
+      ]);
+    }
+    
+    // Check if user can manage engagement (update settings, team)
+    function canManageEngagement(engagementId) {
+      return isPlatformAdmin() || isEngagementLeadership(engagementId);
+    }
+    
+    // Check if user can approve in engagement
+    function canApproveInEngagement(engagementId) {
+      return hasEngagementRole(engagementId, [
+        'engagement_owner',
+        'engagement_lead',
+        'program_manager',
+        'project_manager',
+        'deal_lead',
+        'portfolio_manager',
+        'finance_officer'
+      ]);
+    }
+    
+    // Check if user is associated with a client
+    function isClientAssociated(clientId) {
+      let user = getAdvisoryUserDoc();
+      return user.clientAssociations != null && 
+             clientId in user.clientAssociations;
+    }
+    
+    // Check if user is associated with a funder
+    function isFunderAssociated(funderId) {
+      let user = getAdvisoryUserDoc();
+      return user.funderAssociations != null && 
+             funderId in user.funderAssociations;
+    }
+    
+    // Validate required fields exist
+    function hasRequiredFields(data, fields) {
+      return data.keys().hasAll(fields);
+    }
+    
+    // ----------------------------------------
+    // Engagements Collection
+    // ----------------------------------------
+    
+    match /engagements/{engagementId} {
+      // Read: Team members and admins
+      allow read: if canReadEngagement(engagementId);
+      
+      // Create: Admins and managers
+      allow create: if isPlatformAdmin() || hasPlatformRole('manager');
+      
+      // Update: Engagement leadership and admins
+      allow update: if canManageEngagement(engagementId);
+      
+      // Delete: Only super admins
+      allow delete: if hasPlatformRole('super_admin');
+      
+      // ----------------------------------------
+      // Funding Sources Subcollection
+      // ----------------------------------------
+      
+      match /fundingSources/{fundingSourceId} {
+        allow read: if canReadEngagement(engagementId);
+        
+        allow create: if canWriteEngagement(engagementId) &&
+                         hasRequiredFields(request.resource.data, 
+                           ['category', 'instrumentType', 'funderId', 'committedAmount']);
+        
+        allow update: if canWriteEngagement(engagementId);
+        
+        allow delete: if canManageEngagement(engagementId);
+        
+        // Disbursements subcollection
+        match /disbursements/{disbursementId} {
+          allow read: if canReadEngagement(engagementId);
+          
+          allow create: if canWriteEngagement(engagementId) &&
+                           hasRequiredFields(request.resource.data,
+                             ['requestedAmount', 'description']);
+          
+          allow update: if canWriteEngagement(engagementId) ||
+                           // Funder can update status
+                           isFunderAssociated(get(/databases/$(database)/documents/engagements/$(engagementId)/fundingSources/$(fundingSourceId)).data.funderId);
+          
+          allow delete: if canManageEngagement(engagementId);
+        }
+      }
+      
+      // ----------------------------------------
+      // Reporting Requirements Subcollection
+      // ----------------------------------------
+      
+      match /reportingRequirements/{requirementId} {
+        allow read: if canReadEngagement(engagementId);
+        allow write: if canManageEngagement(engagementId);
+      }
+      
+      // ----------------------------------------
+      // Report Submissions Subcollection
+      // ----------------------------------------
+      
+      match /reportSubmissions/{submissionId} {
+        allow read: if canReadEngagement(engagementId);
+        
+        allow create: if canWriteEngagement(engagementId);
+        
+        // Can update own submissions or if approver
+        allow update: if canWriteEngagement(engagementId) ||
+                         (resource.data.submittedBy == request.auth.uid);
+        
+        allow delete: if canManageEngagement(engagementId);
+      }
+      
+      // ----------------------------------------
+      // Covenants Subcollection
+      // ----------------------------------------
+      
+      match /covenants/{covenantId} {
+        allow read: if canReadEngagement(engagementId);
+        
+        allow create, update: if canManageEngagement(engagementId) ||
+                                 hasEngagementRole(engagementId, ['compliance_officer', 'finance_officer']);
+        
+        allow delete: if canManageEngagement(engagementId);
+        
+        // Measurements subcollection
+        match /measurements/{measurementId} {
+          allow read: if canReadEngagement(engagementId);
+          
+          allow create: if hasEngagementRole(engagementId, [
+            'engagement_owner', 'engagement_lead', 'compliance_officer', 'finance_officer'
+          ]);
+          
+          allow update: if canManageEngagement(engagementId);
+          
+          allow delete: if canManageEngagement(engagementId);
+        }
+      }
+      
+      // ----------------------------------------
+      // Approval Requests Subcollection
+      // ----------------------------------------
+      
+      match /approvalRequests/{requestId} {
+        allow read: if canReadEngagement(engagementId);
+        
+        // Anyone on the team can create approval requests
+        allow create: if canWriteEngagement(engagementId) ||
+                         hasEngagementRole(engagementId, ['team_member', 'quantity_surveyor', 'site_manager']);
+        
+        // Can update if you're an approver or the requester (for cancellation)
+        allow update: if canApproveInEngagement(engagementId) ||
+                         resource.data.requestedBy == request.auth.uid;
+        
+        allow delete: if canManageEngagement(engagementId);
+      }
+      
+      // ----------------------------------------
+      // Documents Subcollection
+      // ----------------------------------------
+      
+      match /documents/{documentId} {
+        allow read: if canReadEngagement(engagementId);
+        
+        // Most team members can upload documents
+        allow create: if canReadEngagement(engagementId);
+        
+        // Only uploader or managers can update
+        allow update: if canManageEngagement(engagementId) ||
+                         resource.data.uploadedBy == request.auth.uid;
+        
+        // Only managers can delete
+        allow delete: if canManageEngagement(engagementId);
+      }
+      
+      // ----------------------------------------
+      // Activity Log Subcollection (Audit trail)
+      // ----------------------------------------
+      
+      match /activityLog/{logId} {
+        // Everyone on team can read
+        allow read: if canReadEngagement(engagementId);
+        
+        // Only system/cloud functions create logs
+        allow create: if false; // Use cloud functions
+        
+        // No updates or deletes
+        allow update, delete: if false;
+      }
+    }
+    
+    // ----------------------------------------
+    // Clients Collection
+    // ----------------------------------------
+    
+    match /clients/{clientId} {
+      // Platform staff can read all clients
+      // Client users can read their own client
+      allow read: if isPlatformStaff() || isClientAssociated(clientId);
+      
+      // Only admins and managers can create clients
+      allow create: if isPlatformAdmin() || hasPlatformRole('manager');
+      
+      // Relationship managers and admins can update
+      allow update: if isPlatformAdmin() ||
+                       request.auth.uid == resource.data.relationshipManagerId;
+      
+      // Only super admins can delete
+      allow delete: if hasPlatformRole('super_admin');
+      
+      // Contacts subcollection
+      match /contacts/{contactId} {
+        allow read: if isPlatformStaff() || isClientAssociated(clientId);
+        
+        allow create, update: if isPlatformStaff();
+        
+        allow delete: if isPlatformAdmin();
+      }
+      
+      // KYC Documents subcollection
+      match /kycDocuments/{kycDocId} {
+        allow read: if isPlatformStaff() || isClientAssociated(clientId);
+        
+        allow create: if isPlatformStaff() || isClientAssociated(clientId);
+        
+        // Only compliance can verify
+        allow update: if isPlatformAdmin() || hasPlatformRole('manager');
+        
+        allow delete: if isPlatformAdmin();
+      }
+    }
+    
+    // ----------------------------------------
+    // Funders Collection
+    // ----------------------------------------
+    
+    match /funders/{funderId} {
+      // Platform staff can read all funders
+      // Funder users can read their own funder
+      allow read: if isPlatformStaff() || isFunderAssociated(funderId);
+      
+      // Only admins can manage funders
+      allow create, update: if isPlatformAdmin();
+      
+      allow delete: if hasPlatformRole('super_admin');
+    }
   }
 }

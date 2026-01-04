@@ -6,6 +6,74 @@ export * from './core';
 export * from './customer';
 export * from './variance';
 export * from './stageProgress';
+// Extended BOQ document types (separate from core BOQItem)
+export type {
+  BOQDocument,
+  BOQDocumentStatus,
+  BOQSource,
+  ParsingStatus,
+  ParsingResults,
+  BOQSummary,
+  BOQApproval,
+  BOQSection,
+  BOQCategory,
+  BOQVariation,
+  VariationReason,
+  BOQItemModification,
+  BOQTemplate,
+  BOQMoney,
+  BOQAuditFields,
+  CreateBOQInput,
+  CreateSectionInput,
+  CreateItemInput,
+} from './boq';
+// Note: BOQItem in boq.ts extends core BOQItem concept
+
+// Extended Material types
+export type {
+  Material,
+  MaterialCategoryExtended,
+  MaterialSpecification,
+  UnitConversion,
+  MaterialRateHistory,
+  MaterialCatalog,
+  ProjectMaterial,
+  ProjectMaterialStatus,
+  MaterialTransfer,
+  MaterialTransferItem,
+  CreateMaterialInput,
+  CreateProjectMaterialInput,
+} from './material';
+
+// Requisition types
+export type {
+  Requisition,
+  RequisitionPriority,
+  RequisitionStatus,
+  RequisitionWorkflow,
+  RequisitionItem,
+  RequisitionItemStatus,
+  RequisitionTemplate,
+  CreateRequisitionInput,
+  CreateRequisitionItemInput,
+} from './requisition';
+
+// Supplier types
+export type {
+  Supplier,
+  SupplierStatus,
+  SupplierAddress,
+  BankDetails,
+  SupplierDocument,
+  SupplierRating,
+  SupplierQuotation,
+  QuotationItem,
+  RequestForQuotation,
+  RFQItem,
+  CreateSupplierInput,
+  UpdateSupplierInput,
+  CreateQuotationInput,
+} from './supplier';
 
 // Re-export commonly used types for convenience
 export type {
@@ -61,6 +129,44 @@ export { BREAKPOINTS } from '../hooks/useMediaQuery';
 
 // EFRIS types
 export * from './efris';
+
+// AI Parsing types
+export type {
+  ParsingJob,
+  ParsingJobStatus,
+  SourceFile,
+  ExcelSheetInfo,
+  ParsingProgress,
+  ParsedSection,
+  ParsedItem,
+  ItemReviewStatus,
+  ConfidenceScore,
+  ConfidenceFactor,
+  ConfidenceLevel,
+  MaterialMatch,
+  MaterialMatchType,
+  AlternativeMatch,
+  SourceLocation,
+  ExtractedField,
+  AISuggestion,
+  SuggestionType,
+  UserEdit,
+  ParsingMetadata,
+  SourceAnalysis,
+  ParsingReview,
+  ParsingError,
+  ParsingTemplate,
+  ExpectedFormat,
+  ColumnMapping,
+  ColumnPattern,
+  SectionPattern,
+  UnitMapping,
+  ValidationRule,
+  CreateParsingJobInput,
+  StartParsingInput,
+  UpdateItemReviewInput,
+} from './parsing';
+export { getConfidenceLevel, CONFIDENCE_THRESHOLDS } from './parsing';
 
 // Export and reporting types (excluding VarianceTrend which is already exported from ./variance)
 export type {
