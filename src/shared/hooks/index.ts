@@ -11,3 +11,4 @@ export {
   type UseDocumentReturn,
   type UseCollectionReturn
 } from './useFirestore';
+export { useOnlineStatus } from './useOnlineStatus';
