@@ -43,6 +43,24 @@ export function AppShell({ children }: AppShellProps) {
   const { sidebarOpen, toggleSidebar } = useUIStore();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
+  // Auto-expand navigation groups based on active route
+  useEffect(() => {
+    const allItems = [...mainNavItems, ...moduleNavItems, ...utilityNavItems, ...adminNavItems];
+    const activeParents = allItems.filter(item => 
+      item.children?.some(child => 
+        location.pathname === child.href || 
+        (child.href !== '/' && location.pathname.startsWith(child.href))
+      )
+    );
+    
+    if (activeParents.length > 0) {
+      setExpandedItems(prev => {
+        const newIds = activeParents.map(p => p.id).filter(id => !prev.includes(id));
+        return newIds.length > 0 ? [...prev, ...newIds] : prev;
+      });
+    }
+  }, [location.pathname]);
+
   const toggleExpanded = (id: string) => {
     setExpandedItems(prev => 
       prev.includes(id) 
@@ -53,10 +71,35 @@ export function AppShell({ children }: AppShellProps) {
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return location.pathname === '/dashboard';
-    return location.pathname.startsWith(href);
+    return location.pathname === href || (href !== '/' && location.pathname.startsWith(href));
+  };
+
+  const hasPermission = (item: NavItem) => {
+    if (!user) return false;
+    
+    // Check roles
+    if (item.roles && item.roles.length > 0) {
+      const userRoles = (user as any).roles || [];
+      const hasRole = item.roles.some(role => userRoles.includes(role));
+      if (!hasRole) return false;
+    }
+
+    // Check module access
+    if (item.module) {
+      const userModules = (user as any).modules || [];
+      const userRoles = (user as any).roles || [];
+      const hasModule = userModules.includes(item.module) || 
+                       userRoles.includes('admin') || 
+                       userRoles.includes('super_admin');
+      if (!hasModule) return false;
+    }
+
+    return true;
   };
 
   const renderNavItem = (item: NavItem, depth = 0) => {
+    if (!hasPermission(item)) return null;
+
     const active = isActive(item.href);
     const hasChildren = item.children && item.children.length > 0;
     const isExpanded = expandedItems.includes(item.id);
@@ -65,14 +108,15 @@ export function AppShell({ children }: AppShellProps) {
       <div key={item.id}>
         <div
           className={cn(
-            'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer',
+            'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer select-none',
             active 
               ? 'bg-primary text-primary-foreground' 
               : 'text-muted-foreground hover:bg-muted hover:text-foreground',
             depth > 0 && 'ml-4'
           )}
-          onClick={() => {
+          onClick={(e) => {
             if (hasChildren) {
+              e.preventDefault();
               toggleExpanded(item.id);
             }
           }}
@@ -101,21 +145,7 @@ export function AppShell({ children }: AppShellProps) {
         
         {hasChildren && isExpanded && (
           <div className="mt-1 space-y-1">
-            {item.children!.map(child => (
-              <Link
-                key={child.id}
-                to={child.href}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2 ml-4 rounded-lg text-sm transition-colors',
-                  isActive(child.href)
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                )}
-              >
-                <child.icon className="h-4 w-4" />
-                <span>{child.label}</span>
-              </Link>
-            ))}
+            {item.children!.map(child => renderNavItem(child, depth + 1))}
           </div>
         )}
       </div>
