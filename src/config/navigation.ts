@@ -49,6 +49,46 @@ export interface NavItem {
 
 export const mainNavItems: NavItem[] = [
   {
+    id: 'design',
+    label: 'Design Manager',
+    href: '/design',
+    icon: FolderOpen,
+    children: [
+      { id: 'design-dashboard', label: 'Dashboard', href: '/design', icon: LayoutDashboard },
+      { id: 'design-materials', label: 'Materials', href: '/design/materials', icon: Boxes },
+      { id: 'design-katana', label: 'Katana Catalog', href: '/design/katana', icon: Package },
+      { id: 'design-features', label: 'Features', href: '/design/features', icon: Layers },
+    ],
+  },
+  {
+    id: 'customers',
+    label: 'Customers',
+    href: '/customers',
+    icon: Users,
+  },
+  {
+    id: 'assets',
+    label: 'Assets',
+    href: '/assets',
+    icon: Wrench, // Using Wrench icon as seen in GlobalHeader
+  },
+  {
+    id: 'inventory',
+    label: 'Inventory',
+    href: '/inventory',
+    icon: Package,
+  },
+  {
+    id: 'launch-pipeline',
+    label: 'Launch Pipeline',
+    href: '/launch-pipeline',
+    icon: Rocket, // Using Rocket icon
+    children: [
+      { id: 'launch-dashboard', label: 'Pipeline', href: '/launch-pipeline', icon: Kanban },
+      { id: 'launch-audit', label: 'Audit', href: '/launch-pipeline/audit', icon: Activity },
+    ],
+  },
+  {
     id: 'dashboard',
     label: 'Dashboard',
     href: '/dashboard',
