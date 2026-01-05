@@ -71,17 +71,19 @@ class ErrorBoundary extends React.Component {
  */
 function MainApp() {
   return (
-    <AuthProvider>
-      <SubsidiaryProvider>
-        <ConfigProvider>
-          <OffcutProvider>
-            <WorkInstanceProvider>
-              <AppRouter />
-            </WorkInstanceProvider>
-          </OffcutProvider>
-        </ConfigProvider>
-      </SubsidiaryProvider>
-    </AuthProvider>
+    <HelmetProvider>
+      <AuthProvider>
+        <SubsidiaryProvider>
+          <ConfigProvider>
+            <OffcutProvider>
+              <WorkInstanceProvider>
+                <AppRouter />
+              </WorkInstanceProvider>
+            </OffcutProvider>
+          </ConfigProvider>
+        </SubsidiaryProvider>
+      </AuthProvider>
+    </HelmetProvider>
   )
 }
 

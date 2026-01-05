@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/core/components/ui/c
 import { Button } from '@/core/components/ui/button';
 import { Badge } from '@/core/components/ui/badge';
 import { Progress } from '@/core/components/ui/progress';
-import { ScrollArea } from '@/core/components/ui/scroll-area';
+// import { ScrollArea } from '@/core/components/ui/scroll-area';
 import {
   Package,
   TrendingUp,
@@ -249,7 +249,7 @@ export function MobileDashboard({
           </Card>
         )}
       </div>
-    </div>
+    </ScrollArea>
   );
 }
 
