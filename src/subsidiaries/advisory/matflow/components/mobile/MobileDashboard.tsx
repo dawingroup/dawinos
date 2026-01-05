@@ -249,7 +249,7 @@ export function MobileDashboard({
           </Card>
         )}
       </div>
-    </ScrollArea>
+    </div>
   );
 }
 

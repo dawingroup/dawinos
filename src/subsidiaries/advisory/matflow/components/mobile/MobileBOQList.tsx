@@ -186,7 +186,7 @@ export function MobileBOQList({
       </div>
 
       {/* Item List */}
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         <div className="p-4 pb-24 space-y-6">
           {Object.entries(groupedItems).map(([stage, stageItems]) => (
             <div key={stage}>
