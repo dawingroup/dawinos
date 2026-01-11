@@ -133,6 +133,75 @@ export function useProject(
 }
 
 // ─────────────────────────────────────────────────────────────────
+// HOOK: useAllProjects
+// ─────────────────────────────────────────────────────────────────
+
+export function useAllProjects(
+  db: Firestore,
+  options: {
+    status?: ProjectStatus[];
+    orderBy?: 'name' | 'createdAt' | 'status';
+    orderDirection?: 'asc' | 'desc';
+    limit?: number;
+  } = {}
+): UseProjectsResult {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = useMemo(() => ProjectService.getInstance(db), [db]);
+  const optionsKey = JSON.stringify(options);
+
+  const fetchProjects = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await service.getAllProjects({
+        status: options.status,
+        orderByField: options.orderBy,
+        orderDirection: options.orderDirection,
+        limitCount: options.limit,
+      });
+      setProjects(result);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch projects'));
+    } finally {
+      setLoading(false);
+    }
+  }, [service, optionsKey]);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
+
+  // Computed summaries
+  const summaries = useMemo<ProjectSummary[]>(() => {
+    return projects.map(p => getProjectSummary(p));
+  }, [projects]);
+
+  // Stats
+  const stats = useMemo<ProjectStats>(() => {
+    const byStatus = projects.reduce((acc, p) => {
+      acc[p.status] = (acc[p.status] || 0) + 1;
+      return acc;
+    }, {} as Record<ProjectStatus, number>);
+
+    return {
+      total: projects.length,
+      byStatus,
+      totalBudget: projects.reduce((sum, p) => sum + (p.budget?.totalBudget || 0), 0),
+      totalSpent: projects.reduce((sum, p) => sum + (p.budget?.spent || 0), 0),
+      avgProgress: projects.length
+        ? projects.reduce((sum, p) => sum + (p.progress?.physicalProgress || 0), 0) / projects.length
+        : 0,
+    };
+  }, [projects]);
+
+  return { projects, summaries, stats, loading, error, refresh: fetchProjects };
+}
+
+// ─────────────────────────────────────────────────────────────────
 // HOOK: useProjects
 // ─────────────────────────────────────────────────────────────────
 

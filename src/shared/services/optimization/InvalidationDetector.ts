@@ -27,7 +27,10 @@ export type InvalidationTrigger =
   | 'GRAIN_SETTINGS_CHANGED'
   | 'DESIGN_ITEM_ADDED'
   | 'DESIGN_ITEM_REMOVED'
-  | 'DESIGN_ITEM_MODIFIED';
+  | 'DESIGN_ITEM_MODIFIED'
+  | 'DESIGN_ITEM_QUANTITY_CHANGED'
+  | 'STANDARD_PARTS_CHANGED'
+  | 'SPECIAL_PARTS_CHANGED';
 
 /**
  * Result of invalidation detection

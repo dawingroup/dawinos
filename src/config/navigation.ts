@@ -19,9 +19,7 @@ import {
   Activity,
   FileText,
   HardHat,
-  ClipboardList,
   Receipt,
-  CheckSquare,
   Kanban,
   Scale,
   Wallet,
@@ -30,10 +28,21 @@ import {
   ShoppingCart,
   Truck,
   LucideIcon,
-  Image,
   Wrench,
   Layers,
   Rocket,
+  Scissors,
+  Sparkles,
+  Bug,
+  DollarSign,
+  Target,
+  GraduationCap,
+  Calendar,
+  Brain,
+  Globe,
+  Newspaper,
+  BarChart3,
+  Lightbulb,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -47,18 +56,39 @@ export interface NavItem {
   badge?: number | string;
 }
 
-export const mainNavItems: NavItem[] = [
+// ============================================================================
+// DAWIN FINISHES NAVIGATION
+// ============================================================================
+
+export const finishesNavItems: NavItem[] = [
+  {
+    id: 'finishes-dashboard',
+    label: 'Dashboard',
+    href: '/',
+    icon: LayoutDashboard,
+  },
+  {
+    id: 'clipper',
+    label: 'Clip Library',
+    href: '/clipper',
+    icon: Sparkles,
+  },
   {
     id: 'design',
     label: 'Design Manager',
     href: '/design',
     icon: FolderOpen,
     children: [
-      { id: 'design-dashboard', label: 'Dashboard', href: '/design', icon: LayoutDashboard },
+      { id: 'design-dashboard', label: 'Projects', href: '/design', icon: FolderOpen },
       { id: 'design-materials', label: 'Materials', href: '/design/materials', icon: Boxes },
-      { id: 'design-katana', label: 'Katana Catalog', href: '/design/katana', icon: Package },
       { id: 'design-features', label: 'Features', href: '/design/features', icon: Layers },
     ],
+  },
+  {
+    id: 'cutlist',
+    label: 'Cutlist',
+    href: '/cutlist',
+    icon: Scissors,
   },
   {
     id: 'customers',
@@ -70,7 +100,7 @@ export const mainNavItems: NavItem[] = [
     id: 'assets',
     label: 'Assets',
     href: '/assets',
-    icon: Wrench, // Using Wrench icon as seen in GlobalHeader
+    icon: Wrench,
   },
   {
     id: 'inventory',
@@ -82,14 +112,91 @@ export const mainNavItems: NavItem[] = [
     id: 'launch-pipeline',
     label: 'Launch Pipeline',
     href: '/launch-pipeline',
-    icon: Rocket, // Using Rocket icon
+    icon: Rocket,
     children: [
       { id: 'launch-dashboard', label: 'Pipeline', href: '/launch-pipeline', icon: Kanban },
       { id: 'launch-audit', label: 'Audit', href: '/launch-pipeline/audit', icon: Activity },
     ],
   },
   {
-    id: 'dashboard',
+    id: 'hr',
+    label: 'HR Central',
+    href: '/hr',
+    icon: Users,
+    children: [
+      { id: 'hr-dashboard', label: 'Dashboard', href: '/hr', icon: LayoutDashboard },
+      { id: 'hr-employees', label: 'Employees', href: '/hr/employees', icon: Users },
+      { id: 'hr-leave', label: 'Leave Management', href: '/hr/leave', icon: Calendar },
+      { id: 'hr-payroll', label: 'Payroll', href: '/hr/payroll', icon: DollarSign },
+    ],
+  },
+  {
+    id: 'finance',
+    label: 'Finance',
+    href: '/finance',
+    icon: DollarSign,
+    children: [
+      { id: 'finance-dashboard', label: 'Dashboard', href: '/finance', icon: LayoutDashboard },
+      { id: 'finance-budgets', label: 'Budgets', href: '/finance/budgets', icon: Wallet },
+      { id: 'finance-expenses', label: 'Expenses', href: '/finance/expenses', icon: Receipt },
+      { id: 'finance-reports', label: 'Reports', href: '/finance/reports', icon: PieChart },
+    ],
+  },
+  {
+    id: 'performance',
+    label: 'Performance',
+    href: '/performance',
+    icon: Target,
+    children: [
+      { id: 'performance-dashboard', label: 'Dashboard', href: '/performance', icon: LayoutDashboard },
+      { id: 'performance-goals', label: 'Goals', href: '/performance/goals', icon: Target },
+      { id: 'performance-reviews', label: 'Reviews', href: '/performance/reviews', icon: FileText },
+      { id: 'performance-competencies', label: 'Competencies', href: '/performance/competencies', icon: Brain },
+      { id: 'performance-development', label: 'Development', href: '/performance/development', icon: GraduationCap },
+    ],
+  },
+  {
+    id: 'capital',
+    label: 'Capital Hub',
+    href: '/capital',
+    icon: TrendingUp,
+    children: [
+      { id: 'capital-dashboard', label: 'Dashboard', href: '/capital', icon: LayoutDashboard },
+      { id: 'capital-deals', label: 'Deals', href: '/capital/deals', icon: Briefcase },
+      { id: 'capital-portfolio', label: 'Portfolio', href: '/capital/portfolio', icon: TrendingUp },
+      { id: 'capital-models', label: 'Financial Models', href: '/capital/models', icon: PieChart },
+      { id: 'capital-reports', label: 'Investor Reports', href: '/capital/reports', icon: FileText },
+      { id: 'capital-tax', label: 'Tax Compliance', href: '/capital/tax', icon: Scale },
+    ],
+  },
+  {
+    id: 'market-intel',
+    label: 'Market Intelligence',
+    href: '/market-intel',
+    icon: Globe,
+    children: [
+      { id: 'market-intel-dashboard', label: 'Dashboard', href: '/market-intel', icon: LayoutDashboard },
+      { id: 'market-intel-competitors', label: 'Competitors', href: '/market-intel/competitors', icon: Building2 },
+      { id: 'market-intel-news', label: 'News Feed', href: '/market-intel/news', icon: Newspaper },
+      { id: 'market-intel-market', label: 'Market Analysis', href: '/market-intel/market', icon: BarChart3 },
+      { id: 'market-intel-insights', label: 'AI Insights', href: '/market-intel/insights', icon: Lightbulb },
+    ],
+  },
+  {
+    id: 'ai-intelligence',
+    label: 'AI Intelligence',
+    href: '/ai',
+    icon: Brain,
+  },
+];
+
+// ============================================================================
+// DAWIN ADVISORY NAVIGATION
+// ============================================================================
+
+export const advisoryNavItems: NavItem[] = [
+  {
+    id: 'advisory-home',
     label: 'Dashboard',
     href: '/dashboard',
     icon: LayoutDashboard,
@@ -108,67 +215,75 @@ export const mainNavItems: NavItem[] = [
   },
 ];
 
+// Legacy: Keep for backward compatibility
+export const mainNavItems: NavItem[] = finishesNavItems;
+
 export const moduleNavItems: NavItem[] = [
   {
-    id: 'delivery',
-    label: 'Infrastructure Delivery',
-    href: '/delivery',
-    icon: HardHat,
-    module: 'infrastructure_delivery',
-    children: [
-      { id: 'delivery-dashboard', label: 'Dashboard', href: '/delivery', icon: LayoutDashboard },
-      { id: 'programs', label: 'Programs', href: '/delivery/programs', icon: FolderOpen },
-      { id: 'projects', label: 'Projects', href: '/delivery/projects', icon: FileText },
-      { id: 'ipcs', label: 'Payment Certificates', href: '/delivery/ipcs', icon: Receipt },
-      { id: 'requisitions', label: 'Requisitions', href: '/delivery/requisitions', icon: ClipboardList },
-      { id: 'accountability', label: 'Accountability', href: '/delivery/accountability', icon: FileText },
-      { id: 'approvals', label: 'Approval Queue', href: '/delivery/approvals', icon: CheckSquare },
-    ],
-  },
-  {
-    id: 'investment',
-    label: 'Investment',
-    href: '/investment',
-    icon: TrendingUp,
-    module: 'infrastructure_investment',
-    children: [
-      { id: 'investment-dashboard', label: 'Dashboard', href: '/investment', icon: LayoutDashboard },
-      { id: 'pipeline', label: 'Pipeline', href: '/investment/pipeline', icon: Kanban },
-      { id: 'deals', label: 'Deal List', href: '/investment/deals', icon: FileText },
-      { id: 'committee', label: 'Investment Committee', href: '/investment/committee', icon: Scale },
-      { id: 'reports', label: 'Reports', href: '/investment/reports', icon: PieChart },
-      { id: 'settings', label: 'Settings', href: '/investment/settings', icon: Settings },
-    ],
-  },
-  {
     id: 'advisory',
-    label: 'Advisory',
+    label: 'Dawin Advisory',
     href: '/advisory',
     icon: PieChart,
     module: 'investment_advisory',
     children: [
       { id: 'advisory-dashboard', label: 'Dashboard', href: '/advisory', icon: LayoutDashboard },
-      { id: 'portfolios', label: 'Portfolios', href: '/advisory/portfolios', icon: Wallet },
-      { id: 'mandates', label: 'Mandates', href: '/advisory/mandates', icon: FileText },
+      { id: 'advisory-investment', label: 'Investment', href: '/advisory/investment', icon: TrendingUp },
+      { id: 'advisory-matflow', label: 'MatFlow', href: '/advisory/matflow', icon: Package },
+      { id: 'advisory-delivery', label: 'Delivery', href: '/advisory/delivery', icon: HardHat },
+    ],
+  },
+  {
+    id: 'delivery',
+    label: 'Infrastructure Delivery',
+    href: '/advisory/delivery',
+    icon: HardHat,
+    module: 'infrastructure_delivery',
+    children: [
+      { id: 'delivery-dashboard', label: 'Dashboard', href: '/advisory/delivery', icon: LayoutDashboard },
+      { id: 'programs', label: 'Programs', href: '/advisory/delivery/programs', icon: FolderOpen },
+      { id: 'projects', label: 'Projects', href: '/advisory/delivery/projects', icon: FileText },
+    ],
+  },
+  {
+    id: 'investment',
+    label: 'Investment',
+    href: '/advisory/investment',
+    icon: TrendingUp,
+    module: 'infrastructure_investment',
+    children: [
+      { id: 'investment-dashboard', label: 'Dashboard', href: '/advisory/investment', icon: LayoutDashboard },
+      { id: 'pipeline', label: 'Pipeline', href: '/advisory/investment/pipeline', icon: Kanban },
+      { id: 'deals', label: 'Deal List', href: '/advisory/investment/deals', icon: FileText },
+      { id: 'reports', label: 'Reports', href: '/advisory/investment/reports', icon: PieChart },
     ],
   },
   {
     id: 'matflow',
     label: 'MatFlow',
-    href: '/matflow',
+    href: '/advisory/matflow',
     icon: Package,
     module: 'matflow',
     children: [
-      { id: 'matflow-dashboard', label: 'Dashboard', href: '/matflow', icon: LayoutDashboard },
-      { id: 'matflow-projects', label: 'Projects', href: '/matflow/projects', icon: FolderOpen },
-      { id: 'boq', label: 'Bills of Quantities', href: '/matflow/boq', icon: FileText },
-      { id: 'materials', label: 'Material Catalog', href: '/matflow/materials', icon: Boxes },
-      { id: 'procurement', label: 'Procurement', href: '/matflow/procurement', icon: ShoppingCart },
-      { id: 'deliveries', label: 'Deliveries', href: '/matflow/deliveries', icon: Truck },
-      { id: 'budget', label: 'Budget', href: '/matflow/budget', icon: Wallet },
-      { id: 'suppliers', label: 'Suppliers', href: '/matflow/suppliers', icon: Truck },
-      { id: 'reports', label: 'Reports', href: '/matflow/reports', icon: PieChart },
-      { id: 'settings', label: 'Settings', href: '/matflow/settings', icon: Settings },
+      { id: 'matflow-dashboard', label: 'Dashboard', href: '/advisory/matflow', icon: LayoutDashboard },
+      { id: 'matflow-projects', label: 'Projects', href: '/advisory/matflow/projects', icon: FolderOpen },
+      { id: 'boq', label: 'Bills of Quantities', href: '/advisory/matflow/boq', icon: FileText },
+      { id: 'procurement', label: 'Procurement', href: '/advisory/matflow/procurement', icon: ShoppingCart },
+      { id: 'suppliers', label: 'Suppliers', href: '/advisory/matflow/suppliers', icon: Truck },
+      { id: 'reports', label: 'Reports', href: '/advisory/matflow/reports', icon: PieChart },
+      { id: 'settings', label: 'Settings', href: '/advisory/matflow/settings', icon: Settings },
+    ],
+  },
+  {
+    id: 'market-intelligence',
+    label: 'Market Intelligence',
+    href: '/market-intelligence',
+    icon: TrendingUp,
+    module: 'market_intelligence',
+    children: [
+      { id: 'mi-dashboard', label: 'Dashboard', href: '/market-intelligence', icon: LayoutDashboard },
+      { id: 'mi-insights', label: 'Insights', href: '/market-intelligence/insights', icon: FileText },
+      { id: 'mi-reports', label: 'Reports', href: '/market-intelligence/reports', icon: PieChart },
+      { id: 'mi-analytics', label: 'Analytics', href: '/market-intelligence/analytics', icon: Activity },
     ],
   },
 ];
@@ -196,6 +311,20 @@ export const adminNavItems: NavItem[] = [
       { id: 'migration', label: 'Data Migration', href: '/admin/migration', icon: Activity },
       { id: 'audit-log', label: 'Audit Log', href: '/admin/audit-log', icon: FileText },
       { id: 'settings', label: 'System Settings', href: '/admin/settings', icon: Settings },
+    ],
+  },
+  {
+    id: 'testing',
+    label: 'Testing Suite',
+    href: '/test',
+    icon: Bug,
+    roles: ['admin', 'super_admin', 'developer'],
+    children: [
+      { id: 'test-dashboard', label: 'Test Dashboard', href: '/test', icon: LayoutDashboard },
+      { id: 'test-intelligence', label: 'Intelligence Layer', href: '/test/intelligence', icon: Activity },
+      { id: 'test-hr', label: 'HR Central', href: '/test/hr', icon: Users },
+      { id: 'test-strategy', label: 'CEO Strategy', href: '/test/strategy', icon: TrendingUp },
+      { id: 'test-finance', label: 'Financial Mgmt', href: '/test/finance', icon: Wallet },
     ],
   },
 ];

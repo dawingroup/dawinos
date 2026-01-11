@@ -6,7 +6,9 @@
 
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronUp, ChevronDown, Package, ShoppingCart } from 'lucide-react';
+import { ChevronUp, ChevronDown, Package, ShoppingCart, Edit2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { EditDesignItemDialog } from '../design-item/EditDesignItemDialog';
 import { cn } from '@/shared/lib/utils';
 import type { DesignItem, DesignStage } from '../../types';
 import { STAGE_LABELS } from '../../utils/formatting';
@@ -118,9 +120,11 @@ function ReadinessBadge({ readiness }: { readiness: number }) {
 }
 
 export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
+  const { user } = useAuth();
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [editingItem, setEditingItem] = useState<DesignItem | null>(null);
 
   // Separate items by type
   const manufacturedItems = useMemo(() => 
@@ -284,6 +288,9 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
                 >
                   Costing
                 </th>
+                <th className="w-16 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -353,6 +360,18 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
                     >
                       <span className="text-sm">{hasCosting ? '✓' : '○'}</span>
                     </td>
+                    <td className="w-16 px-2 py-2 text-center">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingItem(item);
+                        }}
+                        className="p-1.5 text-gray-500 hover:text-[#0A7C8E] hover:bg-gray-100 rounded transition-colors"
+                        title="Edit item"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -388,6 +407,17 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
           <h3 className="text-lg font-medium text-gray-900">No design items</h3>
           <p className="text-gray-500 mt-1">Add design items to see them here.</p>
         </div>
+      )}
+
+      {/* Edit Design Item Dialog */}
+      {editingItem && (
+        <EditDesignItemDialog
+          open={!!editingItem}
+          onClose={() => setEditingItem(null)}
+          item={editingItem}
+          projectId={projectId}
+          userId={user?.email || ''}
+        />
       )}
     </div>
   );

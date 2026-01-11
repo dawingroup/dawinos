@@ -58,17 +58,48 @@ interface ColumnMapping {
 }
 
 /**
+ * Remove BOM (Byte Order Mark) from string
+ */
+function removeBOM(str: string): string {
+  // Remove UTF-8 BOM
+  if (str.charCodeAt(0) === 0xFEFF) {
+    return str.slice(1);
+  }
+  // Remove UTF-8 BOM as bytes
+  if (str.startsWith('\uFEFF') || str.startsWith('\xEF\xBB\xBF')) {
+    return str.slice(1);
+  }
+  return str;
+}
+
+/**
+ * Detect the delimiter used in the CSV (comma or semicolon)
+ */
+function detectDelimiter(csvString: string): string {
+  const firstLine = csvString.split(/[\r\n]/)[0] || '';
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  const semicolonCount = (firstLine.match(/;/g) || []).length;
+  return semicolonCount > commaCount ? ';' : ',';
+}
+
+/**
  * Parse CSV string into rows
  */
 function parseCSVToRows(csvString: string): string[][] {
+  // Remove BOM if present
+  const cleanedString = removeBOM(csvString);
+  
+  // Detect delimiter
+  const delimiter = detectDelimiter(cleanedString);
+  
   const rows: string[][] = [];
   let currentRow: string[] = [];
   let currentCell = '';
   let inQuotes = false;
 
-  for (let i = 0; i < csvString.length; i++) {
-    const char = csvString[i];
-    const nextChar = csvString[i + 1];
+  for (let i = 0; i < cleanedString.length; i++) {
+    const char = cleanedString[i];
+    const nextChar = cleanedString[i + 1];
 
     if (char === '"') {
       if (inQuotes && nextChar === '"') {
@@ -77,7 +108,7 @@ function parseCSVToRows(csvString: string): string[][] {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (char === ',' && !inQuotes) {
+    } else if (char === delimiter && !inQuotes) {
       currentRow.push(currentCell.trim());
       currentCell = '';
     } else if ((char === '\n' || char === '\r') && !inQuotes) {
@@ -103,6 +134,39 @@ function parseCSVToRows(csvString: string): string[][] {
   }
 
   return rows;
+}
+
+/**
+ * Detect if a row is a header row or a data row
+ * Polyboard exports often have no header - data starts immediately
+ */
+function detectIfHeaderRow(row: string[]): boolean {
+  if (row.length < 7) return false;
+  
+  // In Polyboard format: columns 5 and 6 are Length and Width (0-indexed)
+  // If they're numeric, this is likely a data row, not headers
+  const col5 = row[5]?.trim() || '';
+  const col6 = row[6]?.trim() || '';
+  
+  const col5IsNumeric = /^\d+(\.\d+)?$/.test(col5);
+  const col6IsNumeric = /^\d+(\.\d+)?$/.test(col6);
+  
+  if (col5IsNumeric && col6IsNumeric) {
+    return false;
+  }
+  
+  // Also check column 3 (thickness) and 4 (quantity)
+  const col3 = row[3]?.trim() || '';
+  const col4 = row[4]?.trim() || '';
+  const col3IsNumeric = /^\d+(\.\d+)?$/.test(col3);
+  const col4IsNumeric = /^\d+(\.\d+)?$/.test(col4);
+  
+  const numericCount = [col3IsNumeric, col4IsNumeric, col5IsNumeric, col6IsNumeric].filter(Boolean).length;
+  if (numericCount >= 3) {
+    return false;
+  }
+  
+  return true;
 }
 
 /**
@@ -178,16 +242,36 @@ function getColumnMapping(headers: string[], sourceType: CSVSourceType): ColumnM
     };
   }
 
-  // Generic mapping
+  // Generic mapping - try many common variations
   return {
-    name: headerMap['name'] ?? headerMap['part'] ?? headerMap['description'] ?? 0,
-    length: headerMap['length'] ?? headerMap['l'] ?? 1,
-    width: headerMap['width'] ?? headerMap['w'] ?? 2,
-    thickness: headerMap['thickness'] ?? headerMap['t'] ?? headerMap['thk'] ?? 3,
-    quantity: headerMap['quantity'] ?? headerMap['qty'] ?? headerMap['count'] ?? 4,
-    material: headerMap['material'] ?? headerMap['mat'] ?? 5,
-    grain: headerMap['grain'],
-    notes: headerMap['notes'],
+    name: headerMap['name'] ?? headerMap['part'] ?? headerMap['description'] ?? headerMap['part name'] ?? headerMap['component'] ?? headerMap['item'] ?? 0,
+    length: headerMap['length'] ?? headerMap['l'] ?? headerMap['len'] ?? headerMap['long'] ?? 1,
+    width: headerMap['width'] ?? headerMap['w'] ?? headerMap['wid'] ?? headerMap['wide'] ?? 2,
+    thickness: headerMap['thickness'] ?? headerMap['t'] ?? headerMap['thk'] ?? headerMap['thick'] ?? headerMap['depth'] ?? headerMap['d'] ?? 3,
+    quantity: headerMap['quantity'] ?? headerMap['qty'] ?? headerMap['count'] ?? headerMap['no'] ?? headerMap['num'] ?? headerMap['pcs'] ?? 4,
+    material: headerMap['material'] ?? headerMap['mat'] ?? headerMap['board'] ?? headerMap['sheet'] ?? headerMap['panel'] ?? 5,
+    grain: headerMap['grain'] ?? headerMap['grain direction'] ?? headerMap['direction'],
+    notes: headerMap['notes'] ?? headerMap['comment'] ?? headerMap['comments'] ?? headerMap['remarks'],
+  };
+}
+
+/**
+ * Get positional mapping for headerless Polyboard exports
+ * Format: Cabinet;Label;Material;Thickness;Quantity;Length;Width;Grain;Edge1;Edge2;Edge3;Edge4
+ */
+function getPolyboardPositionalMapping(): ColumnMapping {
+  return {
+    name: 1,        // Label
+    length: 5,      // Length
+    width: 6,       // Width
+    thickness: 3,   // Thickness
+    quantity: 4,    // Quantity
+    material: 2,    // Material
+    grain: 7,       // Grain
+    edgeTop: 8,     // Edge1
+    edgeBottom: 10, // Edge3
+    edgeLeft: 11,   // Edge4
+    edgeRight: 9,   // Edge2
   };
 }
 
@@ -306,12 +390,12 @@ function parseRow(
 export function parseCSV(csvString: string, filename?: string): CSVParseResult {
   const rows = parseCSVToRows(csvString);
   
-  if (rows.length < 2) {
+  if (rows.length < 1) {
     return {
       success: false,
       sourceType: 'unknown',
       parts: [],
-      errors: [{ row: 0, message: 'CSV must have header row and at least one data row' }],
+      errors: [{ row: 0, message: 'CSV file is empty' }],
       warnings: [],
       metadata: {
         totalRows: rows.length,
@@ -322,9 +406,25 @@ export function parseCSV(csvString: string, filename?: string): CSVParseResult {
     };
   }
 
-  const headers = rows[0];
-  const sourceType = detectSourceType(headers);
-  const mapping = getColumnMapping(headers, sourceType);
+  // Detect if first row is header or data
+  const firstRow = rows[0];
+  const isHeaderRow = detectIfHeaderRow(firstRow);
+  
+  let headers: string[];
+  let dataStartIndex: number;
+  
+  if (isHeaderRow) {
+    headers = firstRow;
+    dataStartIndex = 1;
+  } else {
+    // No header row - use Polyboard positional format
+    // Format: Cabinet;Label;Material;Thickness;Quantity;Length;Width;Grain;Edge1;Edge2;Edge3;Edge4
+    headers = ['cabinet', 'label', 'material', 'thickness', 'quantity', 'length', 'width', 'grain', 'topEdge', 'rightEdge', 'bottomEdge', 'leftEdge'];
+    dataStartIndex = 0;
+  }
+  
+  const sourceType = isHeaderRow ? detectSourceType(headers) : 'polyboard';
+  const mapping = isHeaderRow ? getColumnMapping(headers, sourceType) : getPolyboardPositionalMapping();
 
   const parts: ParsedPart[] = [];
   const errors: ParseError[] = [];
@@ -333,8 +433,12 @@ export function parseCSV(csvString: string, filename?: string): CSVParseResult {
   if (sourceType === 'unknown') {
     warnings.push('Could not detect CSV format, using generic mapping');
   }
+  
+  if (!isHeaderRow) {
+    warnings.push('No header row detected - using Polyboard positional format');
+  }
 
-  for (let i = 1; i < rows.length; i++) {
+  for (let i = dataStartIndex; i < rows.length; i++) {
     const { part, error } = parseRow(rows[i], i + 1, mapping);
     if (part) {
       parts.push(part);

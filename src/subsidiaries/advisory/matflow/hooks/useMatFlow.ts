@@ -4,6 +4,8 @@
  */
 
 import { useState, useEffect } from 'react';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from '@/core/services/firebase';
 import { useAuth } from '@/core/hooks/useAuth';
 import type { BOQItem } from '../types';
 
@@ -33,7 +35,7 @@ export function useProjectBOQItems(projectId: string) {
   const { user } = useAuth();
   const [items, setItems] = useState<BOQItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error] = useState<Error | null>(null);
+  const [error, setError] = useState<Error | null>(null);
   
   const orgId = (user as { organizationId?: string })?.organizationId || DEFAULT_ORG_ID;
   
@@ -44,9 +46,36 @@ export function useProjectBOQItems(projectId: string) {
       return;
     }
     
-    // For now, return empty array - will be populated from Firestore subscription
-    setLoading(false);
-    setItems([]);
+    // Subscribe to BOQ items from Firestore
+    const boqItemsRef = collection(
+      db,
+      'organizations',
+      orgId,
+      'matflow_projects',
+      projectId,
+      'boq_items'
+    );
+    
+    const q = query(boqItemsRef, orderBy('createdAt', 'desc'));
+    
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const boqItems = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as BOQItem[];
+        setItems(boqItems);
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Failed to load BOQ items:', err);
+        setError(err);
+        setLoading(false);
+      }
+    );
+    
+    return () => unsubscribe();
   }, [user, projectId, orgId]);
   
   return { items, loading, error };

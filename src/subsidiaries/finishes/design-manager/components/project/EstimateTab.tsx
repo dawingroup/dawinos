@@ -76,14 +76,17 @@ export function EstimateTab({ project }: EstimateTabProps) {
     designItems.forEach(item => {
       const manufacturing = (item as any).manufacturing;
       const standardParts: StandardPartEntry[] = manufacturing?.standardParts || [];
+      const requiredQuantity = item.requiredQuantity || 1;
       
       standardParts.forEach(part => {
         const key = `${part.name}-${part.category}`;
         const existing = partsMap.get(key);
+        // Multiply by requiredQuantity for correct totals
+        const totalQty = part.quantity * requiredQuantity;
         
         if (existing) {
-          existing.totalQuantity += part.quantity;
-          existing.totalCost += part.quantity * part.unitCost;
+          existing.totalQuantity += totalQty;
+          existing.totalCost += totalQty * part.unitCost;
           if (!existing.fromItems.includes(item.name)) {
             existing.fromItems.push(item.name);
           }
@@ -92,9 +95,9 @@ export function EstimateTab({ project }: EstimateTabProps) {
           partsMap.set(key, {
             name: part.name,
             category: part.category,
-            totalQuantity: part.quantity,
+            totalQuantity: totalQty,
             avgUnitCost: part.unitCost,
-            totalCost: part.quantity * part.unitCost,
+            totalCost: totalQty * part.unitCost,
             fromItems: [item.name],
           });
         }
@@ -111,14 +114,23 @@ export function EstimateTab({ project }: EstimateTabProps) {
     designItems.forEach(item => {
       const manufacturing = (item as any).manufacturing;
       const specialParts: SpecialPartEntry[] = manufacturing?.specialParts || [];
+      const requiredQuantity = item.requiredQuantity || 1;
       
       specialParts.forEach(part => {
         const key = `${part.name}-${part.category}-${part.supplier || ''}`;
         const existing = partsMap.get(key);
+        // Multiply by requiredQuantity for correct totals
+        const totalQty = part.quantity * requiredQuantity;
+        
+        // Special parts use costing.landedUnitCost (includes transport, logistics, customs, exchange rate)
+        // Falls back to unitCost * exchangeRate if landedUnitCost not set
+        const costing = (part as any).costing;
+        const partLandedUnitCost = costing?.landedUnitCost || 
+          ((costing?.unitCost || 0) + (costing?.transportCost || 0) + (costing?.logisticsCost || 0) + (costing?.customsCost || 0)) * (costing?.exchangeRate || 1);
         
         if (existing) {
-          existing.totalQuantity += part.quantity;
-          existing.totalCost += part.quantity * part.unitCost;
+          existing.totalQuantity += totalQty;
+          existing.totalCost += totalQty * partLandedUnitCost;
           if (!existing.fromItems.includes(item.name)) {
             existing.fromItems.push(item.name);
           }
@@ -128,9 +140,9 @@ export function EstimateTab({ project }: EstimateTabProps) {
             name: part.name,
             category: part.category,
             supplier: part.supplier,
-            totalQuantity: part.quantity,
-            avgUnitCost: part.unitCost,
-            totalCost: part.quantity * part.unitCost,
+            totalQuantity: totalQty,
+            avgUnitCost: partLandedUnitCost,
+            totalCost: totalQty * partLandedUnitCost,
             fromItems: [item.name],
           });
         }
@@ -587,6 +599,45 @@ export function EstimateTab({ project }: EstimateTabProps) {
           onCancel={() => setEditingItem(null)}
           currency={estimate?.currency || 'UGX'}
         />
+      )}
+
+      {/* Error Checking Section */}
+      {estimate && (estimate.hasErrors || estimate.errorChecks?.length) && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+            <h3 className="font-semibold text-red-800">Cost Verification Issues</h3>
+            <span className="text-sm text-red-600">
+              ({estimate.errorChecks?.length || 0} design items need attention)
+            </span>
+          </div>
+          <div className="space-y-2">
+            {estimate.errorChecks?.map((err, idx) => (
+              <div key={idx} className="flex items-center gap-3 text-sm bg-white rounded p-2 border border-red-100">
+                <span className="font-medium text-gray-900">{err.itemName}</span>
+                <span className="text-red-600">→ {err.issue}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-red-600 mt-3">
+            Fix these issues and regenerate the estimate for accurate costing.
+          </p>
+        </div>
+      )}
+
+      {/* Cost Verification Summary */}
+      {estimate && !estimate.hasErrors && estimate.designItemCount && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-green-600">✓</span>
+              <span className="font-medium text-green-800">Cost Verification Passed</span>
+            </div>
+            <div className="text-sm text-green-700">
+              {estimate.lineItemCount} of {estimate.designItemCount} design items costed
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Material Palette Section */}

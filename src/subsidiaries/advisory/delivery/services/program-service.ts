@@ -21,6 +21,7 @@ import {
   increment,
   QueryConstraint,
   Firestore,
+  writeBatch,
 } from 'firebase/firestore';
 import {
   Program,
@@ -76,14 +77,21 @@ export class ProgramService {
     data: CreateProgramData,
     userId: string
   ): Promise<Program> {
-    // Get engagement to validate and extract client info
-    const engagement = await this.getEngagement(data.engagementId);
-    if (!engagement) {
-      throw new Error(`Engagement ${data.engagementId} not found`);
+    let clientId = data.clientId || '';
+    
+    // Get engagement to validate and extract client info (if provided)
+    if (data.engagementId) {
+      const engagement = await this.getEngagement(data.engagementId);
+      if (!engagement) {
+        throw new Error(`Engagement ${data.engagementId} not found`);
+      }
+      clientId = engagement.clientId;
     }
 
     // Generate unique code
-    const programCount = await this.getProgramCountForEngagement(data.engagementId);
+    const programCount = data.engagementId 
+      ? await this.getProgramCountForEngagement(data.engagementId)
+      : await this.getTotalProgramCount();
     const code = data.code || generateProgramCode(data.name, programCount + 1);
 
     // Initialize budget
@@ -98,26 +106,29 @@ export class ProgramService {
       budget.available = { ...budget.allocated };
     }
 
-    // Build program object
+    // Build program object - ensure no undefined values for Firestore
     const programData: Omit<Program, 'id'> = {
-      engagementId: data.engagementId,
-      clientId: engagement.clientId,
+      engagementId: data.engagementId || '',
+      clientId,
+      // Customer link (from global customers collection)
+      customerId: data.customerId,
+      customerName: data.customerName,
       name: data.name,
       code,
-      description: data.description,
-      icon: data.icon,
-      implementationType: data.implementationType,
-      sectors: data.sectors,
+      description: data.description || '',
+      icon: data.icon || '',
+      implementationType: data.implementationType || 'direct',
+      sectors: data.sectors || [],
       coverage: data.coverage || {
         countries: [],
       },
       budget,
       projectIds: [],
       projectStats: getEmptyProjectStats(budget.currency),
-      managerId: data.managerId,
+      managerId: data.managerId || '',
       team: [],
-      startDate: Timestamp.fromDate(data.startDate),
-      endDate: Timestamp.fromDate(data.endDate),
+      startDate: Timestamp.fromDate(data.startDate instanceof Date ? data.startDate : new Date(data.startDate)),
+      endDate: Timestamp.fromDate(data.endDate instanceof Date ? data.endDate : new Date(data.endDate)),
       extensions: [],
       status: 'planning',
       statusHistory: [],
@@ -140,10 +151,10 @@ export class ProgramService {
     const programsRef = collection(this.db, PROGRAMS_PATH);
     const docRef = await addDoc(programsRef, programData);
 
-    // Log activity
+    // Log activity - ensure no undefined values
     await this.logActivity(docRef.id, 'program_created', userId, {
       programName: data.name,
-      implementationType: data.implementationType,
+      implementationType: data.implementationType || 'direct',
     });
 
     return {
@@ -188,6 +199,40 @@ export class ProgramService {
     const constraints: QueryConstraint[] = [
       where('engagementId', '==', engagementId),
     ];
+
+    if (options.status?.length) {
+      constraints.push(where('status', 'in', options.status));
+    }
+
+    constraints.push(
+      orderBy(options.orderByField || 'createdAt', options.orderDirection || 'desc')
+    );
+
+    if (options.limitCount) {
+      constraints.push(limit(options.limitCount));
+    }
+
+    const q = query(collection(this.db, PROGRAMS_PATH), ...constraints);
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Program[];
+  }
+
+  /**
+   * Get all programs
+   */
+  async getAllPrograms(
+    options: {
+      status?: ProgramStatus[];
+      orderByField?: 'name' | 'createdAt' | 'startDate' | 'updatedAt';
+      orderDirection?: 'asc' | 'desc';
+      limitCount?: number;
+    } = {}
+  ): Promise<Program[]> {
+    const constraints: QueryConstraint[] = [];
 
     if (options.status?.length) {
       constraints.push(where('status', 'in', options.status));
@@ -734,14 +779,35 @@ export class ProgramService {
   // ─────────────────────────────────────────────────────────────────
 
   /**
-   * Delete program (soft delete via status)
+   * Delete program (hard delete) and all associated projects
    */
   async deleteProgram(
     programId: string,
-    userId: string,
-    reason?: string
+    _userId: string,
+    _reason?: string
   ): Promise<void> {
-    await this.updateStatus(programId, 'cancelled', userId, reason);
+    const batch = writeBatch(this.db);
+    
+    // Get all projects associated with this program
+    const projectsQuery = query(
+      collection(this.db, 'projects'),
+      where('programId', '==', programId)
+    );
+    const projectsSnapshot = await getDocs(projectsQuery);
+    
+    // Delete all associated projects
+    projectsSnapshot.docs.forEach((projectDoc) => {
+      batch.delete(projectDoc.ref);
+    });
+    
+    // Delete the program document
+    const programRef = doc(this.db, PROGRAMS_PATH, programId);
+    batch.delete(programRef);
+    
+    // Commit the batch
+    await batch.commit();
+    
+    console.log(`Deleted program ${programId} and ${projectsSnapshot.size} associated projects`);
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -768,6 +834,11 @@ export class ProgramService {
       where('engagementId', '==', engagementId)
     );
     const snapshot = await getDocs(q);
+    return snapshot.size;
+  }
+
+  private async getTotalProgramCount(): Promise<number> {
+    const snapshot = await getDocs(collection(this.db, PROGRAMS_PATH));
     return snapshot.size;
   }
 

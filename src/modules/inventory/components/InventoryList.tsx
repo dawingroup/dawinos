@@ -302,7 +302,7 @@ export function InventoryList({
                   </td>
                   <td className="px-4 py-3 text-right text-sm text-gray-600">
                     {item.costPerUnit
-                      ? `${item.currency || 'KES'} ${item.costPerUnit.toLocaleString()}`
+                      ? `${item.currency || 'UGX'} ${item.costPerUnit.toLocaleString()}`
                       : '-'}
                   </td>
                   <td className="px-4 py-3 text-center">

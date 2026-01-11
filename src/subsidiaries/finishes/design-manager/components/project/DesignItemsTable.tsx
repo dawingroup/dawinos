@@ -6,7 +6,9 @@
 
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronUp, ChevronDown, Check, Clock, AlertCircle, Package, ShoppingCart } from 'lucide-react';
+import { ChevronUp, ChevronDown, Package, ShoppingCart, Edit2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { EditDesignItemDialog } from '../design-item/EditDesignItemDialog';
 import { cn } from '@/shared/lib/utils';
 import type { DesignItem, DesignStage } from '../../types';
 import { STAGE_LABELS } from '../../utils/formatting';
@@ -21,11 +23,27 @@ interface DesignItemsTableProps {
   projectId: string;
 }
 
-type SortField = 'name' | 'createdAt' | 'category' | 'readiness' | 'stage';
+type SortField = 'name' | 'category' | 'readiness' | 'stage';
 type SortDirection = 'asc' | 'desc';
 
 // Stage status for display
-type StageStatus = 'completed' | 'current' | 'pending' | 'not-applicable';
+type StageStatus = 'completed' | 'current' | 'current-delayed' | 'pending' | 'not-applicable';
+
+// Expected duration for each stage in days
+const STAGE_TIMELINE_DAYS: Record<DesignStage, number> = {
+  // Manufacturing stages
+  'concept': 2,
+  'preliminary': 5,
+  'technical': 3,
+  'pre-production': 2,
+  'production-ready': 0,
+  // Procurement stages
+  'procure-identify': 2,
+  'procure-quote': 3,
+  'procure-approve': 2,
+  'procure-order': 1,
+  'procure-received': 7,
+};
 
 function getStageStatus(item: DesignItem, stage: DesignStage): StageStatus {
   const stageOrder = getStageOrderForItem(item);
@@ -34,31 +52,55 @@ function getStageStatus(item: DesignItem, stage: DesignStage): StageStatus {
   
   if (stageIndex === -1) return 'not-applicable';
   if (stageIndex < currentIndex) return 'completed';
-  if (stageIndex === currentIndex) return 'current';
+  if (stageIndex === currentIndex) {
+    // Check if delayed based on stageEnteredAt timestamp
+    const stageEnteredAt = (item as any).stageEnteredAt;
+    if (stageEnteredAt) {
+      const enteredDate = stageEnteredAt.toDate ? stageEnteredAt.toDate() : new Date(stageEnteredAt.seconds * 1000);
+      const now = new Date();
+      const daysInStage = Math.floor((now.getTime() - enteredDate.getTime()) / (1000 * 60 * 60 * 24));
+      const expectedDays = STAGE_TIMELINE_DAYS[stage] || 3;
+      
+      if (daysInStage > expectedDays) {
+        return 'current-delayed';
+      }
+    }
+    return 'current';
+  }
   return 'pending';
 }
 
 // Stage cell colors - full cell background
-const STAGE_CELL_CONFIG: Record<StageStatus, { bg: string; text: string; label: string }> = {
+const STAGE_CELL_CONFIG: Record<StageStatus, { bg: string; text: string; label: string; title: string }> = {
   'completed': { 
     bg: 'bg-green-500', 
     text: 'text-white font-medium',
-    label: '✓'
+    label: '✓',
+    title: 'Completed'
   },
   'current': { 
-    bg: 'bg-blue-500', 
+    bg: 'bg-amber-500', 
     text: 'text-white font-medium',
-    label: '●'
+    label: '●',
+    title: 'In Progress'
+  },
+  'current-delayed': { 
+    bg: 'bg-red-500', 
+    text: 'text-white font-medium',
+    label: '!',
+    title: 'Delayed - exceeds expected timeline'
   },
   'pending': { 
     bg: 'bg-gray-100', 
     text: 'text-gray-400',
-    label: '○'
+    label: '○',
+    title: 'Pending'
   },
   'not-applicable': { 
     bg: 'bg-gray-50', 
     text: 'text-gray-300',
-    label: '—'
+    label: '—',
+    title: 'Not applicable'
   },
 };
 
@@ -78,9 +120,11 @@ function ReadinessBadge({ readiness }: { readiness: number }) {
 }
 
 export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
-  const [sortField, setSortField] = useState<SortField>('createdAt');
+  const { user } = useAuth();
+  const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [editingItem, setEditingItem] = useState<DesignItem | null>(null);
 
   // Separate items by type
   const manufacturedItems = useMemo(() => 
@@ -100,11 +144,6 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
       switch (sortField) {
         case 'name':
           comparison = a.name.localeCompare(b.name);
-          break;
-        case 'createdAt':
-          const aTime = a.createdAt?.seconds || 0;
-          const bTime = b.createdAt?.seconds || 0;
-          comparison = aTime - bTime;
           break;
         case 'category':
           comparison = (a.category || '').localeCompare(b.category || '');
@@ -128,11 +167,6 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
       switch (sortField) {
         case 'name':
           comparison = a.name.localeCompare(b.name);
-          break;
-        case 'createdAt':
-          const aTime = a.createdAt?.seconds || 0;
-          const bTime = b.createdAt?.seconds || 0;
-          comparison = aTime - bTime;
           break;
         case 'category':
           comparison = (a.category || '').localeCompare(b.category || '');
@@ -178,19 +212,6 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
       newSelected.add(id);
     }
     setSelectedItems(newSelected);
-  };
-
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return '—';
-    let date: Date;
-    if (timestamp.toDate) {
-      date = timestamp.toDate();
-    } else if (timestamp.seconds !== undefined) {
-      date = new Date(timestamp.seconds * 1000);
-    } else {
-      date = new Date(timestamp);
-    }
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   const SortHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
@@ -245,24 +266,30 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
                     className="h-4 w-4 text-[#0A7C8E] border-gray-300 rounded focus:ring-[#0A7C8E]"
                   />
                 </th>
-                <SortHeader field="createdAt">Created</SortHeader>
                 <SortHeader field="name">Item</SortHeader>
                 <SortHeader field="category">Category</SortHeader>
                 <SortHeader field="readiness">Readiness</SortHeader>
-                {/* Stage columns - with thicker left border for separation */}
+                {/* Stage columns - share 60% of table width equally */}
                 {stageOrder.map((stage, idx) => (
                   <th
                     key={stage}
+                    style={{ width: `${60 / (stageOrder.length + 1)}%` }}
                     className={cn(
-                      "px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]",
-                      idx === 0 ? "border-l-2 border-l-gray-300" : "border-l-2 border-l-gray-200"
+                      "px-1 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider",
+                      idx === 0 ? "border-l-2 border-l-gray-300" : "border-l border-l-gray-200"
                     )}
                   >
-                    {STAGE_LABELS[stage]?.replace('Procure: ', '') || stage}
+                    {STAGE_LABELS[stage]?.replace('Procure: ', '').replace('Procure:', '') || stage}
                   </th>
                 ))}
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-l-2 border-l-gray-300">
+                <th 
+                  style={{ width: `${60 / (stageOrder.length + 1)}%` }}
+                  className="px-1 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l border-l-gray-200"
+                >
                   Costing
+                </th>
+                <th className="w-16 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -288,24 +315,21 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
                         className="h-4 w-4 text-[#0A7C8E] border-gray-300 rounded focus:ring-[#0A7C8E]"
                       />
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(item.createdAt)}
-                    </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       <Link
                         to={`item/${item.id}`}
                         className="text-sm font-medium text-[#0A7C8E] hover:underline"
                       >
                         {item.name}
                       </Link>
-                      {item.code && (
-                        <p className="text-xs text-gray-500">{item.code}</p>
+                      {(item as any).code && (
+                        <p className="text-xs text-gray-500">{(item as any).code}</p>
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-600">
+                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-600 max-w-[120px] truncate">
                       {item.category || '—'}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap text-center">
                       <ReadinessBadge readiness={item.overallReadiness} />
                     </td>
                     {/* Stage status columns - colored cells */}
@@ -315,29 +339,38 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
                       return (
                         <td 
                           key={stage} 
+                          title={config.title}
                           className={cn(
-                            "px-2 py-2 text-center whitespace-nowrap min-w-[80px]",
+                            "px-1 py-2 text-center whitespace-nowrap cursor-default",
                             config.bg,
                             config.text,
-                            stageIdx === 0 ? "border-l-2 border-l-gray-300" : "border-l-2 border-l-gray-200"
+                            stageIdx === 0 ? "border-l-2 border-l-gray-300" : "border-l border-l-gray-200"
                           )}
                         >
                           <span className="text-sm">{config.label}</span>
                         </td>
                       );
                     })}
-                    <td className="px-3 py-2 whitespace-nowrap border-l-2 border-l-gray-300">
-                      {hasCosting ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
-                          <Check className="w-3 h-3" />
-                          Costed
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
-                          <AlertCircle className="w-3 h-3" />
-                          Pending
-                        </span>
+                    <td 
+                      title={hasCosting ? 'Costed' : 'Pending costing'}
+                      className={cn(
+                        "px-1 py-2 text-center whitespace-nowrap cursor-default border-l border-l-gray-200",
+                        hasCosting ? "bg-green-500 text-white font-medium" : "bg-amber-500 text-white font-medium"
                       )}
+                    >
+                      <span className="text-sm">{hasCosting ? '✓' : '○'}</span>
+                    </td>
+                    <td className="w-16 px-2 py-2 text-center">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingItem(item);
+                        }}
+                        className="p-1.5 text-gray-500 hover:text-[#0A7C8E] hover:bg-gray-100 rounded transition-colors"
+                        title="Edit item"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 );
@@ -374,6 +407,17 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
           <h3 className="text-lg font-medium text-gray-900">No design items</h3>
           <p className="text-gray-500 mt-1">Add design items to see them here.</p>
         </div>
+      )}
+
+      {/* Edit Design Item Dialog */}
+      {editingItem && (
+        <EditDesignItemDialog
+          open={!!editingItem}
+          onClose={() => setEditingItem(null)}
+          item={editingItem}
+          projectId={projectId}
+          userId={user?.email || ''}
+        />
       )}
     </div>
   );

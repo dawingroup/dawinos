@@ -394,6 +394,7 @@ export interface DesignItem {
   updatedBy: string;
   
   // Optional fields
+  requiredQuantity?: number;  // Number of units needed (e.g., 4 kitchen cabinets)
   estimatedHours?: number;
   actualHours?: number;
   dueDate?: Timestamp;
@@ -673,6 +674,7 @@ export interface Deliverable {
   
   // File reference
   storageUrl: string;                  // Firebase Storage URL
+  storagePath?: string;                // Firebase Storage path for deletion
   googleDriveUrl: string | null;       // If synced to Drive
   fileType: string;                    // "pdf", "skp", "dxf", etc.
   fileSize: number;                    // bytes
@@ -683,6 +685,12 @@ export interface Deliverable {
   
   // Status
   status: 'draft' | 'review' | 'approved' | 'superseded';
+  
+  // Client Portal Sharing
+  sharedToPortal?: boolean;            // Whether shared to client portal
+  sharedToPortalAt?: Timestamp | null; // When shared
+  sharedToPortalBy?: string | null;    // Who shared it
+  portalDisplayName?: string;          // Custom name for portal display
   
   // Metadata
   uploadedAt: Timestamp;
@@ -888,6 +896,10 @@ export interface PartEntry {
   hasCNCOperations: boolean;
   cncProgramRef?: string;
   
+  // Manufacturing priority (lower number = higher priority, made first)
+  manufacturingPriority?: number;  // 1 = highest priority, null = default order
+  manufacturingBatch?: string;     // Optional batch grouping (e.g., "Batch A", "Carcase parts")
+  
   // Notes
   notes?: string;
   
@@ -1002,3 +1014,6 @@ export interface ConsolidatedEstimate {
   quickbooksInvoiceId?: string;
   quickbooksInvoiceNumber?: string;
 }
+
+// Re-export client portal types
+export * from './clientPortal';

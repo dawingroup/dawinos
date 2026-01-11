@@ -1,6 +1,7 @@
 /**
  * ShopTravelerSection Component
  * UI for generating and downloading shop traveler PDFs
+ * Supports section toggles for customized PDF output
  */
 
 import React, { useState } from 'react';
@@ -11,6 +12,10 @@ import {
   Loader2,
   Table,
   CheckCircle,
+  Settings2,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
 } from 'lucide-react';
 import { 
   downloadShopTraveler, 
@@ -18,6 +23,7 @@ import {
   downloadCutListCSV,
 } from '@/shared/services/pdf/shopTravelerService';
 import type { Project } from '@/shared/types';
+import type { ShopTravelerOptions } from '@/subsidiaries/finishes/design-manager/features/production/pdf/ShopTraveler';
 
 // ============================================
 // Types
@@ -26,9 +32,20 @@ import type { Project } from '@/shared/types';
 interface ShopTravelerSectionProps {
   project: Project;
   onError?: (error: string) => void;
+  onRefresh?: () => Promise<void>;
 }
 
 type DownloadType = 'pdf' | 'labels' | 'cutlist';
+
+// Default options for PDF generation
+const DEFAULT_OPTIONS: ShopTravelerOptions = {
+  includeCoverPage: true,
+  includeCuttingMaps: true,
+  includeEdgeBanding: true,
+  includeRemnants: true,
+  includeLabels: true,
+  includeQCCheckboxes: false,
+};
 
 // ============================================
 // Main Component
@@ -37,18 +54,39 @@ type DownloadType = 'pdf' | 'labels' | 'cutlist';
 export const ShopTravelerSection: React.FC<ShopTravelerSectionProps> = ({ 
   project,
   onError,
+  onRefresh,
 }) => {
   const [isGenerating, setIsGenerating] = useState<DownloadType | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastDownloaded, setLastDownloaded] = useState<DownloadType | null>(null);
+  const [showOptions, setShowOptions] = useState(false);
+  const [pdfOptions, setPdfOptions] = useState<ShopTravelerOptions>(DEFAULT_OPTIONS);
 
   const production = project.optimizationState?.production;
   const hasProduction = !!production && !!production.nestingSheets?.length;
   const isOutdated = !!production?.invalidatedAt;
 
+  const toggleOption = (key: keyof ShopTravelerOptions) => {
+    setPdfOptions(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleRefresh = async () => {
+    if (!onRefresh || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+    } catch (error: any) {
+      console.error('Refresh error:', error);
+      onError?.(error.message || 'Failed to refresh production data');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const handleDownloadPDF = async () => {
     setIsGenerating('pdf');
     try {
-      await downloadShopTraveler(project.id);
+      await downloadShopTraveler(project.id, pdfOptions);
       setLastDownloaded('pdf');
     } catch (error: any) {
       console.error('PDF generation error:', error);
@@ -92,12 +130,25 @@ export const ShopTravelerSection: React.FC<ShopTravelerSectionProps> = ({
           <FileText className="w-5 h-5 text-blue-600" />
           <h4 className="font-medium text-gray-900">Shop Traveler</h4>
         </div>
-        {hasProduction && !isOutdated && (
-          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">
-            <CheckCircle className="w-3 h-3" />
-            Ready
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {onRefresh && (
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
+              title="Refresh production data"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          )}
+          {hasProduction && !isOutdated && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+              <CheckCircle className="w-3 h-3" />
+              Ready
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="p-4 space-y-4">
@@ -126,6 +177,47 @@ export const ShopTravelerSection: React.FC<ShopTravelerSectionProps> = ({
             </div>
           </div>
         )}
+
+        {/* PDF Options Toggle */}
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <button
+            onClick={() => setShowOptions(!showOptions)}
+            className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors"
+          >
+            <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <Settings2 className="w-4 h-4" />
+              PDF Sections
+            </span>
+            {showOptions ? (
+              <ChevronUp className="w-4 h-4 text-gray-500" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-gray-500" />
+            )}
+          </button>
+          
+          {showOptions && (
+            <div className="p-3 space-y-2 border-t border-gray-200">
+              {[
+                { key: 'includeCoverPage' as const, label: 'Cover Page' },
+                { key: 'includeCuttingMaps' as const, label: 'Cutting Maps' },
+                { key: 'includeEdgeBanding' as const, label: 'Edge Banding Schedule' },
+                { key: 'includeRemnants' as const, label: 'Remnant Register' },
+                { key: 'includeLabels' as const, label: 'Part Labels' },
+                { key: 'includeQCCheckboxes' as const, label: 'QC Checkboxes' },
+              ].map(({ key, label }) => (
+                <label key={key} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pdfOptions[key] ?? false}
+                    onChange={() => toggleOption(key)}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">{label}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Download Buttons */}
         <div className="space-y-3">

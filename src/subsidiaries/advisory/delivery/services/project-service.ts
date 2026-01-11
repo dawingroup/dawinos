@@ -83,25 +83,40 @@ export class ProjectService {
     const projectCount = await this.getProjectCountForProgram(data.programId);
     const projectCode = generateProjectCode(program.code, projectCount + 1);
 
+    // Build location from flat form data or nested location object
+    const locationData: ProjectLocation = {
+      ...getDefaultLocation(),
+      siteName: (data as any).siteName || (data.location as any)?.siteName || data.name,
+      region: (data as any).region || (data.location as any)?.region || '',
+      district: (data as any).district || (data.location as any)?.district || '',
+      subcounty: (data as any).subcounty || (data.location as any)?.subcounty || '',
+    };
+
     // Build project
     const projectData: Omit<Project, 'id'> = {
       programId: data.programId,
-      engagementId: program.engagementId,
+      engagementId: program.engagementId || '',
       projectCode,
       name: data.name,
-      description: data.description,
+      description: data.description || '',
+      // Customer link (inherit from program or use provided values)
+      customerId: data.customerId || program.customerId,
+      customerName: data.customerName || program.customerName,
       status: 'planning',
-      implementationType: program.implementationType,
-      projectType: data.projectType,
-      location: {
-        ...getDefaultLocation(),
-        ...data.location,
-        siteName: data.location.siteName || data.name,
-      } as ProjectLocation,
+      implementationType: program.implementationType || 'direct',
+      projectType: data.projectType || 'new_construction',
+      location: locationData,
       scope: getDefaultScope(),
-      budget: initializeProjectBudget(data.budgetAmount, data.budgetCurrency, userId),
+      budget: initializeProjectBudget(
+        (data as any).totalBudget || data.budgetAmount || 0,
+        (data as any).currency || data.budgetCurrency || 'UGX',
+        userId
+      ),
       progress: initializeProjectProgress(),
-      timeline: initializeProjectTimeline(data.estimatedStartDate, data.estimatedEndDate),
+      timeline: initializeProjectTimeline(
+        (data as any).startDate || data.estimatedStartDate,
+        (data as any).endDate || data.estimatedEndDate
+      ),
       matflowLinked: false,
       createdAt: Timestamp.now(),
       createdBy: userId,
@@ -146,6 +161,37 @@ export class ProjectService {
     } as Project;
   }
 
+  async getAllProjects(
+    options: {
+      status?: ProjectStatus[];
+      orderByField?: 'name' | 'createdAt' | 'status';
+      orderDirection?: 'asc' | 'desc';
+      limitCount?: number;
+    } = {}
+  ): Promise<Project[]> {
+    const constraints: QueryConstraint[] = [];
+
+    if (options.status?.length) {
+      constraints.push(where('status', 'in', options.status));
+    }
+
+    constraints.push(
+      orderBy(options.orderByField || 'createdAt', options.orderDirection || 'desc')
+    );
+
+    if (options.limitCount) {
+      constraints.push(limit(options.limitCount));
+    }
+
+    const q = query(collection(this.db, PROJECTS_PATH), ...constraints);
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Project[];
+  }
+
   async getProjectsByProgram(
     programId: string,
     options: {
@@ -174,6 +220,20 @@ export class ProjectService {
     const q = query(collection(this.db, PROJECTS_PATH), ...constraints);
     const snapshot = await getDocs(q);
 
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Project[];
+  }
+
+  async getProjectsByCustomer(customerId: string): Promise<Project[]> {
+    const q = query(
+      collection(this.db, PROJECTS_PATH),
+      where('customerId', '==', customerId),
+      orderBy('createdAt', 'desc')
+    );
+
+    const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
@@ -533,10 +593,16 @@ export class ProjectService {
 
   async deleteProject(
     projectId: string,
-    userId: string,
-    reason?: string
+    _userId: string,
+    _reason?: string
   ): Promise<void> {
-    await this.updateProjectStatus(projectId, 'cancelled', userId, reason);
+    // Hard delete the project document
+    const projectRef = doc(this.db, PROJECTS_PATH, projectId);
+    const batch = writeBatch(this.db);
+    batch.delete(projectRef);
+    await batch.commit();
+    
+    console.log(`Deleted project ${projectId}`);
   }
 
   // ─────────────────────────────────────────────────────────────────

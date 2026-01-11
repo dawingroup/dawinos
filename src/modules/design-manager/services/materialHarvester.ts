@@ -263,6 +263,7 @@ export async function harvestMaterials(
 
 /**
  * Map a material to inventory
+ * If unitCost is 0 or undefined, automatically fetches price from inventory item
  */
 export async function mapMaterialToInventory(
   projectId: string,
@@ -270,10 +271,25 @@ export async function mapMaterialToInventory(
   inventoryId: string,
   inventoryName: string,
   inventorySku: string,
-  unitCost: number,
+  unitCost: number | undefined,
   stockSheets: OptimizationStockSheet[],
   userId: string
 ): Promise<void> {
+  // Auto-fetch price from inventory if not provided or zero
+  let resolvedUnitCost = unitCost || 0;
+  if (resolvedUnitCost === 0) {
+    try {
+      const inventoryRef = doc(db, 'inventoryItems', inventoryId);
+      const inventorySnap = await getDoc(inventoryRef);
+      if (inventorySnap.exists()) {
+        const inventoryData = inventorySnap.data();
+        resolvedUnitCost = inventoryData.pricing?.costPerUnit || 0;
+        console.log(`[MaterialHarvester] Auto-fetched price for ${inventoryName}: ${resolvedUnitCost}`);
+      }
+    } catch (error) {
+      console.warn(`[MaterialHarvester] Failed to auto-fetch price for ${inventoryName}:`, error);
+    }
+  }
   const projectRef = doc(db, PROJECTS_COLLECTION, projectId);
   const projectSnap = await getDoc(projectRef);
   
@@ -303,13 +319,13 @@ export async function mapMaterialToInventory(
     nanoseconds: now.nanoseconds,
   };
   
-  // Update entry
+  // Update entry with resolved price (auto-fetched from inventory if needed)
   palette.entries[entryIndex] = {
     ...entry,
     inventoryId,
     inventoryName,
     inventorySku,
-    unitCost,
+    unitCost: resolvedUnitCost,
     stockSheets,
     mappedAt: timestamp,
     mappedBy: userId,
@@ -494,6 +510,141 @@ async function invalidateKatanaBOM(
  */
 function generateId(): string {
   return `mat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Sync material palette prices from linked inventory items
+ * Call this after Katana sync to update unitCost from the latest inventory prices
+ */
+export async function syncPalettePricesFromInventory(
+  projectId: string,
+  userId: string
+): Promise<{ updated: number; errors: string[] }> {
+  const projectRef = doc(db, PROJECTS_COLLECTION, projectId);
+  const projectSnap = await getDoc(projectRef);
+  
+  if (!projectSnap.exists()) {
+    throw new Error('Project not found');
+  }
+  
+  const project = { id: projectSnap.id, ...projectSnap.data() } as Project;
+  const palette = project.materialPalette;
+  
+  if (!palette || palette.entries.length === 0) {
+    return { updated: 0, errors: [] };
+  }
+  
+  const result = { updated: 0, errors: [] as string[] };
+  let hasChanges = false;
+  
+  // Get all inventory items in one query for efficiency
+  const inventoryRef = collection(db, 'inventoryItems');
+  const inventorySnapshot = await getDocs(inventoryRef);
+  
+  // Build lookup map by ID and SKU
+  const inventoryByIdMap = new Map<string, { costPerUnit: number; inStock: number }>();
+  const inventoryBySkuMap = new Map<string, { costPerUnit: number; inStock: number }>();
+  
+  for (const docSnap of inventorySnapshot.docs) {
+    const data = docSnap.data();
+    const costPerUnit = data.pricing?.costPerUnit || 0;
+    const inStock = data.inventory?.inStock || 0;
+    
+    inventoryByIdMap.set(docSnap.id, { costPerUnit, inStock });
+    if (data.sku) {
+      inventoryBySkuMap.set(data.sku, { costPerUnit, inStock });
+    }
+  }
+  
+  // Update palette entries with latest prices
+  for (let i = 0; i < palette.entries.length; i++) {
+    const entry = palette.entries[i];
+    
+    if (!entry.inventoryId && !entry.inventorySku) {
+      continue; // Not mapped to inventory
+    }
+    
+    // Look up by ID first, then by SKU
+    let inventoryData = entry.inventoryId 
+      ? inventoryByIdMap.get(entry.inventoryId)
+      : undefined;
+    
+    if (!inventoryData && entry.inventorySku) {
+      inventoryData = inventoryBySkuMap.get(entry.inventorySku);
+    }
+    
+    if (inventoryData && inventoryData.costPerUnit > 0) {
+      const currentCost = entry.unitCost || 0;
+      
+      // Only update if price changed
+      if (currentCost !== inventoryData.costPerUnit) {
+        palette.entries[i] = {
+          ...entry,
+          unitCost: inventoryData.costPerUnit,
+          updatedAt: {
+            seconds: Math.floor(Date.now() / 1000),
+            nanoseconds: 0,
+          },
+        };
+        hasChanges = true;
+        result.updated++;
+        console.log(`[MaterialHarvester] Updated price for ${entry.designName}: ${currentCost} -> ${inventoryData.costPerUnit}`);
+      }
+    }
+  }
+  
+  // Save if changes were made
+  if (hasChanges) {
+    await updateDoc(projectRef, {
+      materialPalette: palette,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId,
+    });
+    
+    // Invalidate estimation since costs changed
+    await invalidateEstimation(
+      projectId,
+      userId,
+      `Material prices updated from inventory sync (${result.updated} items)`
+    );
+  }
+  
+  return result;
+}
+
+/**
+ * Sync all projects' material palette prices from inventory
+ * Called after Katana sync to propagate price changes
+ */
+export async function syncAllProjectPricesFromInventory(
+  userId: string
+): Promise<{ projectsUpdated: number; totalMaterialsUpdated: number }> {
+  const projectsRef = collection(db, PROJECTS_COLLECTION);
+  const projectsSnapshot = await getDocs(projectsRef);
+  
+  let projectsUpdated = 0;
+  let totalMaterialsUpdated = 0;
+  
+  for (const projectDoc of projectsSnapshot.docs) {
+    const projectData = projectDoc.data();
+    
+    // Only process projects with material palettes that have mapped materials
+    if (projectData.materialPalette?.mappedCount > 0) {
+      try {
+        const result = await syncPalettePricesFromInventory(projectDoc.id, userId);
+        if (result.updated > 0) {
+          projectsUpdated++;
+          totalMaterialsUpdated += result.updated;
+        }
+      } catch (error) {
+        console.error(`Failed to sync prices for project ${projectDoc.id}:`, error);
+      }
+    }
+  }
+  
+  console.log(`[MaterialHarvester] Synced prices: ${totalMaterialsUpdated} materials across ${projectsUpdated} projects`);
+  
+  return { projectsUpdated, totalMaterialsUpdated };
 }
 
 /**

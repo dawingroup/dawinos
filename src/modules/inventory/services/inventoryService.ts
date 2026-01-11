@@ -100,7 +100,7 @@ function docToItem(id: string, data: any): InventoryItem {
     scopeId: data.scopeId,
     dimensions: data.dimensions,
     grainPattern: data.grainPattern,
-    pricing: data.pricing || { costPerUnit: 0, currency: 'KES', unit: 'sheet' },
+    pricing: data.pricing || { costPerUnit: 0, currency: 'UGX', unit: 'sheet' },
     inventory: data.inventory || { inStock: 0 },
     katanaSync: data.katanaSync || { isStandard: false, pendingPush: false },
     status: data.status || 'active',

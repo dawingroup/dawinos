@@ -33,7 +33,10 @@ async function handleMessage(message: { type: string; [key: string]: unknown }, 
       return getClipsFromStorage();
     
     case 'REQUEST_SYNC':
-      return { success: true };
+      return syncAllPendingClips();
+    
+    case 'GET_SYNC_STATUS':
+      return getSyncStatus();
     
     default:
       return { success: false, error: 'Unknown message type' };
@@ -469,6 +472,267 @@ async function syncClipToFirestore(clip: StoredClip): Promise<void> {
 async function getClipsFromStorage(): Promise<{ success: boolean; clips: StoredClip[] }> {
   const result = await chrome.storage.local.get(['clips']);
   return { success: true, clips: result.clips || [] };
+}
+
+/**
+ * Get current sync status
+ */
+async function getSyncStatus(): Promise<{ 
+  status: 'idle' | 'syncing' | 'error'; 
+  pendingCount: number;
+  lastSync: string | null;
+  error?: string;
+}> {
+  const result = await chrome.storage.local.get(['clips', 'lastSyncTime', 'syncError', 'isSyncing']);
+  const clips: StoredClip[] = result.clips || [];
+  const pendingCount = clips.filter(c => c.syncStatus === 'pending').length;
+  
+  return {
+    status: result.isSyncing ? 'syncing' : (result.syncError ? 'error' : 'idle'),
+    pendingCount,
+    lastSync: result.lastSyncTime || null,
+    error: result.syncError,
+  };
+}
+
+/**
+ * Sync all pending clips to Firestore
+ */
+async function syncAllPendingClips(): Promise<{ 
+  success: boolean; 
+  synced: number; 
+  failed: number; 
+  errors: string[] 
+}> {
+  const result: { success: boolean; synced: number; failed: number; errors: string[] } = {
+    success: true,
+    synced: 0,
+    failed: 0,
+    errors: [],
+  };
+
+  try {
+    // Set syncing state
+    await chrome.storage.local.set({ isSyncing: true, syncError: null });
+    
+    // Notify popup of sync start
+    chrome.runtime.sendMessage({ type: 'SYNC_STATUS_UPDATE', status: 'syncing' }).catch(() => {});
+
+    // Get user info
+    const userResult = await chrome.storage.local.get(['user']);
+    const user = userResult.user;
+    
+    if (!user?.uid) {
+      result.success = false;
+      result.errors.push('Not signed in');
+      await chrome.storage.local.set({ isSyncing: false, syncError: 'Not signed in' });
+      return result;
+    }
+
+    // Get all clips
+    const clipsResult = await chrome.storage.local.get(['clips']);
+    const clips: StoredClip[] = clipsResult.clips || [];
+    const pendingClips = clips.filter(c => c.syncStatus === 'pending');
+
+    if (pendingClips.length === 0) {
+      await chrome.storage.local.set({ isSyncing: false, lastSyncTime: new Date().toISOString() });
+      chrome.runtime.sendMessage({ type: 'SYNC_STATUS_UPDATE', status: 'idle', synced: 0 }).catch(() => {});
+      return result;
+    }
+
+    console.log(`Syncing ${pendingClips.length} pending clips...`);
+
+    // Get Firebase auth token
+    let firebaseIdToken: string;
+    let firebaseUid: string;
+    
+    try {
+      const authResult = await getFirebaseAuthToken();
+      firebaseIdToken = authResult.idToken;
+      firebaseUid = authResult.uid;
+    } catch (error) {
+      result.success = false;
+      result.errors.push('Authentication failed: ' + (error instanceof Error ? error.message : 'Unknown'));
+      await chrome.storage.local.set({ isSyncing: false, syncError: 'Authentication failed' });
+      return result;
+    }
+
+    // Sync each pending clip
+    for (const clip of pendingClips) {
+      try {
+        await syncSingleClip(clip, firebaseIdToken, firebaseUid);
+        result.synced++;
+        
+        // Update local clip status
+        const index = clips.findIndex(c => c.id === clip.id);
+        if (index !== -1) {
+          clips[index].syncStatus = 'synced';
+        }
+        
+        // Send progress update
+        chrome.runtime.sendMessage({ 
+          type: 'SYNC_PROGRESS', 
+          synced: result.synced, 
+          total: pendingClips.length 
+        }).catch(() => {});
+        
+      } catch (error) {
+        result.failed++;
+        result.errors.push(`${clip.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        console.error(`Failed to sync clip ${clip.id}:`, error);
+      }
+    }
+
+    // Save updated clips
+    await chrome.storage.local.set({ 
+      clips, 
+      isSyncing: false, 
+      lastSyncTime: new Date().toISOString(),
+      syncError: result.failed > 0 ? `${result.failed} clips failed to sync` : null,
+    });
+
+    result.success = result.failed === 0;
+    
+    // Notify completion
+    chrome.runtime.sendMessage({ 
+      type: 'SYNC_STATUS_UPDATE', 
+      status: result.success ? 'idle' : 'error',
+      synced: result.synced,
+      failed: result.failed,
+    }).catch(() => {});
+
+    console.log(`Sync complete: ${result.synced} synced, ${result.failed} failed`);
+    return result;
+
+  } catch (error) {
+    result.success = false;
+    result.errors.push(error instanceof Error ? error.message : 'Sync failed');
+    await chrome.storage.local.set({ isSyncing: false, syncError: 'Sync failed' });
+    return result;
+  }
+}
+
+/**
+ * Get Firebase ID token from Google OAuth token
+ */
+async function getFirebaseAuthToken(): Promise<{ idToken: string; uid: string }> {
+  // Get Google OAuth access token
+  const accessToken = await new Promise<string>((resolve, reject) => {
+    chrome.identity.getAuthToken({ interactive: false }, (token) => {
+      if (chrome.runtime.lastError || !token) {
+        reject(new Error(chrome.runtime.lastError?.message || 'No token available'));
+        return;
+      }
+      resolve(token);
+    });
+  });
+
+  // Exchange for Firebase ID token
+  const firebaseApiKey = 'AIzaSyCfSYtxRoHxp9bEUkVbCFTnMmq58QzUsg8';
+  const signInUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${firebaseApiKey}`;
+  
+  const response = await fetch(signInUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      postBody: `access_token=${accessToken}&providerId=google.com`,
+      requestUri: 'http://localhost',
+      returnSecureToken: true,
+      returnIdpCredential: true,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Firebase auth failed: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+  return { idToken: data.idToken, uid: data.localId };
+}
+
+/**
+ * Sync a single clip to Firestore
+ */
+async function syncSingleClip(clip: StoredClip, idToken: string, userId: string): Promise<void> {
+  const projectId = 'dawinos';
+  const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/designClips`;
+
+  // Build Firestore document
+  const fields: Record<string, unknown> = {
+    sourceUrl: { stringValue: clip.sourceUrl },
+    imageUrl: { stringValue: clip.imageUrl },
+    thumbnailUrl: { stringValue: clip.thumbnailDataUrl || clip.imageUrl },
+    title: { stringValue: clip.title },
+    tags: { arrayValue: { values: [] } },
+    syncStatus: { stringValue: 'synced' },
+    createdBy: { stringValue: userId },
+    createdAt: { timestampValue: clip.createdAt },
+    updatedAt: { timestampValue: new Date().toISOString() },
+    clipType: { stringValue: clip.clipType || 'inspiration' },
+    analysisStatus: { stringValue: clip.analysisStatus || 'pending' },
+  };
+
+  // Add optional fields
+  if (clip.projectId) fields.projectId = { stringValue: clip.projectId };
+  if (clip.designItemId) fields.designItemId = { stringValue: clip.designItemId };
+  if (clip.notes) fields.notes = { stringValue: clip.notes };
+  if (clip.brand) fields.brand = { stringValue: clip.brand };
+  if (clip.sku) fields.sku = { stringValue: clip.sku };
+  if (clip.description) fields.description = { stringValue: clip.description };
+  
+  if (clip.price) {
+    fields.price = {
+      mapValue: {
+        fields: {
+          amount: { doubleValue: clip.price.amount },
+          currency: { stringValue: clip.price.currency },
+          formatted: { stringValue: clip.price.formatted },
+        }
+      }
+    };
+  }
+  
+  if (clip.dimensions) {
+    fields.dimensions = {
+      mapValue: {
+        fields: {
+          width: { doubleValue: clip.dimensions.width },
+          height: { doubleValue: clip.dimensions.height },
+          ...(clip.dimensions.depth ? { depth: { doubleValue: clip.dimensions.depth } } : {}),
+          unit: { stringValue: clip.dimensions.unit },
+        }
+      }
+    };
+  }
+  
+  if (clip.materials && clip.materials.length > 0) {
+    fields.materials = {
+      arrayValue: { values: clip.materials.map(m => ({ stringValue: m })) }
+    };
+  }
+  
+  if (clip.colors && clip.colors.length > 0) {
+    fields.colors = {
+      arrayValue: { values: clip.colors.map(c => ({ stringValue: c })) }
+    };
+  }
+
+  const response = await fetch(firestoreUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${idToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ fields }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Firestore error: ${response.status} ${errorText}`);
+  }
+
+  console.log(`Clip ${clip.id} synced to Firestore`);
 }
 
 // Setup on install

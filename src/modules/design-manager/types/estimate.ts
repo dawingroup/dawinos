@@ -87,6 +87,16 @@ export interface ConsolidatedEstimate {
   quickbooksInvoiceId?: string;
   quickbooksInvoiceNumber?: string;
   syncedAt?: Timestamp;
+  
+  // Error checking (for verifying design item costs match estimation)
+  errorChecks?: Array<{
+    itemId: string;
+    itemName: string;
+    issue: string;
+  }>;
+  designItemCount?: number;
+  lineItemCount?: number;
+  hasErrors?: boolean;
 }
 
 /**

@@ -28,6 +28,7 @@ import type {
 } from '@/shared/types';
 import type { PartEntry } from '@/modules/design-manager/types';
 import { optimizationService, type Panel, type OptimizationResult } from './OptimizationService';
+import { getMaterialPriceByName } from '@/modules/inventory/services/inventoryPriceService';
 import { updateOptimizationRAG } from '../ragService';
 
 // Collection names
@@ -94,6 +95,7 @@ export interface EdgeBandItem {
 
 /**
  * Aggregate all parts from design items in a project
+ * Multiplies part quantities by the design item's requiredQuantity
  */
 export async function aggregatePartsFromProject(projectId: string): Promise<CutlistPart[]> {
   const parts: CutlistPart[] = [];
@@ -107,10 +109,16 @@ export async function aggregatePartsFromProject(projectId: string): Promise<Cutl
     const designItemId = itemDoc.id;
     const designItemName = itemData.name || itemData.itemCode || 'Unknown';
     
+    // Get the design item's required quantity (how many of this item are needed)
+    const requiredQuantity = itemData.requiredQuantity || 1;
+    
     // Get parts from the design item
     const itemParts: PartEntry[] = itemData.parts || [];
     
     for (const part of itemParts) {
+      // Multiply part quantity by design item's required quantity
+      const totalQuantity = part.quantity * requiredQuantity;
+      
       parts.push({
         id: part.id,
         partNumber: part.partNumber,
@@ -120,7 +128,7 @@ export async function aggregatePartsFromProject(projectId: string): Promise<Cutl
         length: part.length,
         width: part.width,
         thickness: part.thickness,
-        quantity: part.quantity,
+        quantity: totalQuantity,  // Total = part qty × design item qty
         materialId: part.materialId || '',
         materialName: part.materialName,
         grainDirection: part.grainDirection,
@@ -133,20 +141,254 @@ export async function aggregatePartsFromProject(projectId: string): Promise<Cutl
 }
 
 /**
- * Convert CutlistParts to optimization Panel format
+ * Aggregate standard parts (hinges, screws, edging) from all design items
+ * Multiplies quantities by design item's requiredQuantity
  */
-function partsToOptimizationPanels(parts: CutlistPart[]): Panel[] {
-  return parts.map(part => ({
-    id: part.id,
-    label: `${part.designItemName} - ${part.name}`,
-    cabinet: part.designItemName,
-    material: part.materialName,
-    thickness: part.thickness,
-    length: part.length,
-    width: part.width,
-    quantity: part.quantity,
-    grain: part.grainDirection === 'none' ? 0 : 1,
-  }));
+export async function aggregateStandardPartsFromProject(projectId: string): Promise<Array<{
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  unitCost: number;
+  designItemId: string;
+  designItemName: string;
+}>> {
+  const parts: Array<{
+    id: string;
+    name: string;
+    category: string;
+    quantity: number;
+    unitCost: number;
+    designItemId: string;
+    designItemName: string;
+  }> = [];
+  
+  const itemsRef = collection(db, PROJECTS_COLLECTION, projectId, DESIGN_ITEMS_SUBCOLLECTION);
+  const itemsSnapshot = await getDocs(itemsRef);
+  
+  for (const itemDoc of itemsSnapshot.docs) {
+    const itemData = itemDoc.data();
+    const designItemId = itemDoc.id;
+    const designItemName = itemData.name || itemData.itemCode || 'Unknown';
+    const requiredQuantity = itemData.requiredQuantity || 1;
+    
+    const manufacturing = itemData.manufacturing || {};
+    const standardParts = manufacturing.standardParts || [];
+    
+    for (const part of standardParts) {
+      parts.push({
+        id: part.id,
+        name: part.name,
+        category: part.category || 'other',
+        quantity: (part.quantity || 1) * requiredQuantity,
+        unitCost: part.unitCost || 0,
+        designItemId,
+        designItemName,
+      });
+    }
+  }
+  
+  return parts;
+}
+
+/**
+ * Aggregate special parts (luxury/approved items) from all design items
+ * Multiplies quantities by design item's requiredQuantity
+ */
+export async function aggregateSpecialPartsFromProject(projectId: string): Promise<Array<{
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  supplier: string;
+  costing?: {
+    currency: string;
+    unitCost: number;
+    totalLandedCost: number;
+  };
+  designItemId: string;
+  designItemName: string;
+}>> {
+  const parts: Array<{
+    id: string;
+    name: string;
+    category: string;
+    quantity: number;
+    supplier: string;
+    costing?: {
+      currency: string;
+      unitCost: number;
+      totalLandedCost: number;
+    };
+    designItemId: string;
+    designItemName: string;
+  }> = [];
+  
+  const itemsRef = collection(db, PROJECTS_COLLECTION, projectId, DESIGN_ITEMS_SUBCOLLECTION);
+  const itemsSnapshot = await getDocs(itemsRef);
+  
+  for (const itemDoc of itemsSnapshot.docs) {
+    const itemData = itemDoc.data();
+    const designItemId = itemDoc.id;
+    const designItemName = itemData.name || itemData.itemCode || 'Unknown';
+    const requiredQuantity = itemData.requiredQuantity || 1;
+    
+    const manufacturing = itemData.manufacturing || {};
+    const specialParts = manufacturing.specialParts || [];
+    
+    for (const part of specialParts) {
+      parts.push({
+        id: part.id,
+        name: part.name,
+        category: part.category || 'other',
+        quantity: (part.quantity || 1) * requiredQuantity,
+        supplier: part.supplier || '',
+        costing: part.costing,
+        designItemId,
+        designItemName,
+      });
+    }
+  }
+  
+  return parts;
+}
+
+/**
+ * Build a mapping from design material names to inventory material names
+ * Multiple design materials may map to the same inventory material
+ * This consolidation prevents over-buying sheets
+ */
+function buildDesignToInventoryMaterialMap(
+  project: Project
+): Map<string, { inventoryName: string; inventoryId?: string }> {
+  const mapping = new Map<string, { inventoryName: string; inventoryId?: string }>();
+  const materialPalette = project.materialPalette?.entries || [];
+  
+  for (const entry of materialPalette) {
+    if (entry.inventoryName) {
+      mapping.set(entry.designName, {
+        inventoryName: entry.inventoryName,
+        inventoryId: entry.inventoryId,
+      });
+      // Also map by normalized name for fuzzy matching
+      if (entry.normalizedName && entry.normalizedName !== entry.designName) {
+        mapping.set(entry.normalizedName, {
+          inventoryName: entry.inventoryName,
+          inventoryId: entry.inventoryId,
+        });
+      }
+    }
+  }
+  
+  return mapping;
+}
+
+/**
+ * Convert CutlistParts to optimization Panel format
+ * Uses inventory material name for grouping when available (via materialMap)
+ * This ensures parts with different design materials but same inventory material
+ * are nested together on the same sheets
+ */
+function partsToOptimizationPanels(
+  parts: CutlistPart[],
+  materialMap?: Map<string, { inventoryName: string; inventoryId?: string }>
+): Panel[] {
+  return parts.map(part => {
+    // Use inventory material if mapped, otherwise use design material
+    const mappedMaterial = materialMap?.get(part.materialName);
+    const nestingMaterial = mappedMaterial?.inventoryName || part.materialName;
+    
+    return {
+      id: part.id,
+      label: `${part.designItemName} - ${part.name}`,
+      cabinet: part.designItemName,
+      material: nestingMaterial, // Use inventory material for nesting grouping
+      thickness: part.thickness,
+      length: part.length,
+      width: part.width,
+      quantity: part.quantity,
+      grain: part.grainDirection === 'none' ? 0 : 1,
+    };
+  });
+}
+
+/**
+ * Fetch dynamic material costs from material palette mappings
+ * Uses the MAPPED inventory material's cost, not the design material name
+ * Returns a map of design material name -> cost per sheet
+ */
+async function fetchMaterialCosts(
+  parts: CutlistPart[],
+  project: Project
+): Promise<Record<string, number>> {
+  const costs: Record<string, number> = {};
+  const uniqueMaterials = new Map<string, number>(); // material -> thickness
+  
+  // Get unique materials from parts
+  for (const part of parts) {
+    if (part.materialName && !uniqueMaterials.has(part.materialName)) {
+      uniqueMaterials.set(part.materialName, part.thickness);
+    }
+  }
+  
+  // Get material palette from project
+  const materialPalette = project.materialPalette?.entries || [];
+  
+  for (const [designMaterialName, thickness] of uniqueMaterials) {
+    const normalizedName = designMaterialName.toLowerCase().trim();
+    
+    // 1. First priority: Look up in material palette (mapped materials)
+    const paletteEntry = materialPalette.find(
+      entry => entry.designName === designMaterialName || 
+               entry.normalizedName === normalizedName
+    );
+    
+    if (paletteEntry?.unitCost && paletteEntry.unitCost > 0) {
+      // Use the mapped material's cost from palette
+      costs[designMaterialName] = paletteEntry.unitCost;
+      continue;
+    }
+    
+    // 2. Second priority: Try inventory lookup by mapped inventory name
+    if (paletteEntry?.inventoryName) {
+      try {
+        const priceResult = await getMaterialPriceByName(
+          paletteEntry.inventoryName, 
+          thickness, 
+          project.id
+        );
+        if (priceResult.found && priceResult.price?.costPerUnit) {
+          costs[designMaterialName] = priceResult.price.costPerUnit;
+          continue;
+        }
+      } catch {
+        // Continue to fallback
+      }
+    }
+    
+    // 3. Third priority: Try inventory lookup by design name (legacy)
+    try {
+      const priceResult = await getMaterialPriceByName(designMaterialName, thickness, project.id);
+      if (priceResult.found && priceResult.price?.costPerUnit) {
+        costs[designMaterialName] = priceResult.price.costPerUnit;
+        continue;
+      }
+    } catch {
+      // Continue to fallback
+    }
+    
+    // 4. Fallback pricing
+    if (!costs[designMaterialName]) {
+      const fallbackPrices: Record<number, number> = {
+        3: 45000, 6: 65000, 9: 85000, 12: 105000, 15: 125000,
+        16: 135000, 18: 155000, 22: 185000, 25: 210000,
+      };
+      costs[designMaterialName] = fallbackPrices[thickness] || 150000;
+      console.warn(`[Estimation] No mapped cost for "${designMaterialName}", using fallback`);
+    }
+  }
+  
+  return costs;
 }
 
 // ============================================
@@ -178,35 +420,86 @@ export async function runProjectEstimation(
     throw new Error('No parts found in project design items');
   }
   
-  // Convert to optimization format
-  const panels = partsToOptimizationPanels(parts);
+  // Build material map to consolidate design materials to inventory materials
+  // This prevents over-buying when multiple design materials map to the same inventory material
+  const materialMap = buildDesignToInventoryMaterialMap(project);
+  
+  // Convert to optimization format using inventory materials for grouping
+  const panels = partsToOptimizationPanels(parts, materialMap);
   
   // Get config or use defaults
   const config = project.optimizationState?.config;
-  const stockSheets = config?.stockSheets?.reduce((acc, sheet) => {
-    acc[sheet.materialName] = {
-      material: sheet.materialName,
-      length: sheet.length,
-      width: sheet.width,
-      thickness: sheet.thickness,
-      cost: sheet.costPerSheet,
-    };
-    return acc;
-  }, {} as Record<string, { material: string; length: number; width: number; thickness: number; cost: number }>) || undefined;
+  
+  // Fetch dynamic material costs from material palette mappings
+  const dynamicCosts = await fetchMaterialCosts(parts, project);
+  
+  // Build stock sheets with dynamic costs
+  const stockSheets: Record<string, { material: string; length: number; width: number; thickness: number; cost: number }> = {};
+  
+  // First, use config stock sheets as base (for dimensions)
+  if (config?.stockSheets) {
+    for (const sheet of config.stockSheets) {
+      stockSheets[sheet.materialName] = {
+        material: sheet.materialName,
+        length: sheet.length,
+        width: sheet.width,
+        thickness: sheet.thickness,
+        // Override with dynamic cost from inventory
+        cost: dynamicCosts[sheet.materialName] || sheet.costPerSheet,
+      };
+    }
+  }
+  
+  // Add any materials from parts that aren't in config
+  // Use inventory material name for grouping (matches what partsToOptimizationPanels uses)
+  for (const part of parts) {
+    const mappedMaterial = materialMap.get(part.materialName);
+    const inventoryMaterial = mappedMaterial?.inventoryName || part.materialName;
+    
+    if (inventoryMaterial && !stockSheets[inventoryMaterial]) {
+      stockSheets[inventoryMaterial] = {
+        material: inventoryMaterial,
+        length: 2440,  // Default sheet size
+        width: 1220,
+        thickness: part.thickness,
+        cost: dynamicCosts[part.materialName] || 150000,
+      };
+    }
+  }
   
   // Run estimation optimization
   const result = optimizationService.optimize(panels, {
     mode: 'ESTIMATION',
     bladeKerf: config?.kerf || 4,
-    stockSheets,
+    stockSheets: Object.keys(stockSheets).length > 0 ? stockSheets : undefined,
   });
+  
+  // Aggregate standard and special parts for cost calculation
+  const [standardParts, specialParts] = await Promise.all([
+    aggregateStandardPartsFromProject(projectId),
+    aggregateSpecialPartsFromProject(projectId),
+  ]);
+  
+  // Calculate standard parts cost (quantity × unitCost)
+  const standardPartsCost = standardParts.reduce(
+    (sum, p) => sum + (p.quantity * p.unitCost), 0
+  );
+  
+  // Calculate special parts cost (unitCost × quantity for proper multiplication)
+  // Note: totalLandedCost is per-entry before requiredQuantity multiplication
+  const specialPartsCost = specialParts.reduce(
+    (sum, p) => sum + (p.quantity * (p.costing?.unitCost || 0)), 0
+  );
   
   // Convert to EstimationResult format
   const sheetSummary = buildSheetSummary(result, parts);
   const wasteEstimate = result.totalWastedArea / (result.totalUsedArea + result.totalWastedArea) * 100;
   
-  // Add 15% buffer to estimation
+  // Add 15% buffer to sheet material estimation
   const bufferedCost = (result.estimatedMaterialCost || 0) * 1.15;
+  
+  // Total cost includes all components
+  const totalCost = bufferedCost + standardPartsCost + specialPartsCost;
   
   const now = FirestoreTimestamp.now();
   const timestamp: Timestamp = {
@@ -217,9 +510,14 @@ export async function runProjectEstimation(
   const estimation: EstimationResult = {
     sheetSummary,
     roughCost: bufferedCost,
+    standardPartsCost,
+    specialPartsCost,
+    totalCost,
     wasteEstimate,
     totalPartsCount: result.totalPanels,
     totalSheetsCount: result.totalSheets,
+    totalStandardParts: standardParts.reduce((sum, p) => sum + p.quantity, 0),
+    totalSpecialParts: specialParts.reduce((sum, p) => sum + p.quantity, 0),
     validAt: timestamp,
   };
   
@@ -227,9 +525,14 @@ export async function runProjectEstimation(
   await updateDoc(projectRef, {
     'optimizationState.estimation.sheetSummary': estimation.sheetSummary,
     'optimizationState.estimation.roughCost': estimation.roughCost,
+    'optimizationState.estimation.standardPartsCost': estimation.standardPartsCost,
+    'optimizationState.estimation.specialPartsCost': estimation.specialPartsCost,
+    'optimizationState.estimation.totalCost': estimation.totalCost,
     'optimizationState.estimation.wasteEstimate': estimation.wasteEstimate,
     'optimizationState.estimation.totalPartsCount': estimation.totalPartsCount,
     'optimizationState.estimation.totalSheetsCount': estimation.totalSheetsCount,
+    'optimizationState.estimation.totalStandardParts': estimation.totalStandardParts,
+    'optimizationState.estimation.totalSpecialParts': estimation.totalSpecialParts,
     'optimizationState.estimation.validAt': estimation.validAt,
     'optimizationState.estimation.invalidatedAt': deleteField(),
     'optimizationState.estimation.invalidationReasons': deleteField(),
@@ -314,21 +617,50 @@ export async function runProjectProduction(
     throw new Error('No parts found in project design items');
   }
   
-  // Convert to optimization format
-  const panels = partsToOptimizationPanels(parts);
+  // Build material map to consolidate design materials to inventory materials
+  // This prevents over-buying when multiple design materials map to the same inventory material
+  const materialMap = buildDesignToInventoryMaterialMap(project);
+  
+  // Convert to optimization format using inventory materials for grouping
+  const panels = partsToOptimizationPanels(parts, materialMap);
   
   // Get config
   const config = project.optimizationState?.config;
-  const stockSheets = config?.stockSheets?.reduce((acc, sheet) => {
-    acc[sheet.materialName] = {
-      material: sheet.materialName,
-      length: sheet.length,
-      width: sheet.width,
-      thickness: sheet.thickness,
-      cost: sheet.costPerSheet,
-    };
-    return acc;
-  }, {} as Record<string, { material: string; length: number; width: number; thickness: number; cost: number }>) || undefined;
+  
+  // Fetch dynamic material costs from material palette mappings
+  const dynamicCosts = await fetchMaterialCosts(parts, project);
+  
+  // Build stock sheets with dynamic costs
+  const stockSheets: Record<string, { material: string; length: number; width: number; thickness: number; cost: number }> = {};
+  
+  if (config?.stockSheets) {
+    for (const sheet of config.stockSheets) {
+      stockSheets[sheet.materialName] = {
+        material: sheet.materialName,
+        length: sheet.length,
+        width: sheet.width,
+        thickness: sheet.thickness,
+        cost: dynamicCosts[sheet.materialName] || sheet.costPerSheet,
+      };
+    }
+  }
+  
+  // Add any materials from parts that aren't in config
+  // Use inventory material name for grouping (matches what partsToOptimizationPanels uses)
+  for (const part of parts) {
+    const mappedMaterial = materialMap.get(part.materialName);
+    const inventoryMaterial = mappedMaterial?.inventoryName || part.materialName;
+    
+    if (inventoryMaterial && !stockSheets[inventoryMaterial]) {
+      stockSheets[inventoryMaterial] = {
+        material: inventoryMaterial,
+        length: 2440,
+        width: 1220,
+        thickness: part.thickness,
+        cost: dynamicCosts[part.materialName] || 150000,
+      };
+    }
+  }
   
   // Run production optimization
   const result = optimizationService.optimize(panels, {
@@ -393,6 +725,8 @@ function buildNestingSheets(result: OptimizationResult, parts: CutlistPart[]): N
         p.panel.label.includes(part.name) || p.panel.id === part.id
       );
       
+      // Store PLACED dimensions (already accounting for rotation)
+      // These match what the NestingStudio displays
       return {
         partId: p.panel.id || `part-${index}`,
         partName: p.label,
@@ -400,15 +734,27 @@ function buildNestingSheets(result: OptimizationResult, parts: CutlistPart[]): N
         designItemName: originalPart?.designItemName || '',
         x: p.x,
         y: p.y,
-        length: p.width,
-        width: p.height,
+        length: p.width,   // Placed width (horizontal on sheet)
+        width: p.height,   // Placed height (vertical on sheet)
         rotated: p.rotated,
         grainAligned: !p.rotated || p.panel.grain === 0,
+        // Copy edge banding from original part data
+        edgeBanding: originalPart?.edgeBanding ? {
+          top: originalPart.edgeBanding.top,
+          bottom: originalPart.edgeBanding.bottom,
+          left: originalPart.edgeBanding.left,
+          right: originalPart.edgeBanding.right,
+        } : undefined,
       };
     });
     
-    // Calculate waste regions
-    const wasteRegions = calculateWasteRegions(sheet, placements);
+    // Calculate waste regions from guillotine cut algorithm
+    const wasteRegions = calculateWasteRegions({
+      width: sheet.width,
+      height: sheet.height,
+      wastedArea: sheet.wastedArea,
+      wasteRegions: sheet.wasteRegions,
+    }, placements);
     
     return {
       id: sheet.id,
@@ -426,25 +772,43 @@ function buildNestingSheets(result: OptimizationResult, parts: CutlistPart[]): N
 }
 
 /**
- * Calculate waste regions on a sheet
+ * Calculate waste regions on a sheet from guillotine cut free rectangles
+ * For panel saw cutting, waste regions are the remaining free rectangles after all parts are placed
  */
 function calculateWasteRegions(
-  sheet: { width: number; height: number; wastedArea: number },
-  _placements: PartPlacement[]
+  sheet: { width: number; height: number; wastedArea: number; wasteRegions?: { x: number; y: number; width: number; height: number }[] },
+  _placements: PartPlacement[],
+  minimumUsableSize: { width: number; height: number } = { width: 200, height: 200 }
 ): WasteRegion[] {
-  // Simplified waste region calculation
-  // A full implementation would use computational geometry
   const regions: WasteRegion[] = [];
   
-  if (sheet.wastedArea > 0) {
-    // Create a single waste region for now
+  // Use actual waste regions from guillotine algorithm if available
+  if (sheet.wasteRegions && sheet.wasteRegions.length > 0) {
+    for (const rect of sheet.wasteRegions) {
+      const area = rect.width * rect.height;
+      // A region is reusable if both dimensions are >= minimum usable size
+      const reusable = rect.width >= minimumUsableSize.width && rect.height >= minimumUsableSize.height;
+      
+      regions.push({
+        x: rect.x,
+        y: rect.y,
+        length: rect.width,   // Horizontal dimension
+        width: rect.height,   // Vertical dimension
+        area,
+        reusable,
+      });
+    }
+  } else if (sheet.wastedArea > 0) {
+    // Fallback: create estimated waste region if no detailed regions available
+    // This shouldn't happen with panel saw cuts but provides backwards compatibility
+    const estimatedSide = Math.sqrt(sheet.wastedArea);
     regions.push({
-      x: 0,
-      y: 0,
-      length: 100,
-      width: 100,
+      x: sheet.width - estimatedSide,
+      y: sheet.height - estimatedSide,
+      length: estimatedSide,
+      width: estimatedSide,
       area: sheet.wastedArea,
-      reusable: sheet.wastedArea > (300 * 300), // Reusable if > 300x300mm
+      reusable: estimatedSide >= minimumUsableSize.width && estimatedSide >= minimumUsableSize.height,
     });
   }
   

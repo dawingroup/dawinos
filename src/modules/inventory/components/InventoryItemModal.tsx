@@ -32,7 +32,7 @@ interface InventoryItemModalProps {
   userId: string;
 }
 
-const CURRENCIES = ['KES', 'UGX', 'USD'];
+const CURRENCIES = ['UGX', 'KES', 'USD'];
 
 export function InventoryItemModal({
   isOpen,
@@ -54,7 +54,7 @@ export function InventoryItemModal({
   const [subcategory, setSubcategory] = useState('');
   const [tags, setTags] = useState('');
   const [costPerUnit, setCostPerUnit] = useState<number>(0);
-  const [currency, setCurrency] = useState('KES');
+  const [currency, setCurrency] = useState('UGX');
   const [unit, setUnit] = useState<InventoryUnit>('sheet');
   const [thickness, setThickness] = useState<number | ''>('');
   const [length, setLength] = useState<number | ''>('');
@@ -88,7 +88,7 @@ export function InventoryItemModal({
         setSubcategory(item.subcategory || '');
         setTags(item.tags?.join(', ') || '');
         setCostPerUnit(item.pricing?.costPerUnit || 0);
-        setCurrency(item.pricing?.currency || 'KES');
+        setCurrency(item.pricing?.currency || 'UGX');
         setUnit(item.pricing?.unit || 'sheet');
         setThickness(item.dimensions?.thickness || '');
         setLength(item.dimensions?.length || '');
@@ -113,7 +113,7 @@ export function InventoryItemModal({
     setSubcategory('');
     setTags('');
     setCostPerUnit(0);
-    setCurrency('KES');
+    setCurrency('UGX');
     setUnit('sheet');
     setThickness('');
     setLength('');

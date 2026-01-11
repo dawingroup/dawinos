@@ -138,6 +138,10 @@ export interface Project {
   name: string;
   description?: string;
   
+  // Customer (links to global customers collection)
+  customerId?: string;
+  customerName?: string;
+  
   // Classification
   status: ProjectStatus;
   implementationType: ImplementationType;
@@ -184,6 +188,9 @@ export interface ProjectFormData {
   estimatedEndDate: Date;
   budgetAmount: number;
   budgetCurrency: string;
+  // Customer linking (optional - can inherit from program/engagement)
+  customerId?: string;
+  customerName?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────

@@ -110,7 +110,10 @@ export function ProductionTab({ project, stage, onRefresh }: ProductionTabProps)
       )}
 
       {/* Shop Traveler */}
-      <ShopTravelerSection project={projectData} />
+      <ShopTravelerSection 
+        project={projectData} 
+        onRefresh={onRefresh ? async () => onRefresh() : undefined}
+      />
 
       {/* Katana Export */}
       <KatanaExportSection project={projectData} onExportComplete={onRefresh} />

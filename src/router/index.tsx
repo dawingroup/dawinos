@@ -7,8 +7,8 @@ import { lazy, Suspense } from 'react';
 import {
   createBrowserRouter,
   RouterProvider,
-  Navigate,
   Outlet,
+  Navigate,
 } from 'react-router-dom';
 import { FullPageLoader } from '@/shared/components/feedback/FullPageLoader';
 import { ErrorBoundary } from '@/shared/components/feedback/ErrorBoundary';
@@ -16,6 +16,7 @@ import { AppShell } from '@/shared/components/layout/AppShell';
 import { AuthGuard } from './guards/AuthGuard';
 import { RoleGuard } from './guards/RoleGuard';
 import { ModuleGuard } from './guards/ModuleGuard';
+import { testRoutes } from './testRoutes';
 
 // Lazy load pages
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
@@ -32,43 +33,21 @@ const EngagementCreatePage = lazy(() => import('@/pages/engagements/EngagementCr
 
 // Client Pages
 const ClientListPage = lazy(() => import('@/pages/clients/ClientListPage'));
+const ClientCreatePage = lazy(() => import('@/pages/clients/ClientCreatePage'));
 const ClientDetailPage = lazy(() => import('@/pages/clients/ClientDetailPage'));
 
-// Delivery Pages
-const DeliveryDashboardPage = lazy(() => import('@/pages/delivery/DeliveryDashboardPage'));
-const ProjectListPage = lazy(() => import('@/pages/delivery/ProjectListPage'));
-const ProjectDetailPage = lazy(() => import('@/pages/delivery/ProjectDetailPage'));
-const ProgramListPage = lazy(() => import('@/pages/delivery/ProgramListPage'));
-const IPCListPage = lazy(() => import('@/pages/delivery/IPCListPage'));
-const RequisitionListPage = lazy(() => import('@/pages/delivery/RequisitionListPage'));
-const AccountabilityListPage = lazy(() => import('@/pages/delivery/AccountabilityListPage'));
-const ApprovalQueuePage = lazy(() => import('@/pages/delivery/ApprovalQueuePage'));
-
-// Investment Pages
-const InvestmentDashboardPage = lazy(() => import('@/pages/investment/InvestmentDashboardPage'));
-const DealPipelinePage = lazy(() => import('@/pages/investment/DealPipelinePage'));
-const InvestmentPipelinePage = lazy(() => import('@/pages/investment/InvestmentPipelinePage'));
-const DealListPage = lazy(() => import('@/pages/investment/DealListPage'));
-const InvestmentCommitteePage = lazy(() => import('@/pages/investment/InvestmentCommitteePage'));
-const InvestmentReportsPage = lazy(() => import('@/pages/investment/InvestmentReportsPage'));
-
-// Advisory Pages
-const AdvisoryDashboardPage = lazy(() => import('@/pages/advisory/AdvisoryDashboardPage'));
-const PortfolioListPage = lazy(() => import('@/pages/advisory/PortfolioListPage'));
-const MandateListPage = lazy(() => import('@/pages/advisory/MandateListPage'));
-
-// MatFlow Pages
-const MatFlowDashboardPage = lazy(() => import('@/pages/matflow/MatFlowDashboardPage'));
-const BOQListPage = lazy(() => import('@/pages/matflow/BOQListPage'));
-const MatFlowProjectListPage = lazy(() => import('@/pages/matflow/MatFlowProjectListPage'));
-const MaterialCatalogPage = lazy(() => import('@/pages/matflow/MaterialCatalogPage'));
-const ProcurementListPage = lazy(() => import('@/pages/matflow/ProcurementListPage'));
-const SupplierListPage = lazy(() => import('@/pages/matflow/SupplierListPage'));
-const MatFlowReportsPage = lazy(() => import('@/pages/matflow/MatFlowReportsPage'));
-const MatFlowSettingsPage = lazy(() => import('@/pages/matflow/MatFlowSettingsPage'));
+// Advisory Module Routes (uses real implementations from subsidiaries)
+const AdvisoryRoutes = lazy(() => import('@/subsidiaries/advisory/AdvisoryModule'));
 
 // AI Assistant
 const AIAssistantPage = lazy(() => import('@/pages/ai/AIAssistantPage'));
+
+// Module Layouts with Tab Navigation
+const HRLayout = lazy(() => import('@/modules/hr/components/HRLayout'));
+const FinanceLayout = lazy(() => import('@/modules/finance/components/FinanceLayout'));
+const PerformanceLayout = lazy(() => import('@/modules/performance/components/PerformanceLayout'));
+const CapitalLayout = lazy(() => import('@/modules/capital/components/CapitalLayout'));
+const MarketIntelLayout = lazy(() => import('@/modules/intelligence/components/MarketIntelLayout'));
 
 // Admin Pages
 const AdminDashboardPage = lazy(() => import('@/pages/admin/AdminDashboardPage'));
@@ -77,9 +56,14 @@ const RoleManagementPage = lazy(() => import('@/pages/admin/RoleManagementPage')
 const MigrationDashboardPage = lazy(() => import('@/pages/admin/MigrationDashboardPage'));
 const AuditLogPage = lazy(() => import('@/pages/admin/AuditLogPage'));
 const SystemSettingsPage = lazy(() => import('@/pages/admin/SystemSettingsPage'));
+const SettingsPage = lazy(() => import('@/app/pages/SettingsPage'));
 
-// Legacy Modules
+// Finishes Dashboard
+const FinishesDashboard = lazy(() => import('@/app/pages/DawinOSDashboard'));
+
+// Finishes Modules
 const DesignManagerModule = lazy(() => import('@/modules/design-manager/DesignManagerModule'));
+const CutlistProcessorPage = lazy(() => import('@/app/pages/CutlistProcessorPage'));
 const CustomerHubModule = lazy(() => import('@/modules/customer-hub/CustomerHubModule'));
 const LaunchPipelineModule = lazy(() => import('@/modules/launch-pipeline/LaunchPipelineModule'));
 const AssetRegistryPage = lazy(() => import('@/modules/assets').then(module => ({ default: module.AssetRegistryPage })));
@@ -87,9 +71,65 @@ const ClipperPage = lazy(() => import('@/app/pages/ClipperPage'));
 const InventoryPage = lazy(() => import('@/modules/inventory/pages/InventoryPage'));
 const FeatureLibraryPage = lazy(() => import('@/modules/design-manager/components/feature-library/FeatureLibraryPage'));
 
+// Client Portal (Public)
+const ClientPortalPage = lazy(() => import('@/modules/design-manager/components/client-portal/ClientPortalPage'));
+
+// Market Intelligence Pages
+const IntelligenceDashboardPage = lazy(() =>
+  import('@/modules/market-intelligence/intelligence-dashboard/pages/IntelligenceDashboardPage')
+);
+const IntelligenceInsightsPage = lazy(() =>
+  import('@/modules/market-intelligence/intelligence-dashboard/pages/IntelligenceInsightsPage')
+);
+const IntelligenceReportsPage = lazy(() =>
+  import('@/modules/market-intelligence/intelligence-dashboard/pages/IntelligenceReportsPage')
+);
+const IntelligenceAnalyticsPage = lazy(() =>
+  import('@/modules/market-intelligence/intelligence-dashboard/pages/IntelligenceAnalyticsPage')
+);
+
 // Profile Pages
 const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'));
 const NotificationSettingsPage = lazy(() => import('@/pages/profile/NotificationSettingsPage'));
+
+// HR Central Pages (dashboard removed - direct to content)
+const EmployeeListPage = lazy(() => import('@/pages/hr/EmployeeListPage'));
+const EmployeeCreatePage = lazy(() => import('@/pages/hr/EmployeeCreatePage'));
+const EmployeeDetailPage = lazy(() => import('@/pages/hr/EmployeeDetailPage'));
+const EmployeeEditPage = lazy(() => import('@/pages/hr/EmployeeEditPage'));
+const LeaveManagementPage = lazy(() => import('@/pages/hr/LeaveManagementPage'));
+const PayrollPage = lazy(() => import('@/pages/hr/PayrollPage'));
+const OrgStructurePage = lazy(() => import('@/pages/hr/OrgStructurePage'));
+
+// Finance Pages (dashboard removed - direct to content)
+const BudgetListPage = lazy(() => import('@/pages/finance/BudgetListPage'));
+const ExpenseListPage = lazy(() => import('@/pages/finance/ExpenseListPage'));
+const FinancialReportsPage = lazy(() => import('@/pages/finance/FinancialReportsPage'));
+
+// Performance Pages (dashboard removed - direct to content)
+const GoalListPage = lazy(() => import('@/pages/performance/GoalListPage'));
+const ReviewListPage = lazy(() => import('@/pages/performance/ReviewListPage'));
+const CompetencyListPage = lazy(() => import('@/pages/performance/CompetencyListPage'));
+const DevelopmentPlanListPage = lazy(() => import('@/pages/performance/DevelopmentPlanListPage'));
+
+// Capital Hub Pages (dashboard removed - direct to content)
+const CapitalDealListPage = lazy(() => import('@/modules/capital/pages/DealListPage'));
+const CapitalDealDetailPage = lazy(() => import('@/modules/capital/pages/DealDetailPage'));
+const PortfolioListPage = lazy(() => import('@/modules/capital/pages/PortfolioListPage'));
+const InvestorReportsPage = lazy(() => import('@/modules/capital/pages/InvestorReportsPage'));
+const FinancialModelsPage = lazy(() => import('@/modules/capital/pages/FinancialModelsPage'));
+const TaxCompliancePage = lazy(() => import('@/modules/capital/pages/TaxCompliancePage'));
+
+// Market Intelligence Module Pages (dashboard removed - direct to content)
+const MarketCompetitorListPage = lazy(() => import('@/modules/intelligence/pages/CompetitorListPage'));
+const MarketCompetitorDetailPage = lazy(() => import('@/modules/intelligence/pages/CompetitorDetailPage'));
+const MarketCompetitorComparisonPage = lazy(() => import('@/modules/intelligence/pages/CompetitorComparisonPage'));
+const MarketNewsFeedPage = lazy(() => import('@/modules/intelligence/pages/NewsFeedPage'));
+const MarketAnalysisPage = lazy(() => import('@/modules/intelligence/pages/MarketAnalysisPage'));
+const MarketInsightsPage = lazy(() => import('@/modules/intelligence/pages/InsightsPage'));
+
+// Intelligence Layer Module Pages
+const IntelligenceLayerDashboard = lazy(() => import('@/modules/intelligence-layer/pages/IntelligenceLayerDashboardPage'));
 
 // Error Pages
 const NotFoundPage = lazy(() => import('@/pages/errors/NotFoundPage'));
@@ -128,6 +168,12 @@ export const router = createBrowserRouter([
     ],
   },
 
+  // Client Portal (Public - no auth required)
+  {
+    path: '/client-portal/:token',
+    element: <PageWrapper><ClientPortalPage /></PageWrapper>,
+  },
+
   // Protected routes
   {
     path: '/',
@@ -140,10 +186,49 @@ export const router = createBrowserRouter([
     ),
     errorElement: <ServerErrorPage />,
     children: [
+      // ========================================
+      // DAWIN FINISHES ROUTES
+      // ========================================
       {
         index: true,
-        element: <Navigate to="/dashboard" replace />,
+        element: <PageWrapper><FinishesDashboard /></PageWrapper>,
       },
+      {
+        path: 'clipper',
+        element: <PageWrapper><ClipperPage /></PageWrapper>,
+      },
+      {
+        path: 'design/*',
+        element: <PageWrapper><DesignManagerModule /></PageWrapper>,
+      },
+      {
+        path: 'cutlist/*',
+        element: <PageWrapper><CutlistProcessorPage /></PageWrapper>,
+      },
+      {
+        path: 'customers/*',
+        element: <PageWrapper><CustomerHubModule /></PageWrapper>,
+      },
+      {
+        path: 'assets',
+        element: <PageWrapper><AssetRegistryPage /></PageWrapper>,
+      },
+      {
+        path: 'inventory',
+        element: <PageWrapper><InventoryPage /></PageWrapper>,
+      },
+      {
+        path: 'launch-pipeline/*',
+        element: <PageWrapper><LaunchPipelineModule /></PageWrapper>,
+      },
+      {
+        path: 'features',
+        element: <PageWrapper><FeatureLibraryPage /></PageWrapper>,
+      },
+
+      // ========================================
+      // DAWIN ADVISORY ROUTES
+      // ========================================
       {
         path: 'dashboard',
         element: <PageWrapper><DashboardPage /></PageWrapper>,
@@ -159,53 +244,40 @@ export const router = createBrowserRouter([
         ],
       },
 
-      // Clients
+      // Clients (shared across all subsidiaries)
       {
         path: 'clients',
         children: [
           { index: true, element: <PageWrapper><ClientListPage /></PageWrapper> },
+          { path: 'new', element: <PageWrapper><ClientCreatePage /></PageWrapper> },
           { path: ':clientId', element: <PageWrapper><ClientDetailPage /></PageWrapper> },
         ],
       },
 
-      // Delivery Module
+      // ========================================
+      // DAWIN ADVISORY MODULE (Complete Implementation)
+      // Includes: Investment, MatFlow, Delivery sub-modules
+      // ========================================
       {
-        path: 'delivery',
-        element: <ModuleGuard module="infrastructure_delivery"><Outlet /></ModuleGuard>,
-        children: [
-          { index: true, element: <PageWrapper><DeliveryDashboardPage /></PageWrapper> },
-          { path: 'projects', element: <PageWrapper><ProjectListPage /></PageWrapper> },
-          { path: 'projects/:projectId', element: <PageWrapper><ProjectDetailPage /></PageWrapper> },
-        ],
+        path: 'advisory/*',
+        element: (
+          <ModuleGuard module="investment_advisory">
+            <PageWrapper>
+              <AdvisoryRoutes />
+            </PageWrapper>
+          </ModuleGuard>
+        ),
       },
 
-      // Investment Module
+      // Market Intelligence Module
       {
-        path: 'investment',
-        element: <ModuleGuard module="infrastructure_investment"><Outlet /></ModuleGuard>,
+        path: 'market-intelligence',
+        element: <ModuleGuard module="market_intelligence"><Outlet /></ModuleGuard>,
         children: [
-          { index: true, element: <PageWrapper><InvestmentDashboardPage /></PageWrapper> },
-          { path: 'deals', element: <PageWrapper><DealPipelinePage /></PageWrapper> },
-        ],
-      },
-
-      // Advisory Module
-      {
-        path: 'advisory',
-        element: <ModuleGuard module="investment_advisory"><Outlet /></ModuleGuard>,
-        children: [
-          { index: true, element: <PageWrapper><AdvisoryDashboardPage /></PageWrapper> },
-          { path: 'portfolios', element: <PageWrapper><PortfolioListPage /></PageWrapper> },
-        ],
-      },
-
-      // MatFlow Module
-      {
-        path: 'matflow',
-        element: <ModuleGuard module="matflow"><Outlet /></ModuleGuard>,
-        children: [
-          { index: true, element: <PageWrapper><MatFlowDashboardPage /></PageWrapper> },
-          { path: 'boq', element: <PageWrapper><BOQListPage /></PageWrapper> },
+          { index: true, element: <PageWrapper><IntelligenceDashboardPage /></PageWrapper> },
+          { path: 'insights', element: <PageWrapper><IntelligenceInsightsPage /></PageWrapper> },
+          { path: 'reports', element: <PageWrapper><IntelligenceReportsPage /></PageWrapper> },
+          { path: 'analytics', element: <PageWrapper><IntelligenceAnalyticsPage /></PageWrapper> },
         ],
       },
 
@@ -222,6 +294,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <PageWrapper><AdminDashboardPage /></PageWrapper> },
           { path: 'users', element: <PageWrapper><UserManagementPage /></PageWrapper> },
+          { path: 'settings', element: <PageWrapper><SettingsPage /></PageWrapper> },
         ],
       },
 
@@ -230,8 +303,102 @@ export const router = createBrowserRouter([
         path: 'profile',
         element: <PageWrapper><ProfilePage /></PageWrapper>,
       },
+
+      // ========================================
+      // HR CENTRAL ROUTES - with Tab Navigation
+      // ========================================
+      {
+        path: 'hr',
+        element: <PageWrapper><HRLayout /></PageWrapper>,
+        children: [
+          { index: true, element: <Navigate to="/hr/employees" replace /> },
+          { path: 'employees', element: <EmployeeListPage /> },
+          { path: 'employees/new', element: <EmployeeCreatePage /> },
+          { path: 'employees/:employeeId', element: <EmployeeDetailPage /> },
+          { path: 'employees/:employeeId/edit', element: <EmployeeEditPage /> },
+          { path: 'leave', element: <LeaveManagementPage /> },
+          { path: 'payroll', element: <PayrollPage /> },
+          { path: 'org-structure', element: <OrgStructurePage /> },
+        ],
+      },
+
+      // ========================================
+      // FINANCE ROUTES - with Tab Navigation
+      // ========================================
+      {
+        path: 'finance',
+        element: <PageWrapper><FinanceLayout /></PageWrapper>,
+        children: [
+          { index: true, element: <Navigate to="/finance/budgets" replace /> },
+          { path: 'budgets', element: <BudgetListPage /> },
+          { path: 'expenses', element: <ExpenseListPage /> },
+          { path: 'reports', element: <FinancialReportsPage /> },
+        ],
+      },
+
+      // ========================================
+      // PERFORMANCE ROUTES - with Tab Navigation
+      // ========================================
+      {
+        path: 'performance',
+        element: <PageWrapper><PerformanceLayout /></PageWrapper>,
+        children: [
+          { index: true, element: <Navigate to="/performance/goals" replace /> },
+          { path: 'goals', element: <GoalListPage /> },
+          { path: 'reviews', element: <ReviewListPage /> },
+          { path: 'competencies', element: <CompetencyListPage /> },
+          { path: 'development', element: <DevelopmentPlanListPage /> },
+        ],
+      },
+
+      // ========================================
+      // CAPITAL HUB ROUTES - with Tab Navigation
+      // ========================================
+      {
+        path: 'capital',
+        element: <PageWrapper><CapitalLayout /></PageWrapper>,
+        children: [
+          { index: true, element: <Navigate to="/capital/deals" replace /> },
+          { path: 'deals', element: <CapitalDealListPage /> },
+          { path: 'deals/:dealId', element: <CapitalDealDetailPage /> },
+          { path: 'portfolio', element: <PortfolioListPage /> },
+          { path: 'reports', element: <InvestorReportsPage /> },
+          { path: 'models', element: <FinancialModelsPage /> },
+          { path: 'tax', element: <TaxCompliancePage /> },
+        ],
+      },
+
+      // ========================================
+      // MARKET INTELLIGENCE ROUTES - with Tab Navigation
+      // ========================================
+      {
+        path: 'market-intel',
+        element: <PageWrapper><MarketIntelLayout /></PageWrapper>,
+        children: [
+          { index: true, element: <Navigate to="/market-intel/competitors" replace /> },
+          { path: 'competitors', element: <MarketCompetitorListPage /> },
+          { path: 'competitors/compare', element: <MarketCompetitorComparisonPage /> },
+          { path: 'competitors/:competitorId', element: <MarketCompetitorDetailPage /> },
+          { path: 'news', element: <MarketNewsFeedPage /> },
+          { path: 'market', element: <MarketAnalysisPage /> },
+          { path: 'insights', element: <MarketInsightsPage /> },
+        ],
+      },
+
+      // ========================================
+      // INTELLIGENCE LAYER ROUTES
+      // ========================================
+      {
+        path: 'ai',
+        children: [
+          { index: true, element: <PageWrapper><IntelligenceLayerDashboard /></PageWrapper> },
+        ],
+      },
     ],
   },
+
+  // Test routes (DawinOS v2.0 Testing Suite)
+  ...testRoutes,
 
   // Error routes
   {

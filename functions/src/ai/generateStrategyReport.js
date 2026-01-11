@@ -2,10 +2,11 @@
  * Strategy Report Generator Cloud Function
  * Uses Gemini with Google Search grounding to generate design strategy reports
  * that match current trends to available manufacturing features
+ * 
+ * Using v1 API for better CORS support
  */
 
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { defineSecret } = require('firebase-functions/params');
+const functions = require('firebase-functions');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const admin = require('firebase-admin');
 
@@ -16,9 +17,6 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-// Use Gemini API key from Firebase secrets
-const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
-
 /**
  * Generate a strategy report for a design project
  * Step 1: Search for design trends
@@ -26,13 +24,18 @@ const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
  * Step 3: Match trends to available features
  * Step 4: Return structured JSON for PDF report
  */
-exports.generateStrategyReport = onCall(
-  { 
-    cors: true,
-    invoker: 'public',
-    secrets: [GEMINI_API_KEY]
-  },
-  async (request) => {
+exports.generateStrategyReport = functions
+  .runWith({
+    memory: '1GB',
+    timeoutSeconds: 300,
+    secrets: ['GEMINI_API_KEY'],
+  })
+  .https.onCall(async (data, context) => {
+    // Get API key from environment/secrets
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    
+    // Map v1 API parameters to match v2 structure
+    const request = { data, auth: context.auth };
     const { 
       projectName,
       projectType,
@@ -47,18 +50,22 @@ exports.generateStrategyReport = onCall(
       spaceDetails,
       researchFindings = [],
       researchExcerpts = [],
+      // Scoping context from ProjectScopingAI
+      scopingContext,
+      // Enhanced project context from ProjectContextSection
+      projectContext,
+      // Selected product recommendations
+      recommendedProducts = [],
     } = request.data;
 
     // Validate input
     if (!projectName || !clientBrief) {
-      throw new HttpsError(
-        'invalid-argument',
-        'projectName and clientBrief are required'
-      );
+      throw new functions.https.HttpsError('invalid-argument', 'projectName and clientBrief are required');
     }
 
     console.log(`Generating strategy report for: ${projectName}`);
     console.log(`Enhanced inputs: ${constraints.length} constraints, ${painPoints.length} pain points, ${goals.length} goals, ${researchFindings.length} findings`);
+    console.log(`Product recommendations: ${recommendedProducts.length}, Scoping context: ${scopingContext ? 'yes' : 'no'}, Project context: ${projectContext ? 'yes' : 'no'}`);
 
     try {
       // ============================================
@@ -98,6 +105,46 @@ exports.generateStrategyReport = onCall(
       }
 
       console.log(`Found ${availableFeatures.length} available features`);
+
+      // ============================================
+      // Step 1b: Fetch Relevant Products and Inspirations
+      // ============================================
+      console.log('Step 1b: Fetching products and inspirations...');
+      
+      // Fetch products from launch pipeline for recommendations
+      const productsSnapshot = await db
+        .collection('launchProducts')
+        .where('currentStage', 'in', ['launched', 'ready', 'photoshoot', 'seo'])
+        .limit(30)
+        .get();
+      
+      const catalogProducts = productsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name,
+        category: doc.data().category,
+        description: doc.data().description?.substring(0, 150),
+        materials: doc.data().specifications?.materials || [],
+        tags: doc.data().tags || [],
+      }));
+      
+      console.log(`Found ${catalogProducts.length} catalog products`);
+      
+      // Fetch design inspirations
+      const clipsSnapshot = await db
+        .collection('designClips')
+        .orderBy('createdAt', 'desc')
+        .limit(20)
+        .get();
+      
+      const inspirations = clipsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        title: doc.data().title,
+        tags: doc.data().tags || [],
+        imageUrl: doc.data().imageUrl,
+        notes: doc.data().notes?.substring(0, 100),
+      }));
+      
+      console.log(`Found ${inspirations.length} inspirations`);
 
       // Build feature list for prompt
       const featureListForPrompt = availableFeatures.map(f => ({
@@ -174,6 +221,36 @@ exports.generateStrategyReport = onCall(
         ? `\n**RESEARCH ASSISTANT INSIGHTS:**\n${researchExcerpts.map((e, i) => `[Insight ${i+1}]: ${e}`).join('\n\n')}` 
         : '';
 
+      // Project context section
+      const projectContextSection = projectContext ? `
+**ENHANCED PROJECT CONTEXT:**
+${projectContext.customer?.name ? `- Customer: ${projectContext.customer.name} (${projectContext.customer.company || 'Individual'})` : ''}
+${projectContext.customer?.industry ? `- Industry: ${projectContext.customer.industry}` : ''}
+${projectContext.timeline?.urgency ? `- Urgency: ${projectContext.timeline.urgency}` : ''}
+${projectContext.style?.primary ? `- Primary Style: ${projectContext.style.primary}` : ''}
+${projectContext.style?.secondary ? `- Secondary Style: ${projectContext.style.secondary}` : ''}
+${projectContext.style?.materialPreferences?.length ? `- Material Preferences: ${projectContext.style.materialPreferences.join(', ')}` : ''}
+${projectContext.style?.colorPreferences?.length ? `- Color Preferences: ${projectContext.style.colorPreferences.join(', ')}` : ''}
+${projectContext.targetUsers?.demographics ? `- Target Users: ${projectContext.targetUsers.demographics}` : ''}
+${projectContext.requirements?.sustainability ? '- Sustainability: Required' : ''}
+${projectContext.requirements?.localSourcing ? '- Local Sourcing: Required' : ''}
+` : '';
+
+      // Recommended products section (user-selected from catalog)
+      const recommendedProductsSection = recommendedProducts.length > 0 
+        ? `\n**PRE-SELECTED PRODUCT RECOMMENDATIONS:**\nThe following products have been selected from our catalog for this project:\n${recommendedProducts.map(p => `- ${p.productName} (${p.category}): ${p.reason || 'No reason provided'}`).join('\n')}` 
+        : '';
+
+      // Catalog products section (for AI to consider)
+      const catalogSection = catalogProducts.length > 0 
+        ? `\n**AVAILABLE CATALOG PRODUCTS:**\nThese products from our catalog may be relevant:\n${catalogProducts.slice(0, 15).map(p => `- ${p.name} (${p.category}): ${p.description || 'No description'}`).join('\n')}` 
+        : '';
+
+      // Inspirations section
+      const inspirationsSection = inspirations.length > 0 
+        ? `\n**SAVED DESIGN INSPIRATIONS:**\n${inspirations.slice(0, 10).map(i => `- ${i.title || 'Untitled'}: ${i.notes || 'No notes'}${i.tags?.length ? ` [Tags: ${i.tags.join(', ')}]` : ''}`).join('\n')}` 
+        : '';
+
       const prompt = `You are a Senior Interior Design Strategist for a custom millwork and furniture manufacturing company in ${location}.
 
 **PROJECT CONTEXT:**
@@ -189,6 +266,10 @@ ${painPointsSection}
 ${goalsSection}
 ${findingsSection}
 ${excerptSection}
+${projectContextSection}
+${recommendedProductsSection}
+${catalogSection}
+${inspirationsSection}
 
 **STEP 1 - RESEARCH:**
 Using Google Search, research current interior design trends for ${year} relevant to ${location} and ${projectType || 'custom millwork'}. Focus on:
@@ -264,6 +345,22 @@ Return ONLY valid JSON matching this exact schema:
   "nextSteps": [
     "Step 1 description",
     "Step 2 description"
+  ],
+  "productRecommendations": [
+    {
+      "productId": "product-id-from-catalog",
+      "productName": "Product name",
+      "category": "Product category",
+      "rationale": "Why this product fits the project",
+      "priority": "essential" | "recommended" | "optional"
+    }
+  ],
+  "inspirationGallery": [
+    {
+      "title": "Inspiration title",
+      "relevance": "How this inspiration relates to the project",
+      "designElements": ["Element 1", "Element 2"]
+    }
   ]
 }`;
 
@@ -317,10 +414,7 @@ Return ONLY valid JSON matching this exact schema:
       } catch (parseError) {
         console.error('Failed to parse AI response:', parseError.message);
         console.error('JSON string preview:', jsonStr.substring(0, 300));
-        throw new HttpsError(
-          'internal',
-          `Failed to parse strategy response: ${parseError.message}`
-        );
+        throw new functions.https.HttpsError('internal', `Failed to parse strategy response: ${parseError.message}`);
       }
 
       // ============================================
@@ -372,6 +466,64 @@ Return ONLY valid JSON matching this exact schema:
 
       strategyData.productionDetails = productionDetails;
 
+      // ============================================
+      // Step 4: Enrich Product Recommendations
+      // ============================================
+      console.log('Step 4: Enriching product recommendations...');
+      
+      // Merge AI-suggested products with user-selected products
+      const allProductRecommendations = [
+        // User-selected products take priority
+        ...recommendedProducts.map(p => ({
+          productId: p.productId,
+          productName: p.productName,
+          category: p.category,
+          rationale: p.reason || 'User selected',
+          priority: 'essential',
+          source: 'user-selected',
+        })),
+        // Add AI recommendations (avoiding duplicates)
+        ...(strategyData.productRecommendations || [])
+          .filter(p => !recommendedProducts.some(rp => rp.productId === p.productId))
+          .map(p => ({ ...p, source: 'ai-recommended' })),
+      ];
+      
+      strategyData.productRecommendations = allProductRecommendations;
+      
+      // Add full product details for recommendations
+      if (strategyData.productRecommendations) {
+        for (const rec of strategyData.productRecommendations) {
+          const product = catalogProducts.find(p => p.id === rec.productId);
+          if (product) {
+            rec.productDetails = {
+              description: product.description,
+              materials: product.materials,
+              tags: product.tags,
+            };
+          }
+        }
+      }
+      
+      // ============================================
+      // Step 5: Enrich Inspiration Gallery
+      // ============================================
+      console.log('Step 5: Enriching inspiration gallery...');
+      
+      // Match AI inspiration suggestions with actual clips
+      if (strategyData.inspirationGallery) {
+        for (const insp of strategyData.inspirationGallery) {
+          const clip = inspirations.find(c => 
+            c.title?.toLowerCase().includes(insp.title?.toLowerCase()) ||
+            insp.title?.toLowerCase().includes(c.title?.toLowerCase())
+          );
+          if (clip) {
+            insp.clipId = clip.id;
+            insp.imageUrl = clip.imageUrl;
+            insp.tags = clip.tags;
+          }
+        }
+      }
+
       // Add metadata
       strategyData.metadata = {
         generatedAt: new Date().toISOString(),
@@ -381,6 +533,11 @@ Return ONLY valid JSON matching this exact schema:
         year,
         totalAvailableFeatures: availableFeatures.length,
         featuresProposed: productionDetails.length,
+        catalogProductsConsidered: catalogProducts.length,
+        inspirationsConsidered: inspirations.length,
+        userSelectedProducts: recommendedProducts.length,
+        hasProjectContext: !!projectContext,
+        hasScopingContext: !!scopingContext,
       };
 
       console.log('Strategy report generated successfully');
@@ -388,15 +545,9 @@ Return ONLY valid JSON matching this exact schema:
 
     } catch (error) {
       console.error('Error generating strategy report:', error);
-      
-      if (error instanceof HttpsError) {
+      if (error instanceof functions.https.HttpsError) {
         throw error;
       }
-      
-      throw new HttpsError(
-        'internal',
-        `Failed to generate strategy report: ${error.message}`
-      );
+      throw new functions.https.HttpsError('internal', `Failed to generate strategy report: ${error.message}`);
     }
-  }
-);
+  });

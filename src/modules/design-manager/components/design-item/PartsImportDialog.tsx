@@ -95,13 +95,36 @@ export function PartsImportDialog({ onImport, onClose, loading }: PartsImportDia
               />
 
               {/* Format Help */}
-              <div className="bg-gray-50 rounded-lg p-4 text-sm">
-                <h3 className="font-medium text-gray-900 mb-2">Expected CSV Columns</h3>
-                <p className="text-gray-600">
-                  Name, Length, Width, Thickness, Quantity, Material
-                </p>
-                <p className="text-gray-500 mt-1">
-                  Optional: Grain, Edge Banding (T/B/L/R), Notes
+              <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-3">
+                <h3 className="font-medium text-gray-900">CSV Format Guide (Polyboard Export)</h3>
+                
+                <div>
+                  <p className="font-medium text-gray-700 mb-1">Column Order:</p>
+                  <div className="flex flex-wrap gap-1">
+                    <span className="bg-gray-200 px-2 py-1 rounded text-xs text-gray-500">1. Cabinet (ignored)</span>
+                    <span className="bg-blue-50 px-2 py-1 rounded border border-blue-300 text-xs text-blue-700">2. Label</span>
+                    <span className="bg-white px-2 py-1 rounded border text-xs">3. Material</span>
+                    <span className="bg-white px-2 py-1 rounded border text-xs">4. Thickness</span>
+                    <span className="bg-white px-2 py-1 rounded border text-xs">5. Quantity</span>
+                    <span className="bg-blue-50 px-2 py-1 rounded border border-blue-300 text-xs text-blue-700">6. Length</span>
+                    <span className="bg-blue-50 px-2 py-1 rounded border border-blue-300 text-xs text-blue-700">7. Width</span>
+                    <span className="bg-white px-2 py-1 rounded border text-xs">8. Grain</span>
+                    <span className="bg-white px-2 py-1 rounded border text-xs">9-12. Edges</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    <span className="inline-block bg-blue-100 px-1 rounded">Blue</span> = required
+                  </p>
+                </div>
+
+                <div className="bg-blue-50 rounded p-2 border border-blue-200">
+                  <p className="font-medium text-blue-800 text-xs mb-1">Example (Polyboard format):</p>
+                  <pre className="text-xs font-mono text-blue-700 overflow-x-auto whitespace-pre-wrap">cabinet,label,material,thickness,quantity,length,width,grain,topEdge,rightEdge,bottomEdge,leftEdge
+Kitchen-01,Top Panel,MDF 18mm,18,1,800,600,0,ABS-White,ABS-White,,
+Kitchen-01,Side Panel,MDF 18mm,18,2,700,550,1,,,,</pre>
+                </div>
+
+                <p className="text-gray-500 text-xs">
+                  <strong>Note:</strong> Cabinet column is ignored here (all parts go to this Design Item). Use Bulk Import at project level to split by cabinet.
                 </p>
               </div>
             </>

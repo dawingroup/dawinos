@@ -13,13 +13,13 @@ import {
   FolderPlus,
   Check,
 } from 'lucide-react';
-import type { ClipRecord } from '../../types/database';
 import { ClipCard } from './ClipCard';
+import type { PopupClipRecord } from '../types';
 
 interface ClipGalleryProps {
-  clips: ClipRecord[];
+  clips: PopupClipRecord[];
   onDelete: (id: string) => void;
-  onSelect: (clip: ClipRecord) => void;
+  onSelect: (clip: PopupClipRecord) => void;
   onBulkAction: (action: 'delete' | 'tag' | 'project', ids: string[]) => void;
 }
 

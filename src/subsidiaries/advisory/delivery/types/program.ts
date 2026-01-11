@@ -316,6 +316,10 @@ export interface Program {
   engagementId: string;
   clientId: string;
   
+  // Customer (links to global customers collection)
+  customerId?: string;
+  customerName?: string;
+  
   // Identity
   name: string;
   code: string;
@@ -375,7 +379,11 @@ export interface Program {
  * Data required to create a new program
  */
 export interface CreateProgramData {
-  engagementId: string;
+  engagementId?: string;  // Optional - standalone programs allowed
+  clientId?: string;      // Can be provided directly if no engagement
+  // Customer linking (from global customers collection)
+  customerId?: string;
+  customerName?: string;
   name: string;
   code?: string;
   description: string;

@@ -2,7 +2,7 @@
  * Project Form - Create/Edit projects
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Save, 
   Plus, 
@@ -100,6 +100,13 @@ export function ProjectForm({
     majorWorks: initialData?.majorWorks || [''],
     expectedDeliverables: initialData?.expectedDeliverables || [''],
   });
+
+  // Sync programId prop with form state when it changes
+  useEffect(() => {
+    if (programId) {
+      setFormData(prev => ({ ...prev, programId }));
+    }
+  }, [programId]);
 
   const handleChange = (field: keyof ProjectFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));

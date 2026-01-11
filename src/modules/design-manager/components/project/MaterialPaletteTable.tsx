@@ -3,7 +3,7 @@
  * Displays material palette entries with mapping status and actions
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Package, 
   Link, 
@@ -16,6 +16,8 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
+  DollarSign,
+  Loader2,
 } from 'lucide-react';
 import type { MaterialPalette, MaterialPaletteEntry, OptimizationStockSheet } from '@/shared/types';
 import { 
@@ -25,6 +27,8 @@ import {
   getPaletteStats,
   allMaterialsMapped,
 } from '../../services/materialHarvester';
+import { subscribeToInventory } from '@/modules/inventory/services/inventoryService';
+import type { InventoryListItem } from '@/modules/inventory/types';
 
 // ============================================
 // Types
@@ -38,56 +42,8 @@ interface MaterialPaletteTableProps {
   className?: string;
 }
 
-interface InventoryItem {
-  id: string;
-  name: string;
-  sku: string;
-  unitCost: number;
-  stockSheets: OptimizationStockSheet[];
-}
-
-// ============================================
-// Mock Inventory Data (replace with real service)
-// ============================================
-
-const MOCK_INVENTORY: InventoryItem[] = [
-  {
-    id: 'inv-001',
-    name: 'MDF 18mm White',
-    sku: 'MDF-18-WHT',
-    unitCost: 85000,
-    stockSheets: [
-      { id: 'ss-1', materialId: 'inv-001', materialName: 'MDF 18mm White', length: 2440, width: 1220, thickness: 18, quantity: 100, costPerSheet: 85000 },
-    ],
-  },
-  {
-    id: 'inv-002',
-    name: 'Melamine White 18mm',
-    sku: 'MEL-18-WHT',
-    unitCost: 95000,
-    stockSheets: [
-      { id: 'ss-2', materialId: 'inv-002', materialName: 'Melamine White 18mm', length: 2440, width: 1220, thickness: 18, quantity: 50, costPerSheet: 95000 },
-    ],
-  },
-  {
-    id: 'inv-003',
-    name: 'Plywood Birch 18mm',
-    sku: 'PLY-18-BIR',
-    unitCost: 180000,
-    stockSheets: [
-      { id: 'ss-3', materialId: 'inv-003', materialName: 'Plywood Birch 18mm', length: 2440, width: 1220, thickness: 18, quantity: 30, costPerSheet: 180000 },
-    ],
-  },
-  {
-    id: 'inv-004',
-    name: 'Chipboard 18mm',
-    sku: 'CHI-18-STD',
-    unitCost: 65000,
-    stockSheets: [
-      { id: 'ss-4', materialId: 'inv-004', materialName: 'Chipboard 18mm', length: 2750, width: 1830, thickness: 18, quantity: 80, costPerSheet: 65000 },
-    ],
-  },
-];
+// Default sheet dimensions for stock sheets
+const DEFAULT_SHEET_DIMENSIONS = { length: 2440, width: 1220 };
 
 // ============================================
 // Component
@@ -105,6 +61,62 @@ export function MaterialPaletteTable({
   const [showMappingModal, setShowMappingModal] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Katana inventory state
+  const [inventoryItems, setInventoryItems] = useState<InventoryListItem[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventorySearch, setInventorySearch] = useState('');
+  
+  // Price override state
+  const [priceOverride, setPriceOverride] = useState<string>('');
+  const [useOverride, setUseOverride] = useState(false);
+  const [selectedInventoryItem, setSelectedInventoryItem] = useState<InventoryListItem | null>(null);
+  
+  // Subscribe to Katana inventory when modal opens
+  useEffect(() => {
+    if (!showMappingModal) return;
+    
+    setInventoryLoading(true);
+    const unsubscribe = subscribeToInventory(
+      (items) => {
+        // Filter to relevant categories for material palette mapping
+        // Include sheet-goods, solid-wood, edge-banding, and other (for materials not yet categorized)
+        const relevantCategories = ['sheet-goods', 'solid-wood', 'edge-banding', 'other'];
+        const mappableItems = items.filter(i => 
+          relevantCategories.includes(i.category) && i.status === 'active'
+        );
+        setInventoryItems(mappableItems);
+        setInventoryLoading(false);
+      },
+      (error) => {
+        console.error('Failed to load inventory:', error);
+        setInventoryLoading(false);
+      }
+    );
+    
+    return () => unsubscribe();
+  }, [showMappingModal]);
+  
+  // Reset modal state when closed
+  useEffect(() => {
+    if (!showMappingModal) {
+      setPriceOverride('');
+      setUseOverride(false);
+      setSelectedInventoryItem(null);
+      setInventorySearch('');
+    }
+  }, [showMappingModal]);
+  
+  // Filter inventory items by search
+  const filteredInventory = inventoryItems.filter(item => {
+    if (!inventorySearch) return true;
+    const query = inventorySearch.toLowerCase();
+    return (
+      item.name.toLowerCase().includes(query) ||
+      item.sku.toLowerCase().includes(query) ||
+      item.displayName?.toLowerCase().includes(query)
+    );
+  });
 
   const stats = getPaletteStats(palette);
   const canExportToKatana = allMaterialsMapped(palette);
@@ -128,18 +140,37 @@ export function MaterialPaletteTable({
     setShowMappingModal(true);
   };
 
-  const handleMapMaterial = async (inventoryItem: InventoryItem) => {
+  const handleMapMaterial = async (inventoryItem: InventoryListItem, overridePrice?: number) => {
     if (!selectedEntry) return;
+
+    // Use override price if explicitly provided, otherwise let backend auto-fetch from inventory
+    // This ensures we always use the latest price from Katana-synced inventory
+    const unitCost = useOverride && overridePrice ? overridePrice : undefined;
+    
+    // Get the display cost for stock sheets (use inventory price or override)
+    const displayCost = overridePrice || inventoryItem.costPerUnit || 0;
+    
+    // Create stock sheets from inventory item dimensions
+    const stockSheets: OptimizationStockSheet[] = [{
+      id: `ss-${inventoryItem.id}`,
+      materialId: inventoryItem.id,
+      materialName: inventoryItem.displayName || inventoryItem.name,
+      length: DEFAULT_SHEET_DIMENSIONS.length,
+      width: DEFAULT_SHEET_DIMENSIONS.width,
+      thickness: inventoryItem.thickness || selectedEntry.thickness,
+      quantity: inventoryItem.inStock || 0,
+      costPerSheet: displayCost,
+    }];
 
     try {
       await mapMaterialToInventory(
         projectId,
         selectedEntry.id,
         inventoryItem.id,
-        inventoryItem.name,
+        inventoryItem.displayName || inventoryItem.name,
         inventoryItem.sku,
-        inventoryItem.unitCost,
-        inventoryItem.stockSheets,
+        unitCost, // undefined = auto-fetch from inventory
+        stockSheets,
         userId
       );
       setShowMappingModal(false);
@@ -442,47 +473,169 @@ export function MaterialPaletteTable({
       {/* Mapping Modal */}
       {showMappingModal && selectedEntry && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
             <div className="px-4 py-3 border-b border-gray-200">
-              <h3 className="font-semibold text-gray-900">Map Material to Inventory</h3>
+              <h3 className="font-semibold text-gray-900">Map Material to Katana Inventory</h3>
               <p className="text-sm text-gray-500 mt-1">
-                Select inventory item for: <strong>{selectedEntry.designName}</strong>
+                Select inventory item for: <strong>{selectedEntry.designName}</strong> ({selectedEntry.thickness}mm)
               </p>
             </div>
-            <div className="p-4 max-h-96 overflow-y-auto">
-              <div className="space-y-2">
-                {MOCK_INVENTORY.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => handleMapMaterial(item)}
-                    className="w-full p-3 text-left border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="font-medium text-gray-900">{item.name}</div>
-                        <div className="text-sm text-gray-500">SKU: {item.sku}</div>
+            
+            {/* Search and price override section */}
+            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={inventorySearch}
+                      onChange={(e) => setInventorySearch(e.target.value)}
+                      placeholder="Search inventory..."
+                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm"
+                    />
+                  </div>
+                </div>
+                {selectedInventoryItem && (
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={useOverride}
+                        onChange={(e) => setUseOverride(e.target.checked)}
+                        className="rounded"
+                      />
+                      Override price
+                    </label>
+                    {useOverride && (
+                      <div className="relative">
+                        <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                          type="number"
+                          value={priceOverride}
+                          onChange={(e) => setPriceOverride(e.target.value)}
+                          placeholder="Price"
+                          className="w-28 pl-8 pr-2 py-2 border border-gray-300 rounded-md text-sm"
+                        />
                       </div>
-                      <div className="text-right">
-                        <div className="text-sm font-medium text-gray-900">
-                          {item.unitCost.toLocaleString()} UGX
-                        </div>
-                        <div className="text-xs text-gray-500">per sheet</div>
-                      </div>
-                    </div>
-                  </button>
-                ))}
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-            <div className="px-4 py-3 border-t border-gray-200 flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setShowMappingModal(false);
-                  setSelectedEntry(null);
-                }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                Cancel
-              </button>
+            
+            <div className="p-4 max-h-80 overflow-y-auto">
+              {inventoryLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                  <span className="ml-2 text-gray-500">Loading Katana inventory...</span>
+                </div>
+              ) : filteredInventory.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  {inventorySearch ? 'No matching inventory items' : 'No sheet goods in inventory'}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredInventory.map((item) => {
+                    const isSelected = selectedInventoryItem?.id === item.id;
+                    const hasCost = item.costPerUnit && item.costPerUnit > 0;
+                    
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setSelectedInventoryItem(item);
+                          // Don't auto-enable override - let backend fetch from inventory
+                          setUseOverride(false);
+                          setPriceOverride('');
+                        }}
+                        className={`w-full p-3 text-left border rounded-lg transition-colors ${
+                          isSelected 
+                            ? 'border-blue-500 bg-blue-50' 
+                            : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {item.displayName || item.name}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              SKU: {item.sku} {item.thickness && `• ${item.thickness}mm`}
+                            </div>
+                            {item.isStandard && (
+                              <span className="inline-flex items-center px-2 py-0.5 mt-1 text-xs font-medium bg-green-100 text-green-800 rounded">
+                                Katana Standard
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            {hasCost ? (
+                              <>
+                                <div className="text-sm font-medium text-green-700">
+                                  {item.costPerUnit?.toLocaleString()} {item.currency || 'UGX'}
+                                </div>
+                                <div className="text-xs text-green-600">auto-price</div>
+                              </>
+                            ) : (
+                              <div className="text-sm text-amber-600 flex items-center gap-1">
+                                <AlertCircle className="w-4 h-4" />
+                                Price pending sync
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            
+            <div className="px-4 py-3 border-t border-gray-200 flex justify-between items-center">
+              <div className="text-sm text-gray-500">
+                {selectedInventoryItem && (
+                  <>
+                    Selected: <strong>{selectedInventoryItem.displayName || selectedInventoryItem.name}</strong>
+                    {useOverride && priceOverride ? (
+                      <span className="ml-2 text-blue-600">
+                        @ {Number(priceOverride).toLocaleString()} UGX (override)
+                      </span>
+                    ) : selectedInventoryItem.costPerUnit ? (
+                      <span className="ml-2 text-green-600">
+                        @ {selectedInventoryItem.costPerUnit.toLocaleString()} UGX (from inventory)
+                      </span>
+                    ) : (
+                      <span className="ml-2 text-gray-500">
+                        (price will be fetched from inventory)
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setShowMappingModal(false);
+                    setSelectedEntry(null);
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (selectedInventoryItem) {
+                      const override = useOverride && priceOverride ? Number(priceOverride) : undefined;
+                      handleMapMaterial(selectedInventoryItem, override);
+                    }
+                  }}
+                  disabled={!selectedInventoryItem}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Map Material
+                </button>
+              </div>
             </div>
           </div>
         </div>

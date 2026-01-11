@@ -16,7 +16,9 @@ import {
   onSnapshot,
   serverTimestamp,
 } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db } from '@/core/services/firebase/firestore';
+import { storage } from '@/shared/services/firebase';
 import type {
   OrganizationSettings,
   DawinUser,
@@ -120,6 +122,154 @@ export async function updateOrganizationSettings(
       updatedAt: serverTimestamp(),
     });
   }
+}
+
+/**
+ * Upload subsidiary logo to Firebase Storage
+ */
+export async function uploadSubsidiaryLogo(
+  file: File,
+  subsidiaryId: string,
+  type: 'primary' | 'light' | 'favicon' = 'primary',
+  orgId: string = DEFAULT_ORG_ID
+): Promise<string> {
+  console.log('🔍 Upload Debug:', { file: file.name, size: file.size, type: file.type, subsidiaryId, orgId });
+  
+  // Validate file
+  const maxSize = 2 * 1024 * 1024; // 2MB
+  if (file.size > maxSize) {
+    throw new Error('File size exceeds 2MB limit');
+  }
+  
+  const allowedTypes = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error('Invalid file type. Allowed: PNG, JPG, SVG, WebP');
+  }
+  
+  // Generate storage path
+  const ext = file.name.split('.').pop() || 'png';
+  const storagePath = `organizations/${orgId}/branding/${subsidiaryId}/${type}-logo.${ext}`;
+  console.log('📁 Storage Path:', storagePath);
+  const storageRef = ref(storage, storagePath);
+  
+  try {
+    // Upload file
+    await uploadBytes(storageRef, file, {
+      contentType: file.type,
+      customMetadata: {
+        orgId,
+        subsidiaryId,
+        type,
+        uploadedAt: new Date().toISOString(),
+      },
+    });
+    console.log('✅ File uploaded to storage');
+    
+    // Get download URL
+    const downloadUrl = await getDownloadURL(storageRef);
+    console.log('🔗 Download URL:', downloadUrl);
+    
+    // Update organization settings with logo URL
+    const fieldMap = {
+      primary: 'logoUrl',
+      light: 'logoLightUrl',
+      favicon: 'faviconUrl',
+    };
+    
+    // Get current settings
+    const settings = await getOrganizationSettings(orgId);
+    console.log('📋 Current Settings:', settings);
+    
+    // Handle migration from old branding structure to new one
+    let currentBranding = settings?.branding;
+    if (!currentBranding || !currentBranding.subsidiaries) {
+      console.log('🔄 Migrating branding structure');
+      currentBranding = {
+        groupPrimaryColor: '#872E5C',
+        groupSecondaryColor: '#E18425',
+        subsidiaries: {
+          'dawin-group': { primaryColor: '#872E5C', secondaryColor: '#E18425' },
+          'dawin-finishes': { primaryColor: '#872E5C', secondaryColor: '#E18425' },
+          'dawin-advisory': { primaryColor: '#1a365d', secondaryColor: '#3182ce' },
+          'dawin-capital': { primaryColor: '#1a202c', secondaryColor: '#2d3748' },
+          'dawin-technology': { primaryColor: '#553c9a', secondaryColor: '#805ad5' },
+        }
+      };
+    }
+    
+    // Update subsidiary branding
+    const updatedBranding = {
+      ...currentBranding,
+      subsidiaries: {
+        ...currentBranding.subsidiaries,
+        [subsidiaryId]: {
+          ...currentBranding.subsidiaries[subsidiaryId as keyof typeof currentBranding.subsidiaries],
+          [fieldMap[type]]: downloadUrl,
+        },
+      },
+    };
+    
+    console.log('💾 Updated Branding:', updatedBranding);
+    
+    await updateOrganizationSettings(orgId, {
+      branding: updatedBranding,
+    });
+    console.log('✅ Settings updated');
+    
+    return downloadUrl;
+  } catch (error) {
+      console.error('❌ Upload Error:', error);
+      throw error;
+    }
+  }
+
+/**
+ * Upload organization logo to Firebase Storage (legacy)
+ */
+export async function uploadOrganizationLogo(
+  file: File,
+  orgId: string = DEFAULT_ORG_ID,
+  type: 'primary' | 'light' | 'favicon' = 'primary'
+): Promise<string> {
+  // Delegate to subsidiary upload for dawin-group
+  return uploadSubsidiaryLogo(file, 'dawin-group', type, orgId);
+}
+
+/**
+ * Delete organization logo from Firebase Storage
+ */
+export async function deleteOrganizationLogo(
+  orgId: string = DEFAULT_ORG_ID,
+  type: 'primary' | 'light' | 'favicon' = 'primary'
+): Promise<void> {
+  // Get current settings to find the URL
+  const settings = await getOrganizationSettings(orgId);
+  const fieldMap = {
+    primary: 'logoUrl',
+    light: 'logoLightUrl',
+    favicon: 'faviconUrl',
+  };
+  
+  const currentUrl = settings?.branding?.[fieldMap[type] as keyof typeof settings.branding];
+  
+  if (currentUrl) {
+    try {
+      // Extract storage path from URL and delete
+      const storageRef = ref(storage, `organizations/${orgId}/branding/${type}-logo`);
+      await deleteObject(storageRef);
+    } catch (error) {
+      // Ignore if file doesn't exist
+      console.warn('Logo file not found:', error);
+    }
+  }
+  
+  // Clear the URL in settings
+  await updateOrganizationSettings(orgId, {
+    branding: {
+      ...settings?.branding,
+      [fieldMap[type]]: null,
+    },
+  } as Partial<OrganizationSettings>);
 }
 
 // ============================================================================

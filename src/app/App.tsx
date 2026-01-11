@@ -7,6 +7,7 @@ import { RouterProvider } from 'react-router-dom';
 import { router } from './routes/index';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SubsidiaryProvider } from '@/contexts/SubsidiaryContext';
+import { TooltipProvider } from '@/core/components/ui/tooltip';
 
 /**
  * Error Boundary fallback
@@ -35,7 +36,9 @@ export default function App() {
   return (
     <AuthProvider>
       <SubsidiaryProvider>
-        <RouterProvider router={router} />
+        <TooltipProvider delayDuration={300}>
+          <RouterProvider router={router} />
+        </TooltipProvider>
       </SubsidiaryProvider>
     </AuthProvider>
   );

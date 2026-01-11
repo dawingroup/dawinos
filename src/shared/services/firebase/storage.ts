@@ -17,8 +17,8 @@ import {
 } from 'firebase/storage';
 import { app } from './config';
 
-// Initialize Firebase Storage
-export const storage: FirebaseStorage = getStorage(app);
+// Initialize Firebase Storage with correct bucket URL
+export const storage: FirebaseStorage = getStorage(app, 'gs://dawinos.firebasestorage.app');
 
 /**
  * Get a storage reference

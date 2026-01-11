@@ -263,6 +263,7 @@ export async function harvestMaterials(
 
 /**
  * Map a material to inventory
+ * If unitCost is 0 or undefined, automatically fetches price from inventory item
  */
 export async function mapMaterialToInventory(
   projectId: string,
@@ -270,10 +271,25 @@ export async function mapMaterialToInventory(
   inventoryId: string,
   inventoryName: string,
   inventorySku: string,
-  unitCost: number,
+  unitCost: number | undefined,
   stockSheets: OptimizationStockSheet[],
   userId: string
 ): Promise<void> {
+  // Auto-fetch price from inventory if not provided or zero
+  let resolvedUnitCost = unitCost || 0;
+  if (resolvedUnitCost === 0) {
+    try {
+      const inventoryRef = doc(db, 'inventoryItems', inventoryId);
+      const inventorySnap = await getDoc(inventoryRef);
+      if (inventorySnap.exists()) {
+        const inventoryData = inventorySnap.data();
+        resolvedUnitCost = inventoryData.pricing?.costPerUnit || 0;
+        console.log(`[MaterialHarvester] Auto-fetched price for ${inventoryName}: ${resolvedUnitCost}`);
+      }
+    } catch (error) {
+      console.warn(`[MaterialHarvester] Failed to auto-fetch price for ${inventoryName}:`, error);
+    }
+  }
   const projectRef = doc(db, PROJECTS_COLLECTION, projectId);
   const projectSnap = await getDoc(projectRef);
   
@@ -303,13 +319,13 @@ export async function mapMaterialToInventory(
     nanoseconds: now.nanoseconds,
   };
   
-  // Update entry
+  // Update entry with resolved price (auto-fetched from inventory if needed)
   palette.entries[entryIndex] = {
     ...entry,
     inventoryId,
     inventoryName,
     inventorySku,
-    unitCost,
+    unitCost: resolvedUnitCost,
     stockSheets,
     mappedAt: timestamp,
     mappedBy: userId,

@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft,
   FileText, 
@@ -23,9 +23,10 @@ import {
   Plus,
   Upload,
   Download,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import { useMatFlowProject, useProjectBOQItems, useProjectDeliveries } from '../hooks/useMatFlow';
+import { useMatFlowProject, useProjectBOQItems, useProjectDeliveries, useProjectMutations } from '../hooks/useMatFlow';
 import { formatCurrency, formatDate } from '../utils/formatters';
 
 type Tab = 'overview' | 'boq' | 'deliveries' | 'variance' | 'invoices' | 'reports' | 'settings';
@@ -34,7 +35,7 @@ const ProjectDetail: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   
-  const { project, loading: projectLoading } = useMatFlowProject(projectId || '');
+  const { project, isLoading: projectLoading } = useMatFlowProject(projectId || '');
   const { items: boqItems, loading: boqLoading } = useProjectBOQItems(projectId || '');
   const { deliveries, loading: deliveriesLoading } = useProjectDeliveries(projectId || '');
   
@@ -226,7 +227,7 @@ const ProjectDetail: React.FC = () => {
         )}
         
         {activeTab === 'settings' && (
-          <SettingsTab project={project} />
+          <SettingsTab project={project} projectId={projectId!} />
         )}
       </div>
     </div>
@@ -363,15 +364,15 @@ function BOQTab({ projectId, items, loading }: { projectId: string; items: any[]
                     <p className="text-xs text-gray-500">{item.itemCode}</p>
                   </td>
                   <td className="py-3 px-4 text-gray-600">{item.unit}</td>
-                  <td className="py-3 px-4 text-right text-gray-600">{item.quantity}</td>
-                  <td className="py-3 px-4 text-right text-gray-600">{formatCurrency(item.unitPrice, 'UGX')}</td>
-                  <td className="py-3 px-4 text-right font-medium">{formatCurrency(item.totalPrice, 'UGX')}</td>
+                  <td className="py-3 px-4 text-right text-gray-600">{item.quantityContract || item.quantity || 0}</td>
+                  <td className="py-3 px-4 text-right text-gray-600">{formatCurrency(item.rate || item.unitPrice || 0, 'UGX')}</td>
+                  <td className="py-3 px-4 text-right font-medium">{formatCurrency(item.amount || item.totalPrice || 0, 'UGX')}</td>
                   <td className="py-3 px-4 text-right">
                     <span className={cn(
                       'text-sm',
-                      item.deliveredQuantity >= item.quantity ? 'text-green-600' : 'text-amber-600'
+                      (item.quantityExecuted || 0) >= (item.quantityContract || item.quantity || 0) ? 'text-green-600' : 'text-amber-600'
                     )}>
-                      {item.deliveredQuantity || 0} / {item.quantity}
+                      {item.quantityExecuted || item.deliveredQuantity || 0} / {item.quantityContract || item.quantity || 0}
                     </span>
                   </td>
                 </tr>
@@ -511,7 +512,60 @@ function ReportsTab(_props: { projectId?: string; project?: any }) {
 }
 
 // Settings Tab
-function SettingsTab({ project }: { project: any }) {
+function SettingsTab({ project, projectId }: { project: any; projectId: string }) {
+  const navigate = useNavigate();
+  const { update, remove, isSubmitting } = useProjectMutations();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [formData, setFormData] = useState({
+    name: project?.name || '',
+    customerName: project?.customerName || '',
+    district: project?.location?.district || '',
+    address: project?.location?.address || '',
+    description: project?.description || '',
+    status: project?.status || 'draft',
+  });
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  // Sync form data when project changes
+  React.useEffect(() => {
+    if (project) {
+      setFormData({
+        name: project.name || '',
+        customerName: project.customerName || '',
+        district: project.location?.district || '',
+        address: project.location?.address || '',
+        description: project.description || '',
+        status: project.status || 'draft',
+      });
+    }
+  }, [project]);
+
+  const handleChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setSaveStatus('idle');
+  };
+
+  const handleSave = async () => {
+    setSaveStatus('saving');
+    try {
+      await update(projectId, {
+        name: formData.name,
+        description: formData.description,
+        status: formData.status as any,
+        location: {
+          district: formData.district,
+          address: formData.address,
+        },
+      });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err) {
+      console.error('Failed to save:', err);
+      setSaveStatus('error');
+    }
+  };
+
   return (
     <div className="p-6">
       <h3 className="font-semibold text-gray-900 mb-4">Project Settings</h3>
@@ -520,7 +574,8 @@ function SettingsTab({ project }: { project: any }) {
           <label className="block text-sm font-medium text-gray-700 mb-1">Project Name</label>
           <input
             type="text"
-            defaultValue={project.name}
+            value={formData.name}
+            onChange={(e) => handleChange('name', e.target.value)}
             className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
@@ -528,30 +583,125 @@ function SettingsTab({ project }: { project: any }) {
           <label className="block text-sm font-medium text-gray-700 mb-1">Client Name</label>
           <input
             type="text"
-            defaultValue={project.clientName || ''}
+            value={formData.customerName}
+            onChange={(e) => handleChange('customerName', e.target.value)}
             className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-          <input
-            type="text"
-            defaultValue={project.location || ''}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
+          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+          <select
+            value={formData.status}
+            onChange={(e) => handleChange('status', e.target.value)}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+          >
+            <option value="draft">Draft</option>
+            <option value="active">Active</option>
+            <option value="on_hold">On Hold</option>
+            <option value="completed">Completed</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">District</label>
+            <input
+              type="text"
+              value={formData.district}
+              onChange={(e) => handleChange('district', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+            <input
+              type="text"
+              value={formData.address}
+              onChange={(e) => handleChange('address', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
           <textarea
             rows={3}
-            defaultValue={project.description || ''}
+            value={formData.description}
+            onChange={(e) => handleChange('description', e.target.value)}
             className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
-        <div className="pt-4">
-          <button className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700">
-            Save Changes
+        <div className="pt-4 flex items-center gap-4">
+          <button
+            onClick={handleSave}
+            disabled={isSubmitting}
+            className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+          >
+            {isSubmitting ? 'Saving...' : 'Save Changes'}
           </button>
+          {saveStatus === 'saved' && (
+            <span className="text-green-600 text-sm flex items-center gap-1">
+              <CheckCircle2 className="w-4 h-4" /> Saved
+            </span>
+          )}
+          {saveStatus === 'error' && (
+            <span className="text-red-600 text-sm">Failed to save</span>
+          )}
+        </div>
+
+        {/* Danger Zone - Delete Project */}
+        <div className="mt-12 pt-6 border-t border-red-200">
+          <h4 className="text-red-600 font-semibold mb-2">Danger Zone</h4>
+          <p className="text-sm text-gray-600 mb-4">
+            Once you delete a project, there is no going back. Please be certain.
+          </p>
+          
+          {!showDeleteConfirm ? (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Project
+            </button>
+          ) : (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-sm text-red-700 mb-3">
+                Are you sure you want to delete <strong>{project?.name}</strong>? This action cannot be undone.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    try {
+                      await remove(projectId);
+                      navigate('/advisory/matflow/projects');
+                    } catch (err) {
+                      console.error('Failed to delete:', err);
+                      setIsDeleting(false);
+                    }
+                  }}
+                  disabled={isDeleting}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isDeleting ? (
+                    <>Deleting...</>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      Yes, Delete Project
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

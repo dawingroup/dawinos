@@ -179,7 +179,7 @@ export function InventoryItemDetail({
                   <div>
                     <p className="text-xs text-gray-500 uppercase">Cost per Unit</p>
                     <p className="text-lg font-semibold text-gray-900">
-                      {item.pricing?.currency || 'KES'} {item.pricing?.costPerUnit?.toLocaleString() || '0'}
+                      {item.pricing?.currency || 'UGX'} {item.pricing?.costPerUnit?.toLocaleString() || '0'}
                     </p>
                   </div>
                   <div>

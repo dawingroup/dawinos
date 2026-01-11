@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import type { PopupClipRecord } from '../types';
 
 // Simplified clip type for chrome.storage
 interface StoredClip {
@@ -8,35 +9,33 @@ interface StoredClip {
   title: string;
   thumbnailDataUrl?: string;
   createdAt: string;
-  syncStatus: 'pending' | 'synced';
+  syncStatus: 'pending' | 'synced' | 'syncing' | 'error';
+  syncError?: string;
   tags?: string[];
-}
-
-// Map to ClipRecord-like structure for UI compatibility
-interface ClipRecord {
-  id: string;
-  imageUrl: string;
-  sourceUrl: string;
-  title: string;
-  thumbnailBlob?: Blob;
-  thumbnailDataUrl?: string;
-  createdAt: Date;
-  syncStatus: 'pending' | 'synced';
-  tags: string[];
-  price?: { amount: number; formatted: string };
+  description?: string;
+  notes?: string;
+  brand?: string;
+  sku?: string;
+  price?: { amount: number; currency?: string; formatted: string };
+  dimensions?: { width?: number; height?: number; depth?: number; unit?: string };
+  materials?: string[];
+  colors?: string[];
+  projectId?: string;
+  designItemId?: string;
+  clipType?: string;
 }
 
 interface UseClipsReturn {
-  clips: ClipRecord[];
+  clips: PopupClipRecord[];
   pendingCount: number;
   isLoading: boolean;
   syncClips: () => Promise<void>;
   deleteClip: (clipId: string) => Promise<void>;
-  updateClip: (clipId: string, updates: Partial<ClipRecord>) => Promise<void>;
+  updateClip: (clipId: string, updates: Partial<PopupClipRecord>) => Promise<void>;
 }
 
 export function useClips(): UseClipsReturn {
-  const [clips, setClips] = useState<ClipRecord[]>([]);
+  const [clips, setClips] = useState<PopupClipRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadClips = useCallback(async () => {
@@ -45,8 +44,8 @@ export function useClips(): UseClipsReturn {
       const result = await chrome.storage.local.get(['clips']);
       const storedClips: StoredClip[] = result.clips || [];
       
-      // Map to ClipRecord format
-      const mappedClips: ClipRecord[] = storedClips.map((clip) => ({
+      // Map to PopupClipRecord format
+      const mappedClips: PopupClipRecord[] = storedClips.map((clip) => ({
         id: clip.id,
         imageUrl: clip.imageUrl,
         sourceUrl: clip.sourceUrl,
@@ -54,7 +53,19 @@ export function useClips(): UseClipsReturn {
         thumbnailDataUrl: clip.thumbnailDataUrl,
         createdAt: new Date(clip.createdAt),
         syncStatus: clip.syncStatus,
+        syncError: clip.syncError,
         tags: clip.tags || [],
+        description: clip.description,
+        notes: clip.notes,
+        brand: clip.brand,
+        sku: clip.sku,
+        price: clip.price,
+        dimensions: clip.dimensions,
+        materials: clip.materials,
+        colors: clip.colors,
+        projectId: clip.projectId,
+        designItemId: clip.designItemId,
+        clipType: clip.clipType as PopupClipRecord['clipType'],
       }));
       
       // Sort by createdAt descending
@@ -112,14 +123,14 @@ export function useClips(): UseClipsReturn {
     }
   };
 
-  const updateClip = async (clipId: string, updates: Partial<ClipRecord>) => {
+  const updateClip = async (clipId: string, updates: Partial<PopupClipRecord>) => {
     try {
       const result = await chrome.storage.local.get(['clips']);
-      const clips: StoredClip[] = result.clips || [];
-      const index = clips.findIndex((c) => c.id === clipId);
+      const storedClips: StoredClip[] = result.clips || [];
+      const index = storedClips.findIndex((c) => c.id === clipId);
       if (index !== -1) {
-        clips[index] = { ...clips[index], ...updates, createdAt: clips[index].createdAt };
-        await chrome.storage.local.set({ clips });
+        storedClips[index] = { ...storedClips[index], ...updates, createdAt: storedClips[index].createdAt };
+        await chrome.storage.local.set({ clips: storedClips });
         loadClips();
       }
     } catch (error) {

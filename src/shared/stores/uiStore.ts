@@ -9,12 +9,14 @@ import { persist } from 'zustand/middleware';
 interface UIState {
   sidebarOpen: boolean;
   sidebarCollapsed: boolean;
+  sidebarAutoClose: boolean; // Auto-close sidebar on mobile after navigation
   theme: 'light' | 'dark' | 'system';
   activeModal: string | null;
   toasts: Toast[];
   
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
+  setSidebarAutoClose: (autoClose: boolean) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   openModal: (modalId: string) => void;
   closeModal: () => void;
@@ -33,8 +35,9 @@ interface Toast {
 export const useUIStore = create<UIState>()(
   persist(
     (set) => ({
-      sidebarOpen: true,
+      sidebarOpen: false, // Start closed on mobile
       sidebarCollapsed: false,
+      sidebarAutoClose: true, // Auto-close by default on mobile
       theme: 'system',
       activeModal: null,
       toasts: [],
@@ -44,6 +47,9 @@ export const useUIStore = create<UIState>()(
 
       setSidebarCollapsed: (collapsed) =>
         set({ sidebarCollapsed: collapsed }),
+
+      setSidebarAutoClose: (autoClose) =>
+        set({ sidebarAutoClose: autoClose }),
 
       setTheme: (theme) => set({ theme }),
 
@@ -68,6 +74,7 @@ export const useUIStore = create<UIState>()(
       name: 'ui-storage',
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
+        sidebarAutoClose: state.sidebarAutoClose,
         theme: state.theme,
       }),
     }

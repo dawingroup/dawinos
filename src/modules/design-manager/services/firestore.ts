@@ -701,3 +701,64 @@ export function subscribeToDeliverables(
     callback(deliverables);
   });
 }
+
+/**
+ * Share/unshare a deliverable to client portal
+ */
+export async function toggleDeliverablePortalSharing(
+  projectId: string,
+  itemId: string,
+  deliverableId: string,
+  share: boolean,
+  userId: string,
+  portalDisplayName?: string
+): Promise<void> {
+  const deliverableRef = doc(db, PROJECTS_COLLECTION, projectId, ITEMS_SUBCOLLECTION, itemId, DELIVERABLES_SUBCOLLECTION, deliverableId);
+  
+  if (share) {
+    await updateDoc(deliverableRef, {
+      sharedToPortal: true,
+      sharedToPortalAt: serverTimestamp(),
+      sharedToPortalBy: userId,
+      ...(portalDisplayName && { portalDisplayName }),
+    });
+  } else {
+    await updateDoc(deliverableRef, {
+      sharedToPortal: false,
+      sharedToPortalAt: null,
+      sharedToPortalBy: null,
+      portalDisplayName: null,
+    });
+  }
+}
+
+/**
+ * Get all deliverables shared to portal for a project
+ */
+export async function getPortalSharedDeliverables(
+  projectId: string
+): Promise<Array<Deliverable & { itemId: string; itemName: string }>> {
+  // Get all design items for the project
+  const itemsRef = collection(db, PROJECTS_COLLECTION, projectId, ITEMS_SUBCOLLECTION);
+  const itemsSnap = await getDocs(itemsRef);
+  
+  const sharedDeliverables: Array<Deliverable & { itemId: string; itemName: string }> = [];
+  
+  for (const itemDoc of itemsSnap.docs) {
+    const itemData = itemDoc.data();
+    const deliverablesRef = collection(itemDoc.ref, DELIVERABLES_SUBCOLLECTION);
+    const sharedQuery = query(deliverablesRef, where('sharedToPortal', '==', true));
+    const deliverablesSnap = await getDocs(sharedQuery);
+    
+    deliverablesSnap.docs.forEach(delDoc => {
+      sharedDeliverables.push({
+        id: delDoc.id,
+        itemId: itemDoc.id,
+        itemName: itemData.name || 'Unknown Item',
+        ...delDoc.data(),
+      } as Deliverable & { itemId: string; itemName: string });
+    });
+  }
+  
+  return sharedDeliverables;
+}

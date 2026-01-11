@@ -6,3 +6,4 @@
 export { NestingStudio } from './NestingStudio';
 export { KatanaExportSection } from './KatanaExportSection';
 export { ShopTravelerSection } from './ShopTravelerSection';
+export { ShopTraveler } from './ShopTraveler';

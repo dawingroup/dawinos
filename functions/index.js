@@ -1,4 +1,4 @@
-const { onRequest } = require('firebase-functions/v2/https');
+const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { defineString, defineSecret } = require('firebase-functions/params');
 const { Client } = require('@notionhq/client');
@@ -24,6 +24,7 @@ const { analyzeClip } = require('./src/ai/analyzeClip');
 const { generateProductNames } = require('./src/ai/productNaming');
 const { generateProductContent, generateDiscoverabilityData } = require('./src/ai/productContent');
 const { auditShopifyProduct } = require('./src/ai/catalogAudit');
+const { generateEmbedding, generateEmbeddings, semanticSearch, indexCollection } = require('./src/ai/embeddings');
 
 // Scheduled Audit Functions
 const { dailyCatalogAudit, weeklyCatalogAudit } = require('./src/scheduled/catalogAudit');
@@ -47,6 +48,31 @@ exports.generateProductNames = generateProductNames;
 exports.generateProductContent = generateProductContent;
 exports.generateDiscoverabilityData = generateDiscoverabilityData;
 exports.auditShopifyProduct = auditShopifyProduct;
+
+// RAG / Embedding Functions
+exports.generateEmbedding = generateEmbedding;
+exports.generateEmbeddings = generateEmbeddings;
+exports.semanticSearch = semanticSearch;
+exports.indexCollection = indexCollection;
+
+// DawinOS v2.0 - Auth & Claims Functions
+const { syncEmployeeClaims, setAdminClaims, initializeFirstAdmin, getCurrentClaims } = require('./src/auth/setCustomClaims');
+exports.syncEmployeeClaims = syncEmployeeClaims;
+exports.setAdminClaims = setAdminClaims;
+exports.initializeFirstAdmin = initializeFirstAdmin;
+exports.getCurrentClaims = getCurrentClaims;
+
+// DawinOS v2.0 - Task Generation Functions
+const { 
+  onBusinessEventCreated, 
+  processOverdueEscalations, 
+  sendTaskReminders, 
+  retryUnassignedTasks 
+} = require('./src/triggers/taskGeneration');
+exports.onBusinessEventCreated = onBusinessEventCreated;
+exports.processOverdueEscalations = processOverdueEscalations;
+exports.sendTaskReminders = sendTaskReminders;
+exports.retryUnassignedTasks = retryUnassignedTasks;
 
 // Customer Sync Functions
 const { 
@@ -92,11 +118,34 @@ exports.onFeatureLibraryWritten = onFeatureLibraryWritten;
 const { onDesignClipCreated } = require('./src/triggers/analyzeNewClip');
 exports.onDesignClipCreated = onDesignClipCreated;
 
+// Business Event Monitors - AI Intelligence Integration
+const { 
+  onDesignItemUpdated,
+  onDesignItemCreated,
+  onDesignProjectCreated,
+  onDesignProjectUpdated,
+  onLaunchProductUpdated,
+  onEngagementCreated,
+  onEngagementUpdated,
+  onDisbursementCreated,
+  onDeliveryProjectUpdated,
+} = require('./src/triggers/businessEventMonitors');
+exports.onDesignItemUpdated = onDesignItemUpdated;
+exports.onDesignItemCreated = onDesignItemCreated;
+exports.onDesignProjectCreated = onDesignProjectCreated;
+exports.onDesignProjectUpdated = onDesignProjectUpdated;
+exports.onLaunchProductUpdated = onLaunchProductUpdated;
+exports.onEngagementCreated = onEngagementCreated;
+exports.onEngagementUpdated = onEngagementUpdated;
+exports.onDisbursementCreated = onDisbursementCreated;
+exports.onDeliveryProjectUpdated = onDeliveryProjectUpdated;
+
 // Inventory Katana Sync
-const { pullFromKatana, pushToKatana, triggerKatanaSync } = require('./src/inventory/katanaSync');
+const { pullFromKatana, pushToKatana, triggerKatanaSync, processSyncRequest } = require('./src/inventory/katanaSync');
 exports.pullFromKatana = pullFromKatana;
 exports.pushToKatana = pushToKatana;
 exports.triggerKatanaSync = triggerKatanaSync;
+exports.processSyncRequest = processSyncRequest;
 
 // Push Notifications
 const { 
@@ -125,6 +174,128 @@ const KATANA_API_KEY = defineSecret('KATANA_API_KEY');
 const QUICKBOOKS_CLIENT_ID = defineSecret('QUICKBOOKS_CLIENT_ID');
 const QUICKBOOKS_CLIENT_SECRET = defineSecret('QUICKBOOKS_CLIENT_SECRET');
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
+
+// Katana Materials Callable (bypasses Cloud Run IAM for org policy compliance)
+exports.getKatanaMaterialsCallable = onCall({
+  secrets: [KATANA_API_KEY],
+  cors: true,
+  timeoutSeconds: 120,
+}, async (request) => {
+  // Require authentication
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in to sync from Katana');
+  }
+  
+  console.log('getKatanaMaterialsCallable called by:', request.auth.token.email);
+  
+  const KATANA_API_BASE = 'https://api.katanamrp.com/v1';
+  const apiKey = KATANA_API_KEY.value();
+  
+  if (!apiKey) {
+    throw new HttpsError('failed-precondition', 'KATANA_API_KEY not configured');
+  }
+  
+  // Rate limiting helper - wait between requests to avoid 429
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  const RATE_LIMIT_DELAY = 500; // 500ms between requests
+  
+  async function katanaFetch(endpoint, retries = 3) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      const response = await fetch(`${KATANA_API_BASE}${endpoint}`, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.status === 429) {
+        // Rate limited - wait and retry
+        const waitTime = Math.min(1000 * attempt, 5000); // Exponential backoff up to 5s
+        console.log(`Rate limited on ${endpoint}, waiting ${waitTime}ms (attempt ${attempt}/${retries})`);
+        await delay(waitTime);
+        continue;
+      }
+      
+      if (!response.ok) {
+        console.error(`Katana API error: ${response.status} for ${endpoint}`);
+        return null;
+      }
+      return await response.json();
+    }
+    console.error(`Failed after ${retries} retries for ${endpoint}`);
+    return null;
+  }
+  
+  try {
+    // Fetch material variants with prices - limit to first 3 pages to avoid rate limits
+    let allVariants = [];
+    let page = 1;
+    const perPage = 50; // Smaller page size to reduce API load
+    const maxPages = 5; // Limit pages to avoid hitting rate limits
+    
+    while (page <= maxPages) {
+      const data = await katanaFetch(`/variants?type=material&per_page=${perPage}&page=${page}`);
+      if (!data) break;
+      
+      const items = Array.isArray(data) ? data : (data.data || []);
+      if (items.length === 0) break;
+      
+      allVariants = allVariants.concat(items);
+      if (items.length < perPage) break;
+      page++;
+      
+      // Rate limit delay between pages
+      await delay(RATE_LIMIT_DELAY);
+    }
+    
+    console.log(`Fetched ${allVariants.length} material variants from Katana`);
+    
+    // Skip inventory fetch if we already hit rate limits - just return what we have
+    // Inventory data is nice-to-have for stock levels but not critical for parts selection
+    const inventoryMap = new Map();
+    
+    // Only fetch first page of inventory to minimize API calls
+    const invData = await katanaFetch(`/inventory?extend=variant&per_page=${perPage}&page=1`);
+    if (invData) {
+      const items = Array.isArray(invData) ? invData : (invData.data || []);
+      for (const inv of items) {
+        if (inv.variant_id) {
+          inventoryMap.set(inv.variant_id, {
+            inStock: inv.in_stock || inv.quantity_on_hand || 0,
+          });
+        }
+      }
+    }
+    
+    // Map to our format
+    const materials = allVariants
+      .filter(v => v.material_id)
+      .map(v => {
+        const stock = inventoryMap.get(v.id) || {};
+        return {
+          katanaId: v.id || v.material_id,
+          sku: v.sku || '',
+          name: v.name || v.material_name || 'Unknown',
+          type: v.category_name || v.type || 'Material',
+          costPerUnit: parseFloat(v.purchase_price) || 0,
+          inStock: stock.inStock || 0,
+          unit: v.unit || 'pcs',
+        };
+      });
+    
+    console.log(`Returning ${materials.length} materials`);
+    
+    return {
+      success: true,
+      materials,
+      source: 'katana-api',
+      fetchedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error('Katana sync error:', error);
+    throw new HttpsError('internal', error.message || 'Failed to fetch from Katana');
+  }
+});
 
 // QuickBooks OAuth URLs
 const QBO_AUTH_URL = 'https://appcenter.intuit.com/connect/oauth2';
@@ -488,14 +659,37 @@ async function checkRateLimit(userId, limitPerMinute = 10) {
   return { allowed: true, remaining: limitPerMinute - recentRequests.length };
 }
 
+// Helper function to verify Firebase ID token
+async function verifyFirebaseToken(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+  
+  const idToken = authHeader.split('Bearer ')[1];
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    return decodedToken;
+  } catch (error) {
+    console.log('Token verification failed:', error.message);
+    return null;
+  }
+}
+
 // Main API handler - Gen 2 with public access
 exports.api = onRequest({ 
   cors: true,
-  invoker: 'public',
+  invoker: "public",
   secrets: [ANTHROPIC_API_KEY, KATANA_API_KEY, GEMINI_API_KEY, QUICKBOOKS_CLIENT_ID, QUICKBOOKS_CLIENT_SECRET]
 }, async (req, res) => {
   const path = req.path.replace('/api', '');
   console.log('API Request:', req.method, path);
+
+  // Verify Firebase token if provided (required for sensitive endpoints)
+  const user = await verifyFirebaseToken(req);
+  if (user) {
+    console.log('Authenticated user:', user.email);
+  }
 
   try {
     switch (path) {
@@ -1298,107 +1492,212 @@ async function syncProductToKatana(req, res) {
 
 /**
  * Get materials from Katana for matching
- * Katana API uses /inventory endpoint for listing inventory
+ * 
+ * Katana API structure:
+ * - /materials returns materials but WITHOUT prices
+ * - /variants contains purchase_price (costs are on variants, not materials)
+ * - /inventory?extend=variant returns stock levels with variant data
+ * 
+ * Strategy: Fetch variants (type=material) to get prices, then enrich with inventory data
  */
 async function getKatanaMaterials(req, res) {
   try {
-    console.log('Fetching materials from Katana');
+    console.log('Fetching materials from Katana (using variants + inventory endpoints)');
 
-    // Fetch materials (not products) with pagination
-    // Katana API uses /materials endpoint for raw materials/inventory
-    let allItems = [];
+    // Step 1: Fetch material variants (contains purchase_price)
+    let allVariants = [];
     let page = 1;
     const perPage = 100;
     let hasMore = true;
     
     while (hasMore) {
-      // Use /materials endpoint for raw materials, ingredients, components
-      const katanaResponse = await katanaRequest(`/materials?limit=${perPage}&per_page=${perPage}&page=${page}`);
+      // Variants endpoint with type=material filter to get material variants with prices
+      const variantsResponse = await katanaRequest(`/variants?type=material&per_page=${perPage}&page=${page}`);
       
-      console.log(`Katana materials page ${page} response:`, JSON.stringify(katanaResponse).substring(0, 500));
+      console.log(`Katana variants page ${page} response:`, JSON.stringify(variantsResponse).substring(0, 500));
       
-      if (katanaResponse.simulated || katanaResponse.error) {
-        console.log('Katana API error or simulated:', katanaResponse.error);
+      if (variantsResponse.simulated || variantsResponse.error) {
+        console.log('Katana variants API error:', variantsResponse.error);
         break;
       }
       
-      // Handle different response formats
-      let items = [];
-      if (Array.isArray(katanaResponse)) {
-        items = katanaResponse;
-      } else if (katanaResponse.data && Array.isArray(katanaResponse.data)) {
-        items = katanaResponse.data;
-      } else if (katanaResponse.materials && Array.isArray(katanaResponse.materials)) {
-        items = katanaResponse.materials;
-      } else if (katanaResponse.items && Array.isArray(katanaResponse.items)) {
-        items = katanaResponse.items;
-      }
+      // Handle response format
+      let items = Array.isArray(variantsResponse) ? variantsResponse : (variantsResponse.data || []);
       
-      console.log(`Page ${page}: Got ${items.length} materials`);
+      console.log(`Variants page ${page}: Got ${items.length} items`);
       
       if (items.length > 0) {
-        allItems = allItems.concat(items);
-        // If we got less than perPage, we've reached the end
-        if (items.length < perPage) {
-          hasMore = false;
-        } else {
-          page++;
-        }
+        allVariants = allVariants.concat(items);
+        hasMore = items.length >= perPage;
+        page++;
       } else {
         hasMore = false;
       }
       
-      // Safety limit to prevent infinite loops (max 50 pages = 5000 items)
       if (page > 50) {
-        console.log('Reached pagination limit of 50 pages');
+        console.log('Reached pagination limit');
         hasMore = false;
       }
     }
     
-    console.log(`Total materials fetched from Katana: ${allItems.length}`);
+    console.log(`Total variants fetched: ${allVariants.length}`);
     
-    if (allItems.length > 0) {
-      // Map Katana material fields
-      const materials = allItems.map(m => ({
-        id: m.id,
-        name: m.name || `Material #${m.id}`,
-        sku: m.sku || m.default_variant?.sku || m.internal_barcode || '',
-        type: m.category_name || m.category || m.type || 'material',
-        thickness: m.thickness || 0,
-        inStock: m.in_stock_total || m.quantity_in_stock || 0,
-        barcode: m.internal_barcode || m.barcode || '',
-        unit: m.unit || m.uom || '',
-        costPerUnit: m.cost_per_unit || m.unit_cost || 0,
-      }));
+    // Step 2: Fetch inventory with variant extension for stock levels
+    let inventoryMap = new Map();
+    page = 1;
+    hasMore = true;
+    
+    while (hasMore) {
+      // Inventory endpoint with extend=variant to get stock + variant details
+      const inventoryResponse = await katanaRequest(`/inventory?extend=variant&per_page=${perPage}&page=${page}`);
+      
+      if (inventoryResponse.simulated || inventoryResponse.error) {
+        console.log('Katana inventory API error:', inventoryResponse.error);
+        break;
+      }
+      
+      let items = Array.isArray(inventoryResponse) ? inventoryResponse : (inventoryResponse.data || []);
+      
+      console.log(`Inventory page ${page}: Got ${items.length} items`);
+      
+      for (const inv of items) {
+        // Map variant_id to stock level
+        if (inv.variant_id) {
+          const existing = inventoryMap.get(inv.variant_id) || { inStock: 0 };
+          inventoryMap.set(inv.variant_id, {
+            inStock: (existing.inStock || 0) + (inv.in_stock || inv.quantity_on_hand || 0),
+            committed: inv.committed || 0,
+            available: inv.available || 0,
+          });
+        }
+      }
+      
+      if (items.length > 0) {
+        hasMore = items.length >= perPage;
+        page++;
+      } else {
+        hasMore = false;
+      }
+      
+      if (page > 50) hasMore = false;
+    }
+    
+    console.log(`Inventory records mapped: ${inventoryMap.size}`);
+    
+    // Step 3: If variants approach didn't work, try materials endpoint with extend
+    if (allVariants.length === 0) {
+      console.log('Variants empty, trying materials endpoint...');
+      page = 1;
+      hasMore = true;
+      
+      while (hasMore) {
+        // Try materials with supplier extension for potential cost data
+        const materialsResponse = await katanaRequest(`/materials?extend=supplier&per_page=${perPage}&page=${page}`);
+        
+        if (materialsResponse.simulated || materialsResponse.error) {
+          console.log('Katana materials API error:', materialsResponse.error);
+          break;
+        }
+        
+        let items = Array.isArray(materialsResponse) ? materialsResponse : (materialsResponse.data || []);
+        
+        console.log(`Materials page ${page}: Got ${items.length} items`);
+        
+        if (items.length > 0) {
+          // Convert materials to variant-like structure
+          for (const m of items) {
+            allVariants.push({
+              id: m.default_variant_id || m.id,
+              material_id: m.id,
+              sku: m.sku || m.default_variant?.sku || '',
+              name: m.name,
+              purchase_price: m.supplier?.default_cost || m.default_supplier_cost || 0,
+              internal_barcode: m.internal_barcode,
+              category_name: m.category_name,
+              unit: m.unit,
+              _fromMaterials: true,
+            });
+          }
+          hasMore = items.length >= perPage;
+          page++;
+        } else {
+          hasMore = false;
+        }
+        
+        if (page > 50) hasMore = false;
+      }
+    }
+    
+    // Log sample for debugging
+    if (allVariants.length > 0 && allVariants[0]) {
+      console.log('Sample variant fields:', JSON.stringify(allVariants[0], null, 2));
+    }
+    
+    if (allVariants.length > 0) {
+      // Map variants to our material format
+      const materials = allVariants
+        .filter(v => v.material_id) // Only material variants
+        .map(v => {
+          const stock = inventoryMap.get(v.id) || {};
+          
+          // purchase_price is the key field from variant object
+          const costPerUnit = 
+            parseFloat(v.purchase_price) ||
+            parseFloat(v.average_cost) ||
+            parseFloat(v.cost) ||
+            0;
+          
+          return {
+            id: v.material_id || v.id,
+            variantId: v.id,
+            name: v.name || v.variant_name || `Material #${v.id}`,
+            sku: v.sku || v.internal_barcode || '',
+            type: v.category_name || v.type || 'material',
+            thickness: v.thickness || 0,
+            inStock: stock.inStock || 0,
+            committed: stock.committed || 0,
+            available: stock.available || 0,
+            barcode: v.internal_barcode || v.registered_barcode || '',
+            unit: v.unit || 'ea',
+            costPerUnit: costPerUnit,
+            currency: v.currency || 'UGX',
+            // Debug info
+            _priceSource: costPerUnit > 0 ? (v.purchase_price ? 'purchase_price' : 'average_cost') : 'none',
+            _rawPriceFields: {
+              purchase_price: v.purchase_price,
+              average_cost: v.average_cost,
+              cost: v.cost,
+            },
+          };
+        });
+      
+      const withPrices = materials.filter(m => m.costPerUnit > 0).length;
+      console.log(`Materials with prices: ${withPrices}/${materials.length}`);
       
       return res.json({ 
         success: true, 
         materials,
         source: 'katana-api',
         count: materials.length,
-        pages: page,
+        withPrices,
+        inventoryRecords: inventoryMap.size,
       });
     }
 
     // Fallback to sample materials for development
     const sampleMaterials = [
-      { id: 'KM-001', name: '18mm Baltic Birch Plywood', sku: 'BBP-18', type: 'sheet', thickness: 18 },
-      { id: 'KM-002', name: '12mm MDF', sku: 'MDF-12', type: 'sheet', thickness: 12 },
-      { id: 'KM-003', name: '25mm Particle Board', sku: 'PB-25', type: 'sheet', thickness: 25 },
-      { id: 'KM-004', name: 'White Oak Veneer', sku: 'WOV-01', type: 'veneer', thickness: 0.6 },
-      { id: 'KM-005', name: 'Walnut Solid', sku: 'WS-20', type: 'solid', thickness: 20 },
-      { id: 'KM-006', name: '6mm Birch Plywood', sku: 'BBP-06', type: 'sheet', thickness: 6 },
-      { id: 'KM-007', name: '9mm Birch Plywood', sku: 'BBP-09', type: 'sheet', thickness: 9 },
-      { id: 'KM-008', name: '15mm Birch Plywood', sku: 'BBP-15', type: 'sheet', thickness: 15 },
-      { id: 'KM-009', name: '18mm Oak Veneered MDF', sku: 'OVM-18', type: 'sheet', thickness: 18 },
-      { id: 'KM-010', name: 'White Melamine 16mm', sku: 'WM-16', type: 'laminate', thickness: 16 },
+      { id: 'KM-001', name: '18mm Baltic Birch Plywood', sku: 'BBP-18', type: 'sheet', thickness: 18, costPerUnit: 0 },
+      { id: 'KM-002', name: '12mm MDF', sku: 'MDF-12', type: 'sheet', thickness: 12, costPerUnit: 0 },
+      { id: 'KM-003', name: '25mm Particle Board', sku: 'PB-25', type: 'sheet', thickness: 25, costPerUnit: 0 },
+      { id: 'KM-004', name: 'White Oak Veneer', sku: 'WOV-01', type: 'veneer', thickness: 0.6, costPerUnit: 0 },
+      { id: 'KM-005', name: 'Walnut Solid', sku: 'WS-20', type: 'solid', thickness: 20, costPerUnit: 0 },
     ];
 
     res.json({ 
       success: true, 
       materials: sampleMaterials,
       source: 'sample-data',
-      note: katanaResponse.error || 'Using sample data - check Katana API configuration',
+      note: 'Using sample data - Katana API returned no materials/variants',
     });
 
   } catch (error) {
@@ -1476,7 +1775,7 @@ async function syncCustomerToKatana(req, res) {
       code: customer.code,
       email: customer.email || undefined,
       phone: customer.phone || undefined,
-      default_currency: 'KES',
+      default_currency: 'UGX',
     };
 
     // Add address if available

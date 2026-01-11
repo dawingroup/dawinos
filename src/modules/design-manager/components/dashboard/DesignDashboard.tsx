@@ -6,7 +6,10 @@
 
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, FolderOpen, AlertCircle, CheckCircle, TrendingUp, Trash2, MoreVertical, Package, ChevronRight } from 'lucide-react';
+import { Plus, FolderOpen, AlertCircle, CheckCircle, TrendingUp, Trash2, MoreVertical, Package, ChevronRight, Calendar, User } from 'lucide-react';
+import { Card, CardContent } from '@/core/components/ui/card';
+import { Badge } from '@/core/components/ui/badge';
+import { Progress } from '@/core/components/ui/progress';
 import { cn } from '@/shared/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import type { DesignProject, DesignItem } from '../../types';
@@ -181,12 +184,14 @@ function ProjectCard({ project, items }: ProjectCardProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const statusColors = {
-    active: 'bg-green-100 text-green-700 border-green-200',
-    'on-hold': 'bg-amber-100 text-amber-700 border-amber-200',
-    completed: 'bg-blue-100 text-blue-700 border-blue-200',
-    cancelled: 'bg-gray-100 text-gray-700 border-gray-200',
+  const statusConfig = {
+    active: { color: '#10B981', bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Active' },
+    'on-hold': { color: '#F59E0B', bg: 'bg-amber-50', text: 'text-amber-700', label: 'On Hold' },
+    completed: { color: '#3B82F6', bg: 'bg-blue-50', text: 'text-blue-700', label: 'Completed' },
+    cancelled: { color: '#6B7280', bg: 'bg-gray-100', text: 'text-gray-600', label: 'Cancelled' },
   };
+
+  const currentStatus = statusConfig[project.status];
 
   // Calculate item stats
   const readyCount = items.filter(i => i.overallReadiness >= 80).length;
@@ -194,6 +199,11 @@ function ProjectCard({ project, items }: ProjectCardProps) {
   const pendingCount = items.filter(i => i.overallReadiness === 0).length;
   const avgReadiness = items.length > 0 
     ? Math.round(items.reduce((sum, i) => sum + i.overallReadiness, 0) / items.length) 
+    : 0;
+
+  // Calculate days since last update
+  const daysActive = project.updatedAt 
+    ? Math.floor((new Date().getTime() - project.updatedAt.toDate().getTime()) / (1000 * 60 * 60 * 24))
     : 0;
 
   const handleDelete = async (e: React.MouseEvent) => {
@@ -212,85 +222,98 @@ function ProjectCard({ project, items }: ProjectCardProps) {
 
   return (
     <div className="relative group">
-      <Link
-        to={`project/${project.id}`}
-        className="block bg-white rounded-xl border border-gray-200 hover:border-[#0A7C8E] hover:shadow-lg transition-all duration-200 overflow-hidden"
-      >
-        {/* Card Header */}
-        <div className="p-6 border-b border-gray-100">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-[#0A7C8E] to-[#0A9A8E] rounded-2xl flex items-center justify-center shadow-md">
-                <FolderOpen className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-900 text-xl">{project.name}</h3>
-                <p className="text-sm text-gray-500 mt-0.5">{project.code}</p>
-              </div>
-            </div>
-            <span className={cn(
-              'text-sm px-3 py-1.5 rounded-full font-medium border',
-              statusColors[project.status]
-            )}>
-              {project.status}
-            </span>
-          </div>
-          {project.customerName && (
-            <p className="text-base text-gray-600 mt-2">
-              <span className="text-gray-400">Customer:</span> {project.customerName}
-            </p>
-          )}
-        </div>
-
-        {/* Item Stats */}
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-base font-semibold text-gray-700">Design Items</span>
-            <span className="text-base text-gray-500">{items.length} total</span>
-          </div>
-          
-          {items.length > 0 ? (
-            <>
-              {/* Progress Bar */}
-              <div className="h-3 bg-gray-100 rounded-full overflow-hidden mb-5">
+      <Link to={`project/${project.id}`} className="block">
+        <Card 
+          className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:-translate-y-1 overflow-hidden"
+          style={{ borderTop: `4px solid ${currentStatus.color}` }}
+        >
+          <CardContent className="p-0">
+            {/* Card Header */}
+            <div className="p-5">
+              <div className="flex items-start gap-4">
                 <div 
-                  className="h-full bg-gradient-to-r from-[#0A7C8E] to-green-500 rounded-full transition-all duration-500"
-                  style={{ width: `${avgReadiness}%` }}
-                />
+                  className="h-14 w-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: `${currentStatus.color}15` }}
+                >
+                  <FolderOpen className="w-7 h-7" style={{ color: currentStatus.color }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-gray-900 text-lg truncate">{project.name}</h3>
+                      <p className="text-sm text-muted-foreground">{project.code}</p>
+                    </div>
+                    <Badge 
+                      variant="secondary" 
+                      className={cn('flex-shrink-0 capitalize', currentStatus.bg, currentStatus.text)}
+                    >
+                      {currentStatus.label}
+                    </Badge>
+                  </div>
+                </div>
               </div>
-              
-              {/* Stats Row */}
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div className="bg-green-50 rounded-xl py-4 px-2">
-                  <p className="text-2xl font-bold text-green-600">{readyCount}</p>
-                  <p className="text-sm text-green-600 mt-1">Ready</p>
-                </div>
-                <div className="bg-amber-50 rounded-xl py-4 px-2">
-                  <p className="text-2xl font-bold text-amber-600">{inProgressCount}</p>
-                  <p className="text-sm text-amber-600 mt-1">In Progress</p>
-                </div>
-                <div className="bg-gray-100 rounded-xl py-4 px-2">
-                  <p className="text-2xl font-bold text-gray-600">{pendingCount}</p>
-                  <p className="text-sm text-gray-600 mt-1">Pending</p>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="text-center py-8 text-gray-400">
-              No items yet
-            </div>
-          )}
-        </div>
 
-        {/* Card Footer */}
-        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-          <span className="text-sm text-gray-500">
-            {avgReadiness}% complete
-          </span>
-          <span className="text-sm text-[#0A7C8E] font-semibold flex items-center gap-1 group-hover:gap-2 transition-all">
-            View Project <ChevronRight className="w-4 h-4" />
-          </span>
-        </div>
+              {/* Customer & Meta Info */}
+              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+                {project.customerName && (
+                  <span className="flex items-center gap-1.5">
+                    <User className="w-4 h-4" />
+                    {project.customerName}
+                  </span>
+                )}
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4" />
+                  {daysActive === 0 ? 'Updated today' : `${daysActive}d ago`}
+                </span>
+              </div>
+            </div>
+
+            {/* Progress Section */}
+            <div className="px-5 pb-4">
+              <div className="flex justify-between items-center text-sm mb-2">
+                <span className="text-muted-foreground">Overall Progress</span>
+                <span className="font-semibold" style={{ color: currentStatus.color }}>{avgReadiness}%</span>
+              </div>
+              <Progress 
+                value={avgReadiness} 
+                className="h-2" 
+                style={{ '--progress-color': currentStatus.color } as React.CSSProperties}
+              />
+            </div>
+
+            {/* Stats Row */}
+            <div className="px-5 pb-5">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-emerald-50 rounded-lg p-3 text-center">
+                  <p className="text-xl font-bold text-emerald-600">{readyCount}</p>
+                  <p className="text-xs text-emerald-600/80 mt-0.5">Ready</p>
+                </div>
+                <div className="bg-amber-50 rounded-lg p-3 text-center">
+                  <p className="text-xl font-bold text-amber-600">{inProgressCount}</p>
+                  <p className="text-xs text-amber-600/80 mt-0.5">In Progress</p>
+                </div>
+                <div className="bg-slate-100 rounded-lg p-3 text-center">
+                  <p className="text-xl font-bold text-slate-600">{pendingCount}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Pending</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Card Footer */}
+            <div className="px-5 py-3 bg-slate-50 border-t flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
+                <Package className="w-4 h-4 inline mr-1.5" />
+                {items.length} design item{items.length !== 1 ? 's' : ''}
+              </span>
+              <span 
+                className="text-sm font-semibold flex items-center gap-1 group-hover:gap-2 transition-all"
+                style={{ color: currentStatus.color }}
+              >
+                View Project <ChevronRight className="w-4 h-4" />
+              </span>
+            </div>
+          </CardContent>
+        </Card>
       </Link>
 
       {/* Menu Button */}

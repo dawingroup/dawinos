@@ -291,6 +291,143 @@ function parseInsights(text, researchType) {
 }
 
 // ============================================
+// RAG Context Retrieval
+// ============================================
+
+/**
+ * Retrieve relevant context from knowledge base for RAG injection
+ * @param {string} query - User query
+ * @param {Object} context - Research context
+ * @param {FirebaseFirestore.Firestore} db - Firestore instance
+ * @returns {Promise<string>} - Formatted context string
+ */
+async function retrieveKnowledgeContext(query, context, db) {
+  const sections = [];
+  
+  try {
+    // Build search terms from query and context
+    const searchTerms = [
+      query,
+      context.projectType,
+      context.location,
+      ...(context.styleKeywords || []),
+      ...(context.materials || []),
+    ].filter(Boolean).join(' ').toLowerCase();
+    
+    // 1. Search products from launch pipeline
+    const productsSnapshot = await db.collection('launchProducts')
+      .where('currentStage', 'in', ['launched', 'ready', 'photoshoot', 'seo'])
+      .limit(50)
+      .get();
+    
+    const matchedProducts = productsSnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(product => {
+        const productText = [
+          product.name,
+          product.description,
+          product.category,
+          ...(product.tags || []),
+          ...(product.specifications?.materials || []),
+        ].filter(Boolean).join(' ').toLowerCase();
+        
+        // Simple keyword matching
+        const terms = searchTerms.split(/\s+/);
+        const matchCount = terms.filter(term => productText.includes(term)).length;
+        return matchCount >= 2; // At least 2 matching terms
+      })
+      .slice(0, 5);
+    
+    if (matchedProducts.length > 0) {
+      sections.push('### Relevant Products from Our Catalog');
+      for (const product of matchedProducts) {
+        sections.push(`- **${product.name}** (${product.category || 'General'})`);
+        if (product.description) {
+          sections.push(`  ${product.description.substring(0, 150)}...`);
+        }
+        if (product.specifications?.materials?.length) {
+          sections.push(`  Materials: ${product.specifications.materials.join(', ')}`);
+        }
+      }
+      sections.push('');
+    }
+    
+    // 2. Search design inspirations
+    const clipsSnapshot = await db.collection('designClips')
+      .orderBy('createdAt', 'desc')
+      .limit(30)
+      .get();
+    
+    const matchedClips = clipsSnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(clip => {
+        const clipText = [
+          clip.title,
+          clip.notes,
+          ...(clip.tags || []),
+        ].filter(Boolean).join(' ').toLowerCase();
+        
+        const terms = searchTerms.split(/\s+/);
+        const matchCount = terms.filter(term => clipText.includes(term)).length;
+        return matchCount >= 1;
+      })
+      .slice(0, 3);
+    
+    if (matchedClips.length > 0) {
+      sections.push('### Saved Design Inspirations');
+      for (const clip of matchedClips) {
+        sections.push(`- **${clip.title || 'Inspiration'}**`);
+        if (clip.notes) {
+          sections.push(`  ${clip.notes.substring(0, 100)}...`);
+        }
+        if (clip.tags?.length) {
+          sections.push(`  Tags: ${clip.tags.join(', ')}`);
+        }
+      }
+      sections.push('');
+    }
+    
+    // 3. Search features library
+    const featuresSnapshot = await db.collection('features')
+      .where('status', '==', 'active')
+      .limit(30)
+      .get();
+    
+    const matchedFeatures = featuresSnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(feature => {
+        const featureText = [
+          feature.name,
+          feature.description,
+          feature.category,
+          ...(feature.tags || []),
+        ].filter(Boolean).join(' ').toLowerCase();
+        
+        const terms = searchTerms.split(/\s+/);
+        const matchCount = terms.filter(term => featureText.includes(term)).length;
+        return matchCount >= 1;
+      })
+      .slice(0, 3);
+    
+    if (matchedFeatures.length > 0) {
+      sections.push('### Available Standard Features');
+      for (const feature of matchedFeatures) {
+        sections.push(`- **${feature.name}** (${feature.category || 'General'})`);
+        if (feature.description) {
+          sections.push(`  ${feature.description.substring(0, 100)}...`);
+        }
+      }
+      sections.push('');
+    }
+    
+  } catch (error) {
+    console.warn('Error retrieving knowledge context:', error.message);
+  }
+  
+  return sections.join('\n');
+}
+
+// ============================================
 // Main Cloud Function
 // ============================================
 
@@ -342,7 +479,18 @@ const strategyResearch = onCall({
   });
 
   try {
-    // 4. Initialize Gemini with Search Grounding
+    // 4. Retrieve relevant knowledge base context (RAG)
+    let knowledgeContext = '';
+    try {
+      knowledgeContext = await retrieveKnowledgeContext(query, context, db);
+      if (knowledgeContext) {
+        console.log('Knowledge context retrieved for RAG injection');
+      }
+    } catch (ragError) {
+      console.warn('RAG context retrieval failed, proceeding without:', ragError.message);
+    }
+
+    // 5. Initialize Gemini with Search Grounding
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY.value());
     
     const model = genAI.getGenerativeModel({
@@ -358,8 +506,13 @@ const strategyResearch = onCall({
       }]
     });
 
-    // 5. Build research prompt
-    const prompt = buildResearchPrompt(researchType, context, query);
+    // 6. Build research prompt with knowledge context
+    let prompt = buildResearchPrompt(researchType, context, query);
+    
+    // Inject knowledge base context if available
+    if (knowledgeContext) {
+      prompt = `${prompt}\n\n---\n\n## Internal Knowledge Base Context\nThe following information is from our internal catalog and may be relevant to your research:\n\n${knowledgeContext}\n\nPlease incorporate relevant products, inspirations, or features from our catalog in your recommendations where appropriate.`;
+    }
 
     // 6. Generate response with grounding
     const startTime = Date.now();

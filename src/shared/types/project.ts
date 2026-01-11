@@ -70,6 +70,14 @@ export interface PartPlacement {
   width: number;            // mm
   rotated: boolean;         // 90° rotation applied
   grainAligned: boolean;
+  edgeBanding?: {           // Edge banding from source part
+    top: boolean;
+    bottom: boolean;
+    left: boolean;
+    right: boolean;
+    material?: string;
+    thickness?: number;
+  };
 }
 
 /**
@@ -120,10 +128,15 @@ export interface EdgeBandConfig {
  */
 export interface EstimationResult {
   sheetSummary: SheetSummary[];
-  roughCost: number;
-  wasteEstimate: number;    // percentage
+  roughCost: number;              // Sheet materials cost (with buffer)
+  standardPartsCost?: number;     // Consumables cost (hinges, screws, etc)
+  specialPartsCost?: number;      // Luxury/approved items cost
+  totalCost?: number;             // Total of all costs
+  wasteEstimate: number;          // percentage
   totalPartsCount: number;
   totalSheetsCount: number;
+  totalStandardParts?: number;
+  totalSpecialParts?: number;
   validAt: Timestamp;
   invalidatedAt?: Timestamp;
   invalidationReasons?: string[];
@@ -161,6 +174,31 @@ export interface OptimizationConfig {
 }
 
 /**
+ * Shop Traveler PDF section settings
+ */
+export interface ShopTravelerSettings {
+  includeCoverPage: boolean;
+  includeCuttingMaps: boolean;
+  includeEdgeBandingSchedule: boolean;
+  includeRemnantRegister: boolean;
+  includePartLabels: boolean;
+  // Future sections
+  includeAssemblyInstructions?: boolean;
+  includeMaterialsList?: boolean;
+}
+
+/**
+ * Default shop traveler settings
+ */
+export const DEFAULT_SHOP_TRAVELER_SETTINGS: ShopTravelerSettings = {
+  includeCoverPage: true,
+  includeCuttingMaps: true,
+  includeEdgeBandingSchedule: true,
+  includeRemnantRegister: true,
+  includePartLabels: true,
+};
+
+/**
  * Complete optimization state for a project
  */
 export interface OptimizationState {
@@ -172,6 +210,9 @@ export interface OptimizationState {
   
   // Configuration (persisted for re-runs)
   config: OptimizationConfig;
+  
+  // Shop Traveler settings (which sections to include)
+  shopTravelerSettings?: ShopTravelerSettings;
   
   // Last run metadata
   lastEstimationRun?: Timestamp;

@@ -77,30 +77,47 @@ export async function calculateSheetMaterialsFromParts(
     // Estimate sheets required (with 15% waste factor)
     const sheetsRequired = Math.ceil((group.totalArea * 1.15) / sheetArea);
     
-    // Get unit cost from unified inventory (single source of truth)
+    // Get unit cost - PRIORITY: Material palette mappings first, then inventory
     let unitCost = 0;
+    const normalizedName = group.materialName.toLowerCase().trim();
     
-    // 1. Try centralized inventory pricing (includes Katana-synced prices)
-    try {
-      const priceResult = await getMaterialPriceByName(
-        group.materialName,
-        group.thickness
-      );
-      if (priceResult.found && priceResult.price) {
-        unitCost = priceResult.price.costPerUnit;
-      }
-    } catch {
-      // Inventory price lookup failed
-    }
-    
-    // 2. Fallback to material palette if provided
-    if (unitCost === 0 && materialPalette) {
+    // 1. FIRST: Check material palette (contains mapped inventory costs)
+    if (materialPalette) {
       const paletteEntry = materialPalette.find(
         entry => entry.designName === group.materialName || 
-                 entry.normalizedName === group.materialName.toLowerCase().trim()
+                 entry.normalizedName === normalizedName
       );
-      if (paletteEntry?.unitCost) {
+      if (paletteEntry?.unitCost && paletteEntry.unitCost > 0) {
         unitCost = paletteEntry.unitCost;
+      }
+      // Also try mapped inventory name if palette has it but no direct cost
+      if (unitCost === 0 && paletteEntry?.inventoryName) {
+        try {
+          const priceResult = await getMaterialPriceByName(
+            paletteEntry.inventoryName,
+            group.thickness
+          );
+          if (priceResult.found && priceResult.price) {
+            unitCost = priceResult.price.costPerUnit;
+          }
+        } catch {
+          // Continue to fallback
+        }
+      }
+    }
+    
+    // 2. SECOND: Try inventory by design material name (legacy)
+    if (unitCost === 0) {
+      try {
+        const priceResult = await getMaterialPriceByName(
+          group.materialName,
+          group.thickness
+        );
+        if (priceResult.found && priceResult.price) {
+          unitCost = priceResult.price.costPerUnit;
+        }
+      } catch {
+        // Inventory price lookup failed
       }
     }
     
@@ -206,13 +223,17 @@ async function fetchProcuredItems(projectId: string): Promise<Array<DesignItem &
 
 /**
  * Generate estimate line items from all design items (both manufactured and procured)
+ * @deprecated Use inline generation in calculateEstimateFromOptimization instead
  */
-function generateDesignItemLineItems(
+function _generateDesignItemLineItems(
   designItems: Array<DesignItem & { procurement?: ProcurementPricing; manufacturing?: ManufacturingCost }>
 ): EstimateLineItem[] {
   const lineItems: EstimateLineItem[] = [];
   
   for (const item of designItems) {
+    // Get the design item's required quantity for multiplication
+    const requiredQuantity = item.requiredQuantity || 1;
+    
     // Handle PROCURED items
     if (item.sourcingType === 'PROCURED') {
       const procurement = item.procurement;
@@ -221,14 +242,18 @@ function generateDesignItemLineItems(
         continue;
       }
       
+      // Multiply by requiredQuantity for correct totals
+      const totalQty = (procurement.quantity || 1) * requiredQuantity;
+      const unitPrice = Math.round(procurement.landedCostPerUnit || 0);
+      
       const landedCostLine: EstimateLineItem = {
         id: nanoid(10),
         description: `${item.name} (Procured)`,
         category: 'procurement',
-        quantity: procurement.quantity,
+        quantity: totalQty,
         unit: 'units',
-        unitPrice: Math.round(procurement.landedCostPerUnit || 0),
-        totalPrice: Math.round(procurement.totalLandedCost),
+        unitPrice,
+        totalPrice: Math.round(unitPrice * totalQty),
         linkedDesignItemId: item.id,
       };
       
@@ -258,14 +283,19 @@ function generateDesignItemLineItems(
       const laborRate = manufacturing.laborRate || 0;
       const laborCost = manufacturing.laborCost || 0;
       
+      // Multiply by requiredQuantity for correct totals
+      const baseQty = manufacturing.quantity || 1;
+      const totalQty = baseQty * requiredQuantity;
+      const unitPrice = Math.round(manufacturing.costPerUnit || (manufacturing.totalCost / baseQty));
+      
       const manufacturedLine: EstimateLineItem = {
         id: nanoid(10),
         description: `${item.name} (Manufactured)`,
         category: 'material', // Using 'material' category for manufactured items
-        quantity: manufacturing.quantity || 1,
+        quantity: totalQty,
         unit: 'units',
-        unitPrice: Math.round(manufacturing.costPerUnit || manufacturing.totalCost),
-        totalPrice: Math.round(manufacturing.totalCost),
+        unitPrice,
+        totalPrice: Math.round(unitPrice * totalQty),
         linkedDesignItemId: item.id,
       };
       
@@ -461,13 +491,19 @@ export async function calculateEstimate(
     marginPercent: config.defaultMarginPercent,
     marginAmount,
     taxMode: 'exclusive',
+    // Ensure errorChecks is always defined (empty array if no errors)
+    errorChecks: [],
+    hasErrors: false,
   };
 
-  // Save to project document
+  // Save to project document - filter out undefined values
   const projectRef = doc(db, 'designProjects', projectId);
+  const estimateForFirestore = Object.fromEntries(
+    Object.entries(estimate).filter(([_, v]) => v !== undefined)
+  );
   await updateDoc(projectRef, {
     consolidatedEstimate: {
-      ...estimate,
+      ...estimateForFirestore,
       generatedAt: serverTimestamp(),
     },
     updatedAt: serverTimestamp(),
@@ -484,15 +520,94 @@ export async function calculateEstimate(
  */
 export async function calculateEstimateFromOptimization(
   projectId: string,
-  _estimation: EstimationResult,
-  _materialPalette: MaterialPaletteEntry[],
+  estimation: EstimationResult,
+  _materialPalette: MaterialPaletteEntry[], // Material costs already in estimation
   userId: string,
   config: EstimateConfig = DEFAULT_ESTIMATE_CONFIG,
   taxMode: 'exclusive' | 'inclusive' = 'exclusive'
 ): Promise<ConsolidatedEstimate> {
-  // Fetch all design items and generate per-item line items
+  // NEW ARCHITECTURE: Generate per-design-item line items
+  // Each design item becomes a line item with its unit cost × requiredQuantity
+  // This ensures: Design Item Costing Tab total × qty = Estimation line item
+  
   const allDesignItems = await fetchAllDesignItems(projectId);
-  const baseLineItems = generateDesignItemLineItems(allDesignItems);
+  const baseLineItems: EstimateLineItem[] = [];
+  const errorChecks: { itemId: string; itemName: string; issue: string }[] = [];
+  
+  // Generate line items for ALL design items (manufactured + procured)
+  for (const item of allDesignItems) {
+    const requiredQuantity = item.requiredQuantity || 1;
+    
+    if (item.sourcingType === 'PROCURED') {
+      // PROCURED items: use procurement pricing
+      const procurement = item.procurement;
+      
+      if (!procurement || !procurement.totalLandedCost || procurement.totalLandedCost === 0) {
+        errorChecks.push({
+          itemId: item.id,
+          itemName: item.name,
+          issue: 'Missing procurement pricing',
+        });
+        continue;
+      }
+      
+      const unitCost = Math.round(procurement.landedCostPerUnit || 0);
+      const extendedCost = unitCost * requiredQuantity;
+      
+      baseLineItems.push({
+        id: nanoid(10),
+        description: item.name,
+        category: 'procurement',
+        quantity: requiredQuantity,
+        unit: 'units',
+        unitPrice: unitCost,
+        totalPrice: extendedCost,
+        linkedDesignItemId: item.id,
+        ...(procurement.vendor && { notes: `Vendor: ${procurement.vendor}` }),
+      });
+    } else {
+      // MANUFACTURED items: use manufacturing.costPerUnit from Costing tab
+      const manufacturing = item.manufacturing;
+      
+      // Check if manufacturing data exists with valid costs
+      // Note: 0 is a valid cost (e.g., for items with no material cost), so check explicitly for undefined/null
+      const hasCostPerUnit = manufacturing?.costPerUnit !== undefined && manufacturing?.costPerUnit !== null;
+      const hasTotalCost = manufacturing?.totalCost !== undefined && manufacturing?.totalCost !== null;
+      
+      if (!manufacturing || (!hasCostPerUnit && !hasTotalCost)) {
+        errorChecks.push({
+          itemId: item.id,
+          itemName: item.name,
+          issue: 'Missing manufacturing cost - go to Costing Summary tab and click Save Costing',
+        });
+        continue;
+      }
+      
+      // Use costPerUnit if available, otherwise calculate from totalCost
+      const mfgQty = manufacturing.quantity || 1;
+      const unitCost = Math.round(manufacturing.costPerUnit || (manufacturing.totalCost / mfgQty));
+      const extendedCost = unitCost * requiredQuantity;
+      
+      // Build cost breakdown notes
+      const breakdown: string[] = [];
+      if (manufacturing.sheetMaterialsCost) breakdown.push(`Sheets: ${manufacturing.sheetMaterialsCost.toLocaleString()}`);
+      if (manufacturing.standardPartsCost) breakdown.push(`Std Parts: ${manufacturing.standardPartsCost.toLocaleString()}`);
+      if (manufacturing.specialPartsCost) breakdown.push(`Spc Parts: ${manufacturing.specialPartsCost.toLocaleString()}`);
+      if (manufacturing.laborCost) breakdown.push(`Labor: ${manufacturing.laborCost.toLocaleString()}`);
+      
+      baseLineItems.push({
+        id: nanoid(10),
+        description: item.name,
+        category: 'material', // Manufactured items
+        quantity: requiredQuantity,
+        unit: 'units',
+        unitPrice: unitCost,
+        totalPrice: extendedCost,
+        linkedDesignItemId: item.id,
+        ...(breakdown.length > 0 && { notes: breakdown.join(' | ') }),
+      });
+    }
+  }
   
   // Calculate markup multiplier (overhead + margin applied to each item's rate)
   const overheadMultiplier = 1 + config.overheadPercent;
@@ -532,7 +647,7 @@ export async function calculateEstimateFromOptimization(
     generatedAt: Timestamp.now() as any,
     generatedBy: userId,
     isStale: false,
-    lastCutlistUpdate: _estimation?.validAt as any, // Use optimization validAt
+    lastCutlistUpdate: estimation?.validAt as any, // Use optimization validAt
     lineItems,
     subtotal: Math.round(subtotal),
     taxRate: config.defaultTaxRate,
@@ -544,13 +659,21 @@ export async function calculateEstimateFromOptimization(
     marginPercent: config.defaultMarginPercent,
     marginAmount,
     taxMode,
+    // Error checking data - use empty array instead of undefined (Firestore doesn't accept undefined)
+    errorChecks: errorChecks.length > 0 ? errorChecks : [],
+    designItemCount: allDesignItems.length,
+    lineItemCount: baseLineItems.length,
+    hasErrors: errorChecks.length > 0,
   };
 
-  // Save to project document
+  // Save to project document - filter out any undefined values
   const projectRef = doc(db, 'designProjects', projectId);
+  const estimateForFirestore = Object.fromEntries(
+    Object.entries(estimate).filter(([_, v]) => v !== undefined)
+  );
   await updateDoc(projectRef, {
     consolidatedEstimate: {
-      ...estimate,
+      ...estimateForFirestore,
       generatedAt: serverTimestamp(),
     },
     updatedAt: serverTimestamp(),
@@ -647,11 +770,18 @@ async function recalculateAndSave(
     taxAmount,
     marginAmount,
     total: Math.round(subtotal + taxAmount + marginAmount),
+    // Ensure errorChecks is never undefined
+    errorChecks: currentEstimate.errorChecks || [],
   };
+
+  // Filter out undefined values before saving to Firestore
+  const estimateForFirestore = Object.fromEntries(
+    Object.entries(estimate).filter(([_, v]) => v !== undefined)
+  );
 
   const projectRef = doc(db, 'designProjects', projectId);
   await updateDoc(projectRef, {
-    consolidatedEstimate: estimate,
+    consolidatedEstimate: estimateForFirestore,
     updatedAt: serverTimestamp(),
     updatedBy: userId,
   });

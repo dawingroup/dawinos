@@ -566,3 +566,255 @@ export function useSubmitPayment(
 
   return { submitForApproval, markAsPaid, loading, error };
 }
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useIPC - Get single IPC with real-time updates
+// ─────────────────────────────────────────────────────────────────
+
+export function useIPC(
+  db: Firestore,
+  ipcId: string | null
+) {
+  const [ipc, setIPC] = useState<IPC | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = useMemo(() => IPCService.getInstance(db), [db]);
+
+  useEffect(() => {
+    if (!ipcId) {
+      setIPC(null);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    service.getIPC(ipcId)
+      .then(setIPC)
+      .catch(err => setError(err instanceof Error ? err : new Error('Failed to fetch IPC')))
+      .finally(() => setLoading(false));
+  }, [service, ipcId]);
+
+  return { ipc, loading, error };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useUpdateIPC - Update IPC draft
+// ─────────────────────────────────────────────────────────────────
+
+export function useUpdateIPC(
+  db: Firestore,
+  userId: string
+) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = useMemo(() => IPCService.getInstance(db), [db]);
+
+  const updateIPC = useCallback(
+    async (ipcId: string, updates: Partial<IPCFormData>): Promise<void> => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        await service.updateIPC(ipcId, updates, userId);
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Failed to update IPC');
+        setError(error);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [service, userId]
+  );
+
+  return { updateIPC, loading, error };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useRequisition - Get single requisition
+// ─────────────────────────────────────────────────────────────────
+
+export function useRequisition(
+  db: Firestore,
+  requisitionId: string | null
+) {
+  const [requisition, setRequisition] = useState<Requisition | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = useMemo(() => RequisitionService.getInstance(db), [db]);
+
+  useEffect(() => {
+    if (!requisitionId) {
+      setRequisition(null);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    service.getRequisition(requisitionId)
+      .then(setRequisition)
+      .catch(err => setError(err instanceof Error ? err : new Error('Failed to fetch requisition')))
+      .finally(() => setLoading(false));
+  }, [service, requisitionId]);
+
+  return { requisition, loading, error };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useAccountability - Get single accountability
+// ─────────────────────────────────────────────────────────────────
+
+export function useAccountability(
+  db: Firestore,
+  accountabilityId: string | null
+) {
+  const [accountability, setAccountability] = useState<Accountability | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = useMemo(() => RequisitionService.getInstance(db), [db]);
+
+  useEffect(() => {
+    if (!accountabilityId) {
+      setAccountability(null);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    service.getAccountability(accountabilityId)
+      .then(setAccountability)
+      .catch(err => setError(err instanceof Error ? err : new Error('Failed to fetch accountability')))
+      .finally(() => setLoading(false));
+  }, [service, accountabilityId]);
+
+  return { accountability, loading, error };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useReturnPayment - Return payment to draft status
+// ─────────────────────────────────────────────────────────────────
+
+export function useReturnPayment(
+  db: Firestore,
+  userId: string
+) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = useMemo(() => PaymentService.getInstance(db), [db]);
+
+  const returnToDraft = useCallback(
+    async (paymentId: string, reason: string): Promise<void> => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        await service.returnPayment(paymentId, userId, reason);
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Failed to return payment');
+        setError(error);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [service, userId]
+  );
+
+  return { returnToDraft, loading, error };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useProgramPayments - Get all payments for a program
+// ─────────────────────────────────────────────────────────────────
+
+export function useProgramPayments(
+  db: Firestore,
+  programId: string | null
+) {
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = useMemo(() => PaymentService.getInstance(db), [db]);
+
+  const fetchPayments = useCallback(async () => {
+    if (!programId) {
+      setPayments([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await service.getPaymentsByProgram(programId);
+      setPayments(result);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch program payments'));
+    } finally {
+      setLoading(false);
+    }
+  }, [service, programId]);
+
+  useEffect(() => {
+    fetchPayments();
+  }, [fetchPayments]);
+
+  // Calculate summary stats
+  const stats = useMemo(() => {
+    const paidPayments = payments.filter(p => p.status === 'paid');
+    const pendingPayments = payments.filter(p => 
+      ['submitted', 'under_review', 'approved'].includes(p.status)
+    );
+
+    return {
+      totalCount: payments.length,
+      paidCount: paidPayments.length,
+      pendingCount: pendingPayments.length,
+      totalPaid: paidPayments.reduce((sum, p) => sum + p.netAmount, 0),
+      totalPending: pendingPayments.reduce((sum, p) => sum + p.netAmount, 0),
+    };
+  }, [payments]);
+
+  return { payments, stats, loading, error, refresh: fetchPayments };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useIPCCertification - QS certification for IPCs
+// ─────────────────────────────────────────────────────────────────
+
+export function useIPCCertification(
+  db: Firestore,
+  userId: string
+) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = useMemo(() => IPCService.getInstance(db), [db]);
+
+  const certifyByQS = useCallback(
+    async (ipcId: string, comments?: string): Promise<void> => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        await service.certifyByQS(ipcId, userId, comments);
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Certification failed');
+        setError(error);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [service, userId]
+  );
+
+  return { certifyByQS, loading, error };
+}

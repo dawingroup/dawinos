@@ -45,7 +45,8 @@ export function PartForm({ part, onSave, onClose, loading }: PartFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSave({
+    // Build data object, only including notes if it has a value
+    const data: Partial<PartEntry> = {
       name: formData.name,
       length: parseFloat(formData.length),
       width: parseFloat(formData.width),
@@ -54,10 +55,14 @@ export function PartForm({ part, onSave, onClose, loading }: PartFormProps) {
       materialName: formData.materialName,
       grainDirection: formData.grainDirection,
       edgeBanding: formData.edgeBanding,
-      notes: formData.notes || undefined,
       source: 'manual',
       hasCNCOperations: false,
-    });
+    };
+    // Only add notes if it has a value (Firestore doesn't accept undefined)
+    if (formData.notes) {
+      data.notes = formData.notes;
+    }
+    await onSave(data);
   };
 
   return (

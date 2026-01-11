@@ -9,13 +9,38 @@ import type { SubsidiaryModule } from '@/types/subsidiary';
 // ORGANIZATION SETTINGS
 // ============================================================================
 
-export interface OrganizationBranding {
+export interface SubsidiaryBranding {
   logoUrl?: string;
   logoLightUrl?: string;  // For dark backgrounds
   faviconUrl?: string;
   primaryColor: string;
   secondaryColor: string;
   accentColor?: string;
+  tagline?: string;
+  description?: string;
+  website?: string;
+  socialLinks?: {
+    linkedin?: string;
+    twitter?: string;
+    facebook?: string;
+    instagram?: string;
+  };
+}
+
+export interface OrganizationBranding {
+  // Group-level branding
+  groupLogo?: string;
+  groupPrimaryColor: string;
+  groupSecondaryColor: string;
+  
+  // Subsidiary-specific branding
+  subsidiaries: {
+    'dawin-group': SubsidiaryBranding;
+    'dawin-finishes': SubsidiaryBranding;
+    'dawin-advisory': SubsidiaryBranding;
+    'dawin-capital': SubsidiaryBranding;
+    'dawin-technology': SubsidiaryBranding;
+  };
 }
 
 export interface OrganizationInfo {

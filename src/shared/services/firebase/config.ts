@@ -3,7 +3,7 @@
  * Firebase app initialization and configuration
  */
 
-import { initializeApp, type FirebaseApp } from 'firebase/app';
+import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
@@ -16,6 +16,6 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-export const app: FirebaseApp = initializeApp(firebaseConfig);
+export const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 export default app;

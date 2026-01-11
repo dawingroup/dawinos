@@ -3,7 +3,7 @@
  * Optimization interface for ESTIMATION and PRODUCTION modes
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, 
   RefreshCw, 
@@ -164,7 +164,7 @@ const EstimationResults: React.FC<EstimationResultsProps> = ({ results }) => {
         </div>
         <div className="bg-green-50 rounded-lg p-4">
           <div className="text-2xl font-bold text-green-700">{results.totalPartsCount}</div>
-          <div className="text-sm text-green-600">Total Parts</div>
+          <div className="text-sm text-green-600">Sheet Parts</div>
         </div>
         <div className="bg-amber-50 rounded-lg p-4">
           <div className="text-2xl font-bold text-amber-700">{results.wasteEstimate.toFixed(1)}%</div>
@@ -172,11 +172,39 @@ const EstimationResults: React.FC<EstimationResultsProps> = ({ results }) => {
         </div>
         <div className="bg-purple-50 rounded-lg p-4">
           <div className="text-2xl font-bold text-purple-700">
-            {(results.roughCost / 1000000).toFixed(2)}M
+            {((results.totalCost || results.roughCost) / 1000000).toFixed(2)}M
           </div>
-          <div className="text-sm text-purple-600">Est. Cost (UGX)</div>
+          <div className="text-sm text-purple-600">Total Est. Cost</div>
         </div>
       </div>
+
+      {/* Cost Breakdown */}
+      {(results.standardPartsCost || results.specialPartsCost) ? (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-gray-50 rounded-lg p-3">
+            <div className="text-lg font-bold text-gray-700">
+              {(results.roughCost / 1000000).toFixed(2)}M
+            </div>
+            <div className="text-xs text-gray-500">Sheet Materials</div>
+          </div>
+          <div className="bg-orange-50 rounded-lg p-3">
+            <div className="text-lg font-bold text-orange-700">
+              {((results.standardPartsCost || 0) / 1000).toFixed(0)}K
+            </div>
+            <div className="text-xs text-orange-500">
+              Standard Parts ({results.totalStandardParts || 0})
+            </div>
+          </div>
+          <div className="bg-pink-50 rounded-lg p-3">
+            <div className="text-lg font-bold text-pink-700">
+              {((results.specialPartsCost || 0) / 1000000).toFixed(2)}M
+            </div>
+            <div className="text-xs text-pink-500">
+              Special Parts ({results.totalSpecialParts || 0})
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Sheet Summary Table */}
       <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -379,12 +407,8 @@ export const NestingStudio: React.FC<NestingStudioProps> = ({
     (w: any) => w.type === 'ASSET_UNAVAILABLE'
   ) || [];
   
-  // Debug logging
-  console.log('[NestingStudio] mode:', mode, 'modeKey:', modeKey);
-  console.log('[NestingStudio] optimizationState:', optimizationState);
-  console.log('[NestingStudio] hasResults:', hasResults, 'isInvalidated:', isInvalidated);
-  console.log('[NestingStudio] project.optimizationState:', project?.optimizationState);
-  console.log('[NestingStudio] isOptimizing:', isOptimizing);
+  // Track if auto-estimation has been attempted
+  const autoRunAttemptedRef = useRef(false);
 
   // Run optimization
   const handleRunOptimization = async () => {
@@ -406,6 +430,19 @@ export const NestingStudio: React.FC<NestingStudioProps> = ({
       setIsOptimizing(false);
     }
   };
+
+  // Auto-run estimation when entering the tab if stale or no results
+  useEffect(() => {
+    if (mode !== 'ESTIMATION') return;
+    if (autoRunAttemptedRef.current || isOptimizing || hasResults) return;
+    
+    if (!optimizationState || isInvalidated) {
+      autoRunAttemptedRef.current = true;
+      console.log('[NestingStudio] Auto-running estimation...');
+      handleRunOptimization();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, hasResults, isInvalidated, isOptimizing]);
 
   // Handle config change
   const handleConfigChange = async (changes: Partial<OptimizationConfig>) => {

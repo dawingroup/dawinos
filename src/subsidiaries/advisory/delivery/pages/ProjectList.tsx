@@ -4,51 +4,22 @@
 
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, LayoutGrid, List, Loader2 } from 'lucide-react';
+import { Plus, LayoutGrid, List, Loader2, AlertCircle, FolderOpen } from 'lucide-react';
 import { ProjectCard } from '../components/projects/ProjectCard';
 import { FilterBar } from '../components/common/FilterBar';
-import { Project, ProjectStatus } from '../types/project';
+import { ProjectStatus } from '../types/project';
+import { useAllProjects } from '../hooks/project-hooks';
+import { db } from '@/core/services/firebase';
 
 export function ProjectList() {
-  const [loading] = useState(false);
+  const { projects, loading, error, refresh } = useAllProjects(db);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all');
   const [regionFilter, setRegionFilter] = useState<string | 'all'>('all');
 
-  // Mock data for demonstration - cast to avoid strict type checking on demo data
-  const projects = useMemo<Project[]>(() => [
-    {
-      id: 'prj-1',
-      programId: 'prg-1',
-      projectCode: 'ARISE-001',
-      name: 'Rushoroza Health Center IV',
-      status: 'active',
-      location: {
-        siteName: 'Rushoroza HC IV',
-        region: 'Western Region',
-        district: 'Rukungiri',
-      },
-      budget: {
-        totalBudget: 450000000,
-        currency: 'UGX',
-        spent: 180000000,
-        varianceStatus: 'on_budget',
-      },
-      progress: {
-        physicalProgress: 65,
-        financialProgress: 40,
-        progressStatus: 'on_track',
-      },
-      timeline: {
-        isDelayed: false,
-        daysRemaining: 180,
-      },
-    } as unknown as Project,
-  ], []);
-
   const regions = useMemo(() => {
-    const uniqueRegions = new Set(projects.map(p => p.location.region));
+    const uniqueRegions = new Set(projects.map(p => p.location?.region).filter(Boolean));
     return Array.from(uniqueRegions).sort();
   }, [projects]);
 
@@ -60,15 +31,15 @@ export function ProjectList() {
     }
 
     if (regionFilter !== 'all') {
-      result = result.filter(p => p.location.region === regionFilter);
+      result = result.filter(p => p.location?.region === regionFilter);
     }
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       result = result.filter(p =>
-        p.name.toLowerCase().includes(query) ||
-        p.projectCode.toLowerCase().includes(query) ||
-        p.location.siteName.toLowerCase().includes(query)
+        p.name?.toLowerCase().includes(query) ||
+        p.projectCode?.toLowerCase().includes(query) ||
+        p.location?.siteName?.toLowerCase().includes(query)
       );
     }
 
@@ -79,6 +50,53 @@ export function ProjectList() {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <span className="ml-2 text-gray-600">Loading projects...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500" />
+          <span className="text-red-700">{error.message}</span>
+          <button onClick={refresh} className="ml-auto text-sm text-red-600 hover:underline">
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (projects.length === 0) {
+    return (
+      <div className="space-y-6 p-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
+            <p className="text-gray-600">0 projects</p>
+          </div>
+          <Link
+            to="/advisory/delivery/projects/new"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+          >
+            <Plus className="w-4 h-4" />
+            New Project
+          </Link>
+        </div>
+        <div className="bg-white rounded-lg border p-12 text-center">
+          <FolderOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-1">No projects yet</h3>
+          <p className="text-gray-600 mb-4">Create your first project to get started</p>
+          <Link
+            to="/advisory/delivery/projects/new"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+          >
+            <Plus className="w-4 h-4" />
+            Create Project
+          </Link>
+        </div>
       </div>
     );
   }
@@ -90,7 +108,7 @@ export function ProjectList() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
           <p className="text-gray-600">
-            {filteredProjects.length} of {projects.length} projects
+            {filteredProjects.length} of {projects.length} project{projects.length !== 1 ? 's' : ''}
           </p>
         </div>
         

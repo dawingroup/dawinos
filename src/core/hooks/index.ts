@@ -11,3 +11,8 @@ export {
   type UseDocumentReturn,
   type UseCollectionReturn
 } from './useFirestore';
+
+export { useCrossModule, type UseCrossModuleOptions } from './useCrossModule';
+export { useGlobalSearch, type UseSearchOptions } from './useSearch';
+export { useSync, type UseSyncOptions } from './useSync';
+export { useKeyboardShortcuts, useCustomShortcut } from './useKeyboardShortcuts';

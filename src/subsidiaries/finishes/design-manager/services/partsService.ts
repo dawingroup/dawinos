@@ -17,6 +17,23 @@ import type { PartEntry, PartsSummary, PartEdgeBanding } from '../types';
 const PROJECTS_COLLECTION = 'designProjects';
 
 /**
+ * Helper to remove undefined values from objects (Firestore doesn't accept undefined)
+ */
+function cleanUndefined(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) return obj.map(cleanUndefined);
+  if (typeof obj !== 'object') return obj;
+  
+  const cleaned: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      cleaned[key] = typeof value === 'object' && value !== null ? cleanUndefined(value) : value;
+    }
+  }
+  return cleaned;
+}
+
+/**
  * Generate a unique part ID
  */
 export function generatePartId(): string {
@@ -121,10 +138,11 @@ export async function addPart(
   existingParts: PartEntry[],
   userId: string
 ): Promise<PartEntry> {
-  const part = createPartEntry(partData, existingParts);
+  const part = cleanUndefined(createPartEntry(partData, existingParts));
   const docRef = getDesignItemRef(projectId, itemId);
 
-  const newParts = [...existingParts, part];
+  // Clean all parts to remove any undefined values
+  const newParts = [...existingParts.map(cleanUndefined), part];
   const summary = calculatePartsSummary(newParts);
 
   await updateDoc(docRef, {
@@ -153,10 +171,13 @@ export async function updatePart(
 ): Promise<void> {
   const docRef = getDesignItemRef(projectId, itemId);
 
+  // Clean undefined values from updates before applying
+  const cleanedUpdates = cleanUndefined(updates);
+  
   const updatedParts = currentParts.map((part) =>
     part.id === partId
-      ? { ...part, ...updates, updatedAt: Timestamp.now() }
-      : part
+      ? cleanUndefined({ ...part, ...cleanedUpdates, updatedAt: Timestamp.now() })
+      : cleanUndefined(part)
   );
 
   const summary = calculatePartsSummary(updatedParts);
@@ -184,7 +205,7 @@ export async function deletePart(
 ): Promise<void> {
   const docRef = getDesignItemRef(projectId, itemId);
 
-  const remainingParts = currentParts.filter((p) => p.id !== partId);
+  const remainingParts = currentParts.filter((p) => p.id !== partId).map(cleanUndefined);
   const summary = calculatePartsSummary(remainingParts);
 
   await updateDoc(docRef, {
@@ -210,11 +231,11 @@ export async function bulkAddParts(
 ): Promise<PartEntry[]> {
   const docRef = getDesignItemRef(projectId, itemId);
 
-  let allParts = [...existingParts];
+  let allParts = existingParts.map(cleanUndefined);
   const newParts: PartEntry[] = [];
 
   for (const partData of partsData) {
-    const part = createPartEntry(partData, allParts);
+    const part = cleanUndefined(createPartEntry(partData, allParts));
     newParts.push(part);
     allParts.push(part);
   }

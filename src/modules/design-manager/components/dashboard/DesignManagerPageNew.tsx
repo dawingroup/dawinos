@@ -5,9 +5,13 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { Package, Plus, FolderOpen, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Package, Plus, FolderOpen, Clock, CheckCircle, AlertTriangle, Calendar, User, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/shared/components/ui';
+import { Card, CardContent } from '@/core/components/ui/card';
+import { Badge } from '@/core/components/ui/badge';
+import { Progress } from '@/core/components/ui/progress';
+import { cn } from '@/shared/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { subscribeToProjects, subscribeToDesignItems } from '../../services/firestore';
 import type { DesignProject, DesignItem } from '../../types';
@@ -178,91 +182,86 @@ export default function DesignManagerPageNew() {
               const avgReadiness = projectItems.length > 0 
                 ? Math.round(projectItems.reduce((sum, i) => sum + i.overallReadiness, 0) / projectItems.length) 
                 : 0;
+
+              // Status configuration matching Capital deals style
+              const statusConfig = {
+                active: { color: '#10B981', bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Active' },
+                'on-hold': { color: '#F59E0B', bg: 'bg-amber-50', text: 'text-amber-700', label: 'On Hold' },
+                completed: { color: '#3B82F6', bg: 'bg-blue-50', text: 'text-blue-700', label: 'Completed' },
+                cancelled: { color: '#6B7280', bg: 'bg-gray-100', text: 'text-gray-600', label: 'Cancelled' },
+              };
+              const currentStatus = statusConfig[project.status] || statusConfig.active;
+
+              // Days since last update
+              const daysActive = project.updatedAt 
+                ? Math.floor((new Date().getTime() - project.updatedAt.toDate().getTime()) / (1000 * 60 * 60 * 24))
+                : 0;
               
               return (
-                <div
+                <Card
                   key={project.id}
                   onClick={() => navigate(`project/${project.id}`)}
-                  className="bg-white rounded-xl border border-gray-200 hover:border-primary hover:shadow-lg transition-all duration-200 cursor-pointer overflow-hidden group"
+                  className="cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 overflow-hidden group"
+                  style={{ borderTop: `4px solid ${currentStatus.color}` }}
                 >
-                  {/* Card Header */}
-                  <div className="p-6 border-b border-gray-100">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 bg-gradient-to-br from-primary to-primary/80 rounded-2xl flex items-center justify-center shadow-md">
-                          <FolderOpen className="w-7 h-7 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-gray-900 text-xl">{project.name}</h3>
-                          <p className="text-sm text-gray-500 mt-0.5">{project.code}</p>
-                        </div>
+                  <CardContent className="p-4">
+                    {/* Header */}
+                    <div className="flex items-start gap-3 mb-3">
+                      <div 
+                        className="h-11 w-11 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: `${currentStatus.color}15` }}
+                      >
+                        <FolderOpen className="w-5 h-5" style={{ color: currentStatus.color }} />
                       </div>
-                      <span className={`text-sm px-3 py-1.5 rounded-full font-medium border ${
-                        project.status === 'active' ? 'bg-green-100 text-green-700 border-green-200' :
-                        project.status === 'on-hold' ? 'bg-amber-100 text-amber-700 border-amber-200' :
-                        project.status === 'completed' ? 'bg-blue-100 text-blue-700 border-blue-200' :
-                        'bg-gray-100 text-gray-700 border-gray-200'
-                      }`}>
-                        {project.status}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-gray-900 truncate">{project.name}</h3>
+                        <p className="text-sm text-muted-foreground">{project.code}</p>
+                      </div>
+                      <Badge 
+                        variant="secondary" 
+                        className={cn('flex-shrink-0 text-xs', currentStatus.bg, currentStatus.text)}
+                      >
+                        {currentStatus.label}
+                      </Badge>
+                    </div>
+
+                    {/* Meta row */}
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
+                      {project.customerName && (
+                        <span className="flex items-center gap-1">
+                          <User className="w-3.5 h-3.5" />
+                          {project.customerName}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5" />
+                        {daysActive === 0 ? 'Today' : `${daysActive}d ago`}
                       </span>
                     </div>
-                    {project.customerName && (
-                      <p className="text-base text-gray-600">
-                        <span className="text-gray-400">Customer:</span> {project.customerName}
-                      </p>
-                    )}
-                  </div>
 
-                  {/* Item Stats */}
-                  <div className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-base font-semibold text-gray-700">Design Items</span>
-                      <span className="text-base text-gray-500">{projectItems.length} total</span>
-                    </div>
-                    
-                    {projectItems.length > 0 ? (
-                      <>
-                        {/* Progress Bar */}
-                        <div className="h-3 bg-gray-100 rounded-full overflow-hidden mb-5">
-                          <div 
-                            className="h-full bg-gradient-to-r from-primary to-green-500 rounded-full transition-all duration-500"
-                            style={{ width: `${avgReadiness}%` }}
-                          />
-                        </div>
-                        
-                        {/* Stats Row */}
-                        <div className="grid grid-cols-3 gap-4 text-center">
-                          <div className="bg-green-50 rounded-xl py-4 px-2">
-                            <p className="text-2xl font-bold text-green-600">{readyCount}</p>
-                            <p className="text-sm text-green-600 mt-1">Ready</p>
-                          </div>
-                          <div className="bg-amber-50 rounded-xl py-4 px-2">
-                            <p className="text-2xl font-bold text-amber-600">{inProgressCount}</p>
-                            <p className="text-sm text-amber-600 mt-1">In Progress</p>
-                          </div>
-                          <div className="bg-gray-100 rounded-xl py-4 px-2">
-                            <p className="text-2xl font-bold text-gray-600">{pendingCount}</p>
-                            <p className="text-sm text-gray-600 mt-1">Pending</p>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-center py-6 text-gray-400">
-                        No items yet
+                    {/* Progress */}
+                    <div className="mb-3">
+                      <div className="flex justify-between items-center text-xs mb-1.5">
+                        <span className="text-muted-foreground">Progress</span>
+                        <span className="font-medium" style={{ color: currentStatus.color }}>{avgReadiness}%</span>
                       </div>
-                    )}
-                  </div>
+                      <Progress value={avgReadiness} className="h-1.5" />
+                    </div>
 
-                  {/* Card Footer */}
-                  <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                    <span className="text-sm text-gray-500">
-                      {avgReadiness}% complete
-                    </span>
-                    <span className="text-sm text-primary font-semibold flex items-center gap-1 group-hover:gap-2 transition-all">
-                      View Project →
-                    </span>
-                  </div>
-                </div>
+                    {/* Stats inline */}
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-700 rounded">
+                        <CheckCircle className="w-3 h-3" /> {readyCount} ready
+                      </span>
+                      <span className="flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 rounded">
+                        <Clock className="w-3 h-3" /> {inProgressCount} active
+                      </span>
+                      <span className="text-muted-foreground ml-auto">
+                        {projectItems.length} items
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>

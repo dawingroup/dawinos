@@ -4,11 +4,13 @@
  */
 
 import { useState, useRef } from 'react';
-import { collection, addDoc, updateDoc, doc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, query, where, getDocs, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '@/shared/services/firebase';
 import { optimizationService, type OptimizationResult } from '@/shared/services/optimization';
-import { splitByCabinet, getSplitSummary, type SplitResult } from '../../utils/csvSplitter';
-import type { RAGStatusValue } from '../../types';
+import { splitByCabinet, getSplitSummary, type SplitResult, type CabinetGroup } from '../../utils/csvSplitter';
+import { calculatePartsSummary } from '../../services/partsService';
+import type { RAGStatusValue, PartEntry, PartEdgeBanding } from '../../types';
+import type { Panel } from '@/shared/services/optimization';
 
 interface BulkImporterProps {
   projectId: string;
@@ -98,6 +100,36 @@ export function BulkImporter({ projectId, projectCode, onComplete, onCancel }: B
     }
   };
 
+  // Convert panels to PartEntry format for storage
+  const panelsToPartEntries = (panels: Panel[], filename: string): PartEntry[] => {
+    return panels.map((panel, idx) => {
+      const defaultEdgeBanding: PartEdgeBanding = {
+        top: false,
+        bottom: false,
+        left: false,
+        right: false,
+      };
+      
+      return {
+        id: `${Date.now()}-${idx}`,
+        partNumber: `P${String(idx + 1).padStart(3, '0')}`,
+        name: panel.label || `Part ${idx + 1}`,
+        length: panel.length,
+        width: panel.width,
+        thickness: panel.thickness || 18,
+        quantity: panel.quantity,
+        materialName: panel.material || 'Unspecified',
+        grainDirection: panel.grain === 1 ? 'length' : panel.grain === 2 ? 'width' : 'none',
+        edgeBanding: defaultEdgeBanding,
+        hasCNCOperations: false,
+        source: 'polyboard' as const,
+        importedFrom: filename,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      } as PartEntry;
+    });
+  };
+
   // Process selected groups
   const processGroups = async () => {
     if (!splitResult) return;
@@ -128,6 +160,10 @@ export function BulkImporter({ projectId, projectCode, onComplete, onCancel }: B
         let designItemId: string;
         let status: 'created' | 'updated' = 'created';
 
+        // Convert panels to parts
+        const parts = panelsToPartEntries(group.panels, fileName || 'bulk-import');
+        const partsSummary = calculatePartsSummary(parts);
+
         if (!existingDocs.empty) {
           // Update existing design item
           designItemId = existingDocs.docs[0].id;
@@ -136,6 +172,9 @@ export function BulkImporter({ projectId, projectCode, onComplete, onCancel }: B
           await updateDoc(
             doc(db, 'designProjects', projectId, 'designItems', designItemId),
             {
+              // Store parts
+              parts,
+              partsSummary,
               // Update RAG status for cost validation
               'ragStatus.manufacturingReadiness.costValidation': {
                 status: estimationResult.estimatedMaterialCost ? 'green' : 'amber' as RAGStatusValue,
@@ -177,6 +216,9 @@ export function BulkImporter({ projectId, projectCode, onComplete, onCancel }: B
             collection(db, 'designProjects', projectId, 'designItems'),
             {
               ...newItem,
+              // Store parts
+              parts,
+              partsSummary,
               estimationData: {
                 totalSheets: estimationResult.totalSheets,
                 totalPanels: estimationResult.totalPanels,
@@ -280,33 +322,99 @@ export function BulkImporter({ projectId, projectCode, onComplete, onCancel }: B
   };
 
   const renderUploadStep = () => (
-    <div className="text-center py-12">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".csv"
-        onChange={handleFileUpload}
-        className="hidden"
-      />
-      
-      <div
-        onClick={() => fileInputRef.current?.click()}
-        className="mx-auto w-96 h-48 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
-      >
-        <svg className="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-        </svg>
-        <p className="text-gray-600 font-medium">Upload Polyboard Master CSV</p>
-        <p className="text-sm text-gray-400 mt-1">Click or drag and drop</p>
+    <div className="py-8">
+      <div className="text-center">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+        
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          className="mx-auto w-96 h-48 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+        >
+          <svg className="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+          <p className="text-gray-600 font-medium">Upload Polyboard Master CSV</p>
+          <p className="text-sm text-gray-400 mt-1">Click or drag and drop</p>
+        </div>
+
+        {errors.length > 0 && (
+          <div className="mt-4 max-w-lg mx-auto">
+            {errors.map((error, i) => (
+              <p key={i} className="text-sm text-red-600">{error}</p>
+            ))}
+          </div>
+        )}
       </div>
 
-      {errors.length > 0 && (
-        <div className="mt-4 max-w-lg mx-auto">
-          {errors.map((error, i) => (
-            <p key={i} className="text-sm text-red-600">{error}</p>
-          ))}
+      {/* CSV Format Guide */}
+      <div className="mt-8 bg-gray-50 rounded-lg p-6 max-w-4xl mx-auto">
+        <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          CSV Format Guide
+        </h4>
+        
+        <div className="space-y-4 text-sm">
+          <div>
+            <p className="font-medium text-gray-700 mb-2">Polyboard CSV Format (column order):</p>
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+              <div className="bg-green-50 rounded px-2 py-1.5 border border-green-300 text-xs">
+                <span className="font-mono text-green-700 font-bold">1. Cabinet</span>
+                <p className="text-green-600 text-xs">→ Design Item</p>
+              </div>
+              <div className="bg-blue-50 rounded px-2 py-1.5 border border-blue-300 text-xs">
+                <span className="font-mono text-blue-700">2. Label</span>
+              </div>
+              <div className="bg-white rounded px-2 py-1.5 border text-xs">
+                <span className="font-mono text-gray-600">3. Material</span>
+              </div>
+              <div className="bg-white rounded px-2 py-1.5 border text-xs">
+                <span className="font-mono text-gray-600">4. Thickness</span>
+              </div>
+              <div className="bg-white rounded px-2 py-1.5 border text-xs">
+                <span className="font-mono text-gray-600">5. Quantity</span>
+              </div>
+              <div className="bg-blue-50 rounded px-2 py-1.5 border border-blue-300 text-xs">
+                <span className="font-mono text-blue-700">6. Length</span>
+              </div>
+              <div className="bg-blue-50 rounded px-2 py-1.5 border border-blue-300 text-xs">
+                <span className="font-mono text-blue-700">7. Width</span>
+              </div>
+              <div className="bg-white rounded px-2 py-1.5 border text-xs">
+                <span className="font-mono text-gray-600">8. Grain</span>
+              </div>
+              <div className="bg-white rounded px-2 py-1.5 border text-xs">
+                <span className="font-mono text-gray-600">9-12. Edges</span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              <span className="inline-block bg-green-100 px-1 rounded">Green</span> = grouping, 
+              <span className="inline-block bg-blue-100 px-1 rounded ml-1">Blue</span> = required
+            </p>
+          </div>
+
+          <div className="bg-blue-50 rounded p-3 border border-blue-200">
+            <p className="font-medium text-blue-800 mb-2">Example CSV (Polyboard export format):</p>
+            <pre className="text-xs font-mono text-blue-700 overflow-x-auto">
+cabinet,label,material,thickness,quantity,length,width,grain,topEdge,rightEdge,bottomEdge,leftEdge
+Kitchen-01,Top Panel,MDF 18mm,18,1,800,600,0,ABS-White,ABS-White,,
+Kitchen-01,Side Panel,MDF 18mm,18,2,700,550,1,,,,
+Kitchen-02,Bottom,Plywood 15mm,15,1,780,580,0,ABS-Oak,ABS-Oak,ABS-Oak,ABS-Oak</pre>
+          </div>
+
+          <div className="text-gray-500 text-xs">
+            <p><strong>Supported delimiters:</strong> Comma (,), Semicolon (;), Tab</p>
+            <p><strong>Supported formats:</strong> Polyboard, SketchUp Cutlist, Generic CSV</p>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 
@@ -338,6 +446,70 @@ export function BulkImporter({ projectId, projectCode, onComplete, onCancel }: B
             </div>
           </div>
         </div>
+
+        {/* Debug Info - Column Detection */}
+        {splitResult.debugInfo && (
+          <div className="bg-gray-100 rounded-lg p-4 text-xs font-mono">
+            <details>
+              <summary className="cursor-pointer font-semibold text-gray-700 mb-2">
+                Debug: Column Detection (click to expand)
+                {splitResult.debugInfo.hasHeaderRow === false && (
+                  <span className="ml-2 text-amber-600 font-normal">[No header row - using positional format]</span>
+                )}
+              </summary>
+              <div className="space-y-2 mt-2">
+                <div>
+                  <span className="font-bold">Headers found:</span>
+                  <div className="bg-white p-2 rounded mt-1 overflow-x-auto">
+                    {splitResult.debugInfo.headers.map((h, i) => (
+                      <span key={i} className="inline-block bg-gray-200 px-2 py-1 rounded mr-1 mb-1">
+                        [{i}] {h || '(empty)'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <span className="font-bold">Column mapping:</span>
+                  <div className="bg-white p-2 rounded mt-1 grid grid-cols-2 gap-1">
+                    <span className={splitResult.debugInfo.columnMapping.cabinetCode !== undefined ? 'text-green-600' : 'text-red-600'}>
+                      Cabinet: {splitResult.debugInfo.columnMapping.cabinetCode ?? 'NOT FOUND'}
+                    </span>
+                    <span className={splitResult.debugInfo.columnMapping.label !== undefined ? 'text-green-600' : 'text-red-600'}>
+                      Label: {splitResult.debugInfo.columnMapping.label ?? 'NOT FOUND'}
+                    </span>
+                    <span className={splitResult.debugInfo.columnMapping.length !== undefined ? 'text-green-600' : 'text-red-600'}>
+                      Length: {splitResult.debugInfo.columnMapping.length ?? 'NOT FOUND'}
+                    </span>
+                    <span className={splitResult.debugInfo.columnMapping.width !== undefined ? 'text-green-600' : 'text-red-600'}>
+                      Width: {splitResult.debugInfo.columnMapping.width ?? 'NOT FOUND'}
+                    </span>
+                    <span className={splitResult.debugInfo.columnMapping.thickness !== undefined ? 'text-green-600' : 'text-gray-400'}>
+                      Thickness: {splitResult.debugInfo.columnMapping.thickness ?? 'not found'}
+                    </span>
+                    <span className={splitResult.debugInfo.columnMapping.quantity !== undefined ? 'text-green-600' : 'text-gray-400'}>
+                      Quantity: {splitResult.debugInfo.columnMapping.quantity ?? 'not found'}
+                    </span>
+                    <span className={splitResult.debugInfo.columnMapping.material !== undefined ? 'text-green-600' : 'text-gray-400'}>
+                      Material: {splitResult.debugInfo.columnMapping.material ?? 'not found'}
+                    </span>
+                  </div>
+                </div>
+                {splitResult.debugInfo.sampleRow && (
+                  <div>
+                    <span className="font-bold">First data row:</span>
+                    <div className="bg-white p-2 rounded mt-1 overflow-x-auto">
+                      {splitResult.debugInfo.sampleRow.map((v, i) => (
+                        <span key={i} className="inline-block bg-blue-100 px-2 py-1 rounded mr-1 mb-1">
+                          [{i}] {v || '(empty)'}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </details>
+          </div>
+        )}
 
         {/* Errors */}
         {errors.length > 0 && (

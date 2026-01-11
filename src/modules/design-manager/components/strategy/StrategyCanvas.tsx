@@ -3,8 +3,8 @@
  * Main canvas for project strategy research with AI report generation
  */
 
-import { useState, lazy, Suspense } from 'react';
-import { Target, Ruler, DollarSign, Search, Lightbulb, X, FileText, Download, Sparkles, Package } from 'lucide-react';
+import { useState, useCallback, lazy, Suspense } from 'react';
+import { Target, Ruler, DollarSign, Search, Lightbulb, X, FileText, Download, Sparkles, Package, User } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { functions } from '@/shared/services/firebase';
@@ -14,7 +14,11 @@ import { SpaceParametersSection } from './SpaceParametersSection';
 import { BudgetFrameworkSection } from './BudgetFrameworkSection';
 import { ResearchAssistant } from './ResearchAssistant';
 import { TrendInsightsPanel } from './TrendInsightsPanel';
+import { ProjectContextSection, DEFAULT_PROJECT_CONTEXT, type ProjectContext } from './ProjectContextSection';
+import { InlineRecommendations } from '@/shared/components/recommendations';
+import { useStrategyRecommendations } from '@/shared/hooks/useRecommendations';
 import { StrategyPDF } from '@/modules/strategy/components/StrategyPDF';
+import type { RecommendationItem } from '@/shared/services/recommendationService';
 import type { StrategyReport, GenerateStrategyInput } from '@/modules/strategy/types';
 
 // Lazy load AI components
@@ -60,6 +64,62 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
   // Project Scoping AI state - used to feed into Strategy Report
   const [scopingResult, setScopingResult] = useState<any>(null);
 
+  // Enhanced context state
+  const [projectContext, setProjectContext] = useState<ProjectContext>(DEFAULT_PROJECT_CONTEXT);
+  const [selectedRecommendations, setSelectedRecommendations] = useState<RecommendationItem[]>([]);
+  
+  // Customer intelligence state
+  const [customerIntelligence, setCustomerIntelligence] = useState<{
+    materialPreferences?: string[];
+    preferredSuppliers?: string[];
+    qualityExpectations?: string;
+    priceSensitivity?: number;
+    segment?: string;
+  } | null>(null);
+
+  // Handle customer intelligence data
+  const handleCustomerContextReady = useCallback((context: any) => {
+    console.log('Customer context ready:', context);
+    setCustomerIntelligence({
+      materialPreferences: context.materialPreferences,
+      preferredSuppliers: context.preferredSuppliers,
+      qualityExpectations: context.qualityExpectations,
+      priceSensitivity: context.priceSensitivity,
+      segment: context.segment,
+    });
+    // Enrich project context with customer preferences
+    if (context.materialPreferences?.length) {
+      setProjectContext(prev => ({
+        ...prev,
+        style: {
+          ...prev.style,
+          materialPreferences: [
+            ...new Set([...(prev.style.materialPreferences || []), ...context.materialPreferences])
+          ],
+        },
+      }));
+    }
+  }, []);
+
+  // Contextual recommendations based on strategy data
+  const { recommendations, isLoading: isLoadingRecommendations } = useStrategyRecommendations({
+    projectType: projectContext.project.type,
+    style: projectContext.style.primary,
+    materials: projectContext.style.materialPreferences,
+    budgetTier: strategy?.budgetFramework?.tier,
+    keywords: [
+      projectContext.project.subType,
+      strategy?.spaceParameters?.spaceType,
+      ...(projectContext.style.colorPreferences || []),
+    ].filter(Boolean) as string[],
+  });
+
+  const handleSelectRecommendation = (item: RecommendationItem) => {
+    if (!selectedRecommendations.find(r => r.id === item.id)) {
+      setSelectedRecommendations(prev => [...prev, item]);
+    }
+  };
+
   
   // Generate AI Strategy Report
   const handleGenerateReport = async () => {
@@ -85,11 +145,6 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
         category: f.category,
       })) || [];
 
-      const generateStrategy = httpsCallable<GenerateStrategyInput, StrategyReport>(
-        functions,
-        'generateStrategyReport'
-      );
-
       // Build scoping context if available
       const scopingContext = scopingResult ? {
         deliverables: scopingResult.deliverables?.slice(0, 20)?.map((d: any) => ({
@@ -103,11 +158,16 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
         trendInsights: scopingResult.aiEnhancement?.trendInsights,
       } : null;
 
+      const generateStrategy = httpsCallable<GenerateStrategyInput, StrategyReport>(
+        functions,
+        'generateStrategyReport'
+      );
+
       const result = await generateStrategy({
         projectName: projectName || 'Untitled Project',
-        projectType: scopingResult?.entities?.projectType || strategy?.spaceParameters?.spaceType || 'Custom Millwork',
+        projectType: projectContext.project.type || scopingResult?.entities?.projectType || strategy?.spaceParameters?.spaceType || 'Custom Millwork',
         clientBrief: clientBrief || 'Custom millwork project',
-        location: scopingResult?.entities?.location || 'East Africa',
+        location: projectContext.project.location || scopingResult?.entities?.location || 'East Africa',
         year: new Date().getFullYear(),
         // Enhanced inputs
         constraints: strategy?.challenges?.constraints || [],
@@ -119,6 +179,32 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
         researchExcerpts,
         // Include scoping output
         scopingContext: scopingContext || undefined,
+        // Enhanced project context
+        projectContext: {
+          customer: projectContext.customer,
+          timeline: projectContext.timeline,
+          style: projectContext.style,
+          targetUsers: projectContext.targetUsers,
+          requirements: projectContext.requirements,
+        },
+        // Customer intelligence enrichment
+        customerIntelligence: customerIntelligence ? {
+          segment: customerIntelligence.segment,
+          materialPreferences: customerIntelligence.materialPreferences,
+          preferredSuppliers: customerIntelligence.preferredSuppliers,
+          qualityExpectations: customerIntelligence.qualityExpectations,
+          priceSensitivity: customerIntelligence.priceSensitivity,
+        } : undefined,
+        // Product recommendations from contextual service
+        recommendedProducts: selectedRecommendations
+          .filter(r => r.type === 'product')
+          .map(p => ({
+            productId: p.id,
+            productName: p.name,
+            category: p.category || 'general',
+            quantity: 1,
+            reason: p.matchReason,
+          })),
       });
 
       setGeneratedReport(result.data);
@@ -140,10 +226,10 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 flex-shrink-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Project Strategy</h1>
@@ -207,18 +293,35 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
         </div>
       )}
 
-      {/* Main Content - Scrollable */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Main Content */}
+      <div className="flex-1">
+        <div className="container mx-auto px-4 py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* Left Column - Strategy Inputs */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Project Scoping AI - FIRST */}
-            <div className="bg-white rounded-xl border-2 border-purple-200 p-6 bg-gradient-to-br from-purple-50 to-white">
-              <div className="flex items-center gap-2 mb-4">
+          <div className="lg:col-span-8 space-y-4">
+            {/* Project Context - Customer & Project Details */}
+            <div className="bg-white rounded-xl border-2 border-blue-200 p-4 bg-gradient-to-br from-blue-50 to-white">
+              <div className="flex items-center gap-2 mb-3">
+                <User className="w-5 h-5 text-blue-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Project Context</h2>
+                <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">ENHANCED DATA</span>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Capture detailed customer and project information to provide better AI context.
+              </p>
+              <ProjectContextSection
+                context={projectContext}
+                onUpdate={setProjectContext}
+                customerName={projectContext.customer.name}
+                projectName={projectName}
+              />
+            </div>
+
+            {/* Project Scoping AI */}
+            <div className="bg-white rounded-xl border-2 border-purple-200 p-4 bg-gradient-to-br from-purple-50 to-white">
+              <div className="flex items-center gap-2 mb-3">
                 <Package className="w-5 h-5 text-purple-500" />
                 <h2 className="text-lg font-semibold text-gray-900">Project Scoping AI</h2>
-                <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">START HERE</span>
               </div>
               <p className="text-sm text-gray-600 mb-4">
                 Enter your design brief to automatically extract deliverables. The output will be used to generate your strategy report.
@@ -240,8 +343,8 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
             </div>
 
             {/* Challenges Section */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center gap-2 mb-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center gap-2 mb-3">
                 <Target className="w-5 h-5 text-red-500" />
                 <h2 className="text-lg font-semibold text-gray-900">Challenges & Goals</h2>
               </div>
@@ -252,8 +355,8 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
             </div>
 
             {/* Space Parameters */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center gap-2 mb-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center gap-2 mb-3">
                 <Ruler className="w-5 h-5 text-blue-500" />
                 <h2 className="text-lg font-semibold text-gray-900">Space Parameters</h2>
               </div>
@@ -269,8 +372,8 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
             </div>
 
             {/* Budget Framework */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center gap-2 mb-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center gap-2 mb-3">
                 <DollarSign className="w-5 h-5 text-green-500" />
                 <h2 className="text-lg font-semibold text-gray-900">Budget Framework</h2>
               </div>
@@ -281,8 +384,8 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
             </div>
 
             {/* Research Findings */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center gap-2 mb-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center gap-2 mb-3">
                 <Lightbulb className="w-5 h-5 text-amber-500" />
                 <h2 className="text-lg font-semibold text-gray-900">Research Findings</h2>
                 <span className="ml-auto text-sm text-gray-500">
@@ -298,36 +401,80 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
           </div>
 
           {/* Right Column - Research Assistant & Customer Intelligence */}
-          <div className="lg:col-span-1 space-y-6">
-            <div className="sticky top-24 space-y-6">
-              {/* Customer Intelligence */}
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="lg:col-span-4 space-y-4">
+            {/* Customer Intelligence - Now properly integrated */}
+            <div className="bg-white rounded-xl border-2 border-teal-200 shadow-sm overflow-hidden">
+              <div className="flex items-center gap-2 p-3 bg-gradient-to-r from-teal-500 to-cyan-600">
+                <User className="w-4 h-4 text-white" />
+                <span className="font-medium text-white text-sm">Customer Intelligence</span>
+                {customerIntelligence?.segment && (
+                  <span className="ml-auto px-2 py-0.5 bg-white/20 text-white text-xs rounded">
+                    {customerIntelligence.segment}
+                  </span>
+                )}
+              </div>
+              <div className="p-3">
                 <Suspense fallback={
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-teal-600 border-t-transparent"></div>
+                  <div className="flex items-center justify-center py-6">
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-teal-600 border-t-transparent"></div>
                   </div>
                 }>
                   <CustomerIntelligenceAI
-                    customerId={undefined}
-                    customerName="Customer"
-                    onContextReady={(context) => console.log('Customer context:', context)}
+                    customerId={projectContext.customer.company ? undefined : undefined}
+                    customerName={projectContext.customer.name || projectContext.customer.company || 'Customer'}
+                    onContextReady={handleCustomerContextReady}
                   />
                 </Suspense>
               </div>
+            </div>
 
-              {/* Research Assistant */}
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="flex items-center gap-2 p-4 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-indigo-600">
-                  <Search className="w-5 h-5 text-white" />
-                  <h2 className="font-semibold text-white">Research Assistant</h2>
-                </div>
-                <ResearchAssistant
-                  messages={messages}
-                  isSending={isSending}
-                  onSendQuery={sendQuery}
-                  onSaveFinding={saveFinding}
+            {/* Contextual Recommendations */}
+            <div className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
+                <InlineRecommendations
+                  recommendations={recommendations}
+                  isLoading={isLoadingRecommendations}
+                  showTypes={['product', 'inspiration', 'feature']}
+                  onSelect={handleSelectRecommendation}
+                  title="Suggested for this project"
+                  maxVisible={3}
                 />
+                {selectedRecommendations.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <p className="text-xs text-gray-500 mb-2">
+                      Selected ({selectedRecommendations.length})
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedRecommendations.map(item => (
+                        <span 
+                          key={item.id}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full"
+                        >
+                          {item.name}
+                          <button
+                            onClick={() => setSelectedRecommendations(prev => prev.filter(r => r.id !== item.id))}
+                            className="hover:text-indigo-900"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
+
+            {/* Research Assistant */}
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+              <div className="flex items-center gap-2 p-3 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-indigo-600">
+                <Search className="w-5 h-5 text-white" />
+                <h2 className="font-semibold text-white">Research Assistant</h2>
+              </div>
+              <ResearchAssistant
+                messages={messages}
+                isSending={isSending}
+                onSendQuery={sendQuery}
+                onSaveFinding={saveFinding}
+              />
             </div>
           </div>
         </div>

@@ -1,0 +1,187 @@
+rules_version = '2';
+
+// ============================================
+// DawinOS v2.0 - Firebase Storage Rules
+// ============================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // ============================================
+    // Helper Functions
+    // ============================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function userId() {
+      return request.auth.uid;
+    }
+    
+    function isAdmin() {
+      return request.auth.token.role == 'platform_admin';
+    }
+    
+    function isHR() {
+      return request.auth.token.role in ['platform_admin', 'hr_admin', 'hr_manager'];
+    }
+    
+    function isFinance() {
+      return request.auth.token.role in ['platform_admin', 'finance_admin', 'finance_manager'];
+    }
+    
+    function isExecutive() {
+      return request.auth.token.role in ['platform_admin', 'ceo', 'executive', 'director'];
+    }
+    
+    function belongsToSubsidiary(subsidiaryId) {
+      return request.auth.token.subsidiaryId == subsidiaryId;
+    }
+    
+    // Validate file size (max 50MB)
+    function isValidSize() {
+      return request.resource.size < 50 * 1024 * 1024;
+    }
+    
+    // Validate image type
+    function isValidImageType() {
+      return request.resource.contentType.matches('image/(png|jpeg|gif|webp)');
+    }
+    
+    // Validate document type
+    function isValidDocType() {
+      return request.resource.contentType.matches('application/pdf');
+    }
+    
+    // Validate spreadsheet/CSV type
+    function isValidSpreadsheetType() {
+      return request.resource.contentType.matches('(application/pdf|text/csv|application/vnd.ms-excel|application/vnd.openxmlformats-officedocument.spreadsheetml.sheet)');
+    }
+    
+    // ============================================
+    // USER PROFILE IMAGES
+    // ============================================
+    
+    match /users/{userId}/profile/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if (request.auth.uid == userId || isAdmin()) &&
+        isValidSize() &&
+        isValidImageType();
+    }
+    
+    // ============================================
+    // HR DOCUMENTS
+    // ============================================
+    
+    match /hr/employees/{employeeId}/{document=**} {
+      allow read: if isHR() || request.auth.uid == employeeId;
+      allow write: if isHR() && isValidSize();
+    }
+    
+    match /hr/contracts/{contractId}/{fileName} {
+      allow read: if isHR();
+      allow write: if isHR() && 
+        isValidSize() &&
+        isValidDocType();
+    }
+    
+    match /hr/payroll/{batchId}/{fileName} {
+      // Highly restricted - HR only
+      allow read: if isHR() || isFinance();
+      allow write: if isHR() && 
+        isValidSize() &&
+        isValidSpreadsheetType();
+    }
+    
+    // ============================================
+    // FINANCE DOCUMENTS
+    // ============================================
+    
+    match /finance/statements/{batchId}/{fileName} {
+      allow read: if isFinance();
+      allow write: if isFinance() && 
+        isValidSize() &&
+        isValidSpreadsheetType();
+    }
+    
+    match /finance/reports/{year}/{fileName} {
+      allow read: if isFinance() || isAdmin();
+      allow write: if isFinance() && isValidSize();
+    }
+    
+    // ============================================
+    // EXECUTIVE DOCUMENTS
+    // ============================================
+    
+    match /executive/strategy/{docId}/{fileName} {
+      allow read: if isExecutive();
+      allow write: if isExecutive() && isValidSize();
+    }
+    
+    match /executive/capital/{raiseId}/{fileName} {
+      // Investor materials
+      allow read: if isExecutive() || isFinance();
+      allow write: if isExecutive() && isValidSize();
+    }
+    
+    // ============================================
+    // SUBSIDIARY DOCUMENTS
+    // ============================================
+    
+    match /subsidiaries/{subsidiaryId}/{path=**} {
+      allow read: if isAdmin() || belongsToSubsidiary(subsidiaryId);
+      allow write: if (isAdmin() || belongsToSubsidiary(subsidiaryId)) && isValidSize();
+    }
+    
+    // ============================================
+    // KNOWLEDGE BASE
+    // ============================================
+    
+    match /knowledge/{category}/{fileName} {
+      // All authenticated users can read
+      allow read: if isAuthenticated();
+      // HR and admin can write
+      allow write: if isHR() && isValidSize();
+    }
+    
+    // ============================================
+    // TEMPORARY UPLOADS
+    // ============================================
+    
+    match /temp/{userId}/{fileName} {
+      // Users can upload to their temp folder
+      allow read: if request.auth.uid == userId;
+      allow write: if request.auth.uid == userId && isValidSize();
+      // Auto-deleted after 24 hours via Cloud Function
+    }
+    
+    // ============================================
+    // ORGANIZATION BRANDING & ASSETS
+    // ============================================
+    
+    match /organizations/{orgId}/{path=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isValidSize();
+    }
+    
+    // ============================================
+    // PROJECT & DESIGN ASSETS (Existing)
+    // ============================================
+    
+    match /projects/{projectId}/{path=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isValidSize();
+    }
+    
+    match /designs/{designId}/{path=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isValidSize();
+    }
+    
+    match /clips/{clipId}/{path=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isValidSize();
+    }
+  }
+}

@@ -5,22 +5,18 @@
 
 import React from 'react';
 import { pdf } from '@react-pdf/renderer';
-import { ShopTraveler } from '@/modules/design-manager/features/production/pdf/ShopTraveler';
+import { ShopTraveler, type ShopTravelerOptions } from '@/subsidiaries/finishes/design-manager/features/production/pdf/ShopTraveler';
 import { getProjectWithOptimization as getProject } from '@/shared/services/projectService';
+import { aggregateStandardPartsFromProject, aggregateSpecialPartsFromProject } from '@/shared/services/optimization';
+import { getDesignItems } from '@/modules/design-manager/services/firestore';
+import { getOrganizationSettings } from '@/core/settings';
 import type { Project, ProductionResult, NestingSheet } from '@/shared/types';
 
 // Suppress unused React warning - needed for JSX
 void React;
 
-// ============================================
-// Types
-// ============================================
-
-export interface ShopTravelerOptions {
-  includeLabels?: boolean;
-  includeRemnants?: boolean;
-  includeEdgeBanding?: boolean;
-}
+// Re-export the options type
+export type { ShopTravelerOptions };
 
 export interface LabelsCSVData {
   partId: string;
@@ -43,7 +39,7 @@ export interface LabelsCSVData {
  */
 export async function generateShopTravelerPDF(
   projectId: string,
-  _options?: ShopTravelerOptions
+  options?: ShopTravelerOptions
 ): Promise<Blob> {
   const project = await getProject(projectId);
   
@@ -61,10 +57,26 @@ export async function generateShopTravelerPDF(
     throw new Error('No nesting sheets to generate shop traveler');
   }
 
-  // Create the PDF document element using JSX
+  // Fetch standard parts, special parts, design items, and organization settings for the project
+  const [standardParts, specialParts, designItems, orgSettings] = await Promise.all([
+    aggregateStandardPartsFromProject(projectId),
+    aggregateSpecialPartsFromProject(projectId),
+    getDesignItems(projectId),
+    getOrganizationSettings().catch(() => null),
+  ]);
+
+  // Get Dawin Finishes logo URL from subsidiary branding
+  const dawinFinishesLogo = orgSettings?.branding?.subsidiaries?.['dawin-finishes']?.logoUrl;
+
+  // Create the PDF document element using JSX with options
   const doc = <ShopTraveler 
     project={project as Project} 
-    production={production as ProductionResult} 
+    production={production as ProductionResult}
+    options={options}
+    standardParts={standardParts}
+    specialParts={specialParts}
+    designItems={designItems}
+    logoUrl={dawinFinishesLogo}
   />;
   
   // Generate PDF blob
@@ -82,13 +94,14 @@ export async function downloadShopTraveler(
 ): Promise<void> {
   const project = await getProject(projectId);
   const projectCode = project?.code || projectId.substring(0, 8);
+  const timestamp = new Date().toISOString().split('T')[0];
   
   const blob = await generateShopTravelerPDF(projectId, options);
   const url = URL.createObjectURL(blob);
   
   const link = document.createElement('a');
   link.href = url;
-  link.download = `ShopTraveler-${projectCode}-${Date.now()}.pdf`;
+  link.download = `ShopTraveler-${projectCode}-${timestamp}.pdf`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

@@ -1,0 +1,361 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ==========================================================================
+    // HELPER FUNCTIONS
+    // ==========================================================================
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Get user document
+    function getUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    
+    // Check if user has specific role
+    function hasRole(role) {
+      return isAuthenticated() && getUserDoc().data.role == role;
+    }
+    
+    // Check if user has specific permission
+    function hasPermission(permission) {
+      return isAuthenticated() && permission in getUserDoc().data.permissions;
+    }
+    
+    // Check if user has any of the specified permissions
+    function hasAnyPermission(permissions) {
+      return isAuthenticated() && 
+        getUserDoc().data.permissions.hasAny(permissions);
+    }
+    
+    // Check if user belongs to subsidiary
+    function belongsToSubsidiary(subsidiaryId) {
+      return isAuthenticated() && 
+        getUserDoc().data.subsidiaryId == subsidiaryId;
+    }
+    
+    // Check if document belongs to user's subsidiary
+    function isSubsidiaryDoc() {
+      return resource.data.subsidiaryId == getUserDoc().data.subsidiaryId;
+    }
+    
+    // Check if creating document for own subsidiary
+    function isCreatingForSubsidiary() {
+      return request.resource.data.subsidiaryId == getUserDoc().data.subsidiaryId;
+    }
+    
+    // Check if user is admin
+    function isAdmin() {
+      return hasRole('admin') || hasRole('super_admin');
+    }
+    
+    // Check if user is CEO or executive
+    function isExecutive() {
+      return hasRole('ceo') || hasRole('executive') || isAdmin();
+    }
+    
+    // ==========================================================================
+    // USER MANAGEMENT
+    // ==========================================================================
+    
+    match /users/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isAdmin() && isSubsidiaryDoc();
+      allow update: if isAuthenticated() && 
+                       request.auth.uid == userId &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['preferences', 'lastLogin', 'updatedAt']);
+      allow create, update: if isAdmin() && isCreatingForSubsidiary();
+      allow delete: if hasRole('super_admin');
+    }
+    
+    // ==========================================================================
+    // COMPANIES & SUBSIDIARIES
+    // ==========================================================================
+    
+    match /companies/{companyId} {
+      allow read: if isAuthenticated() && belongsToSubsidiary(companyId);
+      allow write: if hasRole('super_admin');
+    }
+    
+    // ==========================================================================
+    // HR CENTRAL MODULE
+    // ==========================================================================
+    
+    match /employees/{employeeId} {
+      allow read: if hasAnyPermission(['hr:read', 'hr:admin']) && isSubsidiaryDoc();
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if hasAnyPermission(['hr:write', 'hr:admin']) && isCreatingForSubsidiary();
+      allow update: if hasAnyPermission(['hr:write', 'hr:admin']) && isSubsidiaryDoc();
+      allow delete: if hasPermission('hr:admin') && isSubsidiaryDoc();
+    }
+    
+    match /payroll/{payrollId} {
+      allow read: if hasAnyPermission(['hr:payroll', 'hr:admin', 'finance:read']) && isSubsidiaryDoc();
+      allow read: if isAuthenticated() && resource.data.employeeUserId == request.auth.uid;
+      allow create, update: if hasAnyPermission(['hr:payroll', 'hr:admin']) && isCreatingForSubsidiary();
+      allow update: if hasPermission('hr:approve') && 
+                       isSubsidiaryDoc() &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'approvedBy', 'approvedAt', 'updatedAt']);
+    }
+    
+    match /leave_requests/{requestId} {
+      allow read: if isAuthenticated() && resource.data.employeeUserId == request.auth.uid;
+      allow read: if hasAnyPermission(['hr:read', 'hr:admin']) && isSubsidiaryDoc();
+      allow create: if isAuthenticated() && 
+                       request.resource.data.employeeUserId == request.auth.uid &&
+                       isCreatingForSubsidiary();
+      allow update: if isAuthenticated() && 
+                       resource.data.employeeUserId == request.auth.uid &&
+                       resource.data.status == 'pending';
+      allow update: if hasAnyPermission(['hr:approve', 'hr:admin']) && isSubsidiaryDoc();
+    }
+    
+    match /departments/{departmentId} {
+      allow read: if hasAnyPermission(['hr:read', 'hr:admin']) && isSubsidiaryDoc();
+      allow write: if hasPermission('hr:admin') && isCreatingForSubsidiary();
+    }
+    
+    match /positions/{positionId} {
+      allow read: if hasAnyPermission(['hr:read', 'hr:admin']) && isSubsidiaryDoc();
+      allow write: if hasPermission('hr:admin') && isCreatingForSubsidiary();
+    }
+    
+    // ==========================================================================
+    // CEO STRATEGY MODULE
+    // ==========================================================================
+    
+    match /strategies/{strategyId} {
+      allow read: if hasAnyPermission(['strategy:read', 'strategy:admin']) && isSubsidiaryDoc();
+      allow create: if isExecutive() && isCreatingForSubsidiary();
+      allow update: if hasAnyPermission(['strategy:write', 'strategy:admin']) && isSubsidiaryDoc();
+      allow delete: if hasPermission('strategy:admin') && isSubsidiaryDoc();
+    }
+    
+    match /okrs/{okrId} {
+      allow read: if hasAnyPermission(['strategy:read', 'strategy:admin']) && isSubsidiaryDoc();
+      allow read: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
+      allow create: if hasAnyPermission(['strategy:write', 'strategy:admin']) && isCreatingForSubsidiary();
+      allow update: if (hasAnyPermission(['strategy:write', 'strategy:admin']) ||
+                       resource.data.ownerId == request.auth.uid) && isSubsidiaryDoc();
+    }
+    
+    match /kpis/{kpiId} {
+      allow read: if hasAnyPermission(['strategy:read', 'strategy:admin']) && isSubsidiaryDoc();
+      allow write: if hasAnyPermission(['strategy:write', 'strategy:admin']) && isCreatingForSubsidiary();
+    }
+    
+    // ==========================================================================
+    // FINANCIAL MODULE
+    // ==========================================================================
+    
+    match /accounts/{accountId} {
+      allow read: if hasAnyPermission(['finance:read', 'finance:admin']) && isSubsidiaryDoc();
+      allow write: if hasPermission('finance:admin') && isCreatingForSubsidiary();
+    }
+    
+    match /budgets/{budgetId} {
+      allow read: if hasAnyPermission(['finance:read', 'finance:admin']) && isSubsidiaryDoc();
+      allow read: if isAuthenticated() && resource.data.departmentHeadId == request.auth.uid;
+      allow create, update: if hasAnyPermission(['finance:write', 'finance:admin']) && isCreatingForSubsidiary();
+      allow update: if hasPermission('finance:approve') && 
+                       isSubsidiaryDoc() &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'approvedBy', 'approvedAt', 'updatedAt']);
+    }
+    
+    match /expenses/{expenseId} {
+      allow read: if isAuthenticated() && resource.data.submittedBy == request.auth.uid;
+      allow read: if hasAnyPermission(['finance:read', 'finance:admin']) && isSubsidiaryDoc();
+      allow create: if isAuthenticated() && 
+                       request.resource.data.submittedBy == request.auth.uid &&
+                       isCreatingForSubsidiary();
+      allow update: if isAuthenticated() && 
+                       resource.data.submittedBy == request.auth.uid &&
+                       resource.data.status == 'draft';
+      allow update: if hasAnyPermission(['finance:approve', 'finance:admin']) && isSubsidiaryDoc();
+    }
+    
+    match /transactions/{transactionId} {
+      allow read: if hasAnyPermission(['finance:read', 'finance:admin']) && isSubsidiaryDoc();
+      allow create: if hasAnyPermission(['finance:write', 'finance:admin']) && isCreatingForSubsidiary();
+      allow update, delete: if false;
+    }
+    
+    // ==========================================================================
+    // STAFF PERFORMANCE MODULE
+    // ==========================================================================
+    
+    match /goals/{goalId} {
+      allow read: if isAuthenticated() && resource.data.employeeUserId == request.auth.uid;
+      allow read: if hasAnyPermission(['performance:read', 'performance:admin']) && isSubsidiaryDoc();
+      allow create: if isAuthenticated() && 
+                       request.resource.data.employeeUserId == request.auth.uid &&
+                       isCreatingForSubsidiary();
+      allow update: if isAuthenticated() && resource.data.employeeUserId == request.auth.uid;
+      allow update: if hasPermission('performance:approve') && isSubsidiaryDoc();
+    }
+    
+    match /reviews/{reviewId} {
+      allow read: if isAuthenticated() && resource.data.employeeUserId == request.auth.uid;
+      allow read: if hasAnyPermission(['performance:read', 'performance:admin']) && isSubsidiaryDoc();
+      allow create: if hasAnyPermission(['performance:write', 'performance:admin']) && isCreatingForSubsidiary();
+      allow update: if isAuthenticated() && 
+                       (resource.data.reviewerId == request.auth.uid ||
+                        hasAnyPermission(['performance:write', 'performance:admin'])) &&
+                       isSubsidiaryDoc();
+    }
+    
+    match /competencies/{competencyId} {
+      allow read: if hasAnyPermission(['performance:read', 'performance:admin']) && isSubsidiaryDoc();
+      allow write: if hasPermission('performance:admin') && isCreatingForSubsidiary();
+    }
+    
+    // ==========================================================================
+    // CAPITAL HUB MODULE
+    // ==========================================================================
+    
+    match /deals/{dealId} {
+      allow read: if hasAnyPermission(['capital:read', 'capital:admin']) && isSubsidiaryDoc();
+      allow create: if hasAnyPermission(['capital:write', 'capital:admin']) && isCreatingForSubsidiary();
+      allow update: if hasAnyPermission(['capital:write', 'capital:admin']) && isSubsidiaryDoc();
+      allow update: if hasPermission('capital:approve') && 
+                       isSubsidiaryDoc() &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'approvedBy', 'approvedAt', 'updatedAt']);
+      allow delete: if hasPermission('capital:admin') && isSubsidiaryDoc();
+    }
+    
+    match /investors/{investorId} {
+      allow read: if hasAnyPermission(['capital:read', 'capital:admin']) && isSubsidiaryDoc();
+      allow write: if hasAnyPermission(['capital:write', 'capital:admin']) && isCreatingForSubsidiary();
+    }
+    
+    match /portfolio/{portfolioId} {
+      allow read: if hasAnyPermission(['capital:read', 'capital:admin']) && isSubsidiaryDoc();
+      allow write: if hasAnyPermission(['capital:write', 'capital:admin']) && isCreatingForSubsidiary();
+    }
+    
+    match /funds/{fundId} {
+      allow read: if hasAnyPermission(['capital:read', 'capital:admin']) && isSubsidiaryDoc();
+      allow write: if hasPermission('capital:admin') && isCreatingForSubsidiary();
+    }
+    
+    // ==========================================================================
+    // MARKET INTELLIGENCE MODULE
+    // ==========================================================================
+    
+    match /competitors/{competitorId} {
+      allow read: if hasAnyPermission(['market:read', 'market:admin']) && isSubsidiaryDoc();
+      allow write: if hasAnyPermission(['market:write', 'market:admin']) && isCreatingForSubsidiary();
+    }
+    
+    match /market_research/{researchId} {
+      allow read: if hasAnyPermission(['market:read', 'market:admin']) && isSubsidiaryDoc();
+      allow write: if hasAnyPermission(['market:write', 'market:admin']) && isCreatingForSubsidiary();
+    }
+    
+    match /market_signals/{signalId} {
+      allow read: if hasAnyPermission(['market:read', 'market:admin']) && isSubsidiaryDoc();
+      allow create: if hasAnyPermission(['market:write', 'market:admin']) && isCreatingForSubsidiary();
+      allow update, delete: if hasPermission('market:admin') && isSubsidiaryDoc();
+    }
+    
+    // ==========================================================================
+    // INTELLIGENCE LAYER MODULE
+    // ==========================================================================
+    
+    match /business_events/{eventId} {
+      allow read: if hasAnyPermission(['intelligence:read', 'intelligence:admin']) && isSubsidiaryDoc();
+      allow create: if isAuthenticated() && isCreatingForSubsidiary();
+      allow update: if hasAnyPermission(['intelligence:write', 'intelligence:admin']) && isSubsidiaryDoc();
+    }
+    
+    match /smart_tasks/{taskId} {
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.assigneeIds;
+      allow read: if hasAnyPermission(['intelligence:read', 'intelligence:admin']) && isSubsidiaryDoc();
+      allow create: if isAuthenticated() && isCreatingForSubsidiary();
+      allow update: if isAuthenticated() && request.auth.uid in resource.data.assigneeIds;
+      allow update, delete: if hasPermission('intelligence:admin') && isSubsidiaryDoc();
+    }
+    
+    match /grey_areas/{greyAreaId} {
+      allow read: if hasAnyPermission(['intelligence:read', 'intelligence:admin']) && isSubsidiaryDoc();
+      allow create: if isAuthenticated() && isCreatingForSubsidiary();
+      allow update: if hasAnyPermission(['intelligence:write', 'intelligence:admin']) && isSubsidiaryDoc();
+      allow delete: if hasPermission('intelligence:admin') && isSubsidiaryDoc();
+    }
+    
+    match /role_profiles/{profileId} {
+      allow read: if isAuthenticated() && isSubsidiaryDoc();
+      allow write: if hasPermission('intelligence:admin') && isCreatingForSubsidiary();
+    }
+    
+    // ==========================================================================
+    // CROSS-MODULE
+    // ==========================================================================
+    
+    match /cross_module_references/{referenceId} {
+      allow read: if isAuthenticated() && isSubsidiaryDoc();
+      allow create: if isAuthenticated() && isCreatingForSubsidiary();
+      allow delete: if isAdmin() && isSubsidiaryDoc();
+    }
+    
+    match /cross_module_activity/{activityId} {
+      allow read: if isAuthenticated() && isSubsidiaryDoc();
+      allow create: if isAuthenticated() && isCreatingForSubsidiary();
+      allow update, delete: if false;
+    }
+    
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && 
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'readAt']);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    // ==========================================================================
+    // AUDIT LOGS (Read-Only)
+    // ==========================================================================
+    
+    match /audit_logs/{logId} {
+      allow read: if isAdmin() && isSubsidiaryDoc();
+      allow create: if isAuthenticated() && isCreatingForSubsidiary();
+      allow update, delete: if false;
+    }
+    
+    // ==========================================================================
+    // DAWIN FINISHES COLLECTIONS (existing)
+    // ==========================================================================
+    
+    match /designClips/{clipId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+    
+    match /designItems/{itemId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    match /customers/{customerId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    match /projects/{projectId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    match /engagements/{engagementId} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

@@ -5,7 +5,8 @@
 
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Activity, CheckSquare, History, Sparkles, Settings, Package, Trash2, DollarSign, Image } from 'lucide-react';
+import { ArrowLeft, FileText, Activity, CheckSquare, Sparkles, Settings, Package, Trash2, Edit2 } from 'lucide-react';
+import { DetailDrawer, DrawerTrigger } from './DetailDrawer';
 import { cn } from '@/shared/lib/utils';
 import { useDesignItem, useProject, useRAGUpdate } from '../../hooks';
 import { StageBadge } from './StageBadge';
@@ -32,7 +33,7 @@ import {
 } from '../../services/firestore';
 import { uploadDeliverableFile, validateDeliverableFile, deleteDeliverableFile } from '../../services/storage';
 import { useAuth } from '@/contexts/AuthContext';
-import type { RAGStatus, RAGValue, RAGStatusValue, DesignItem, BriefAnalysisResult, DfMIssue } from '../../types';
+import type { RAGStatus, RAGValue, RAGStatusValue, DesignItem, DfMIssue } from '../../types';
 
 // Lazy load AI components to prevent blocking main bundle
 const DfMChecker = lazy(() => 
@@ -49,8 +50,9 @@ const DesignChat = lazy(() =>
 );
 
 import { useAIContext } from '../../hooks/useAIContext';
+import { EditDesignItemDialog } from './EditDesignItemDialog';
 
-type Tab = 'overview' | 'rag' | 'parameters' | 'parts' | 'costing' | 'files' | 'approvals' | 'history' | 'ai' | 'inspiration';
+type Tab = 'overview' | 'parameters' | 'parts-costing' | 'rag' | 'files-approvals' | 'ai';
 
 // Aspect labels for display
 const ASPECT_LABELS: Record<string, string> = {
@@ -86,6 +88,7 @@ export default function DesignItemDetail() {
   const [showGateCheck, setShowGateCheck] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   
   // RAG Edit Modal state
   const [editingAspect, setEditingAspect] = useState<{
@@ -93,6 +96,12 @@ export default function DesignItemDetail() {
     key: string;
     value: RAGValue;
   } | null>(null);
+
+  // Drawer states - must be before any conditional returns
+  const [showInspirationDrawer, setShowInspirationDrawer] = useState(false);
+  const [showCostSummaryDrawer, setShowCostSummaryDrawer] = useState(false);
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
+  const [showParametersDrawer, setShowParametersDrawer] = useState(false);
 
   if (loading) {
     return (
@@ -142,13 +151,9 @@ export default function DesignItemDetail() {
   const tabs = [
     { id: 'overview' as Tab, label: 'Overview', icon: FileText },
     { id: 'parameters' as Tab, label: 'Parameters', icon: Settings },
-    { id: 'parts' as Tab, label: 'Parts', icon: Package },
-    { id: 'costing' as Tab, label: 'Costing', icon: DollarSign },
+    { id: 'parts-costing' as Tab, label: 'Parts & Costing', icon: Package },
     { id: 'rag' as Tab, label: 'RAG Status', icon: Activity },
-    { id: 'files' as Tab, label: 'Files', icon: FileText },
-    { id: 'inspiration' as Tab, label: 'Inspiration', icon: Image },
-    { id: 'approvals' as Tab, label: 'Approvals', icon: CheckSquare },
-    { id: 'history' as Tab, label: 'History', icon: History },
+    { id: 'files-approvals' as Tab, label: 'Files & Workflow', icon: CheckSquare },
     { id: 'ai' as Tab, label: 'AI Analysis', icon: Sparkles },
   ];
 
@@ -193,6 +198,14 @@ export default function DesignItemDetail() {
               Advance Stage
             </button>
           )}
+          
+          <button
+            onClick={() => setShowEditDialog(true)}
+            className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Edit Item"
+          >
+            <Edit2 className="w-5 h-5" />
+          </button>
           
           <button
             onClick={() => setShowDeleteConfirm(true)}
@@ -241,6 +254,17 @@ export default function DesignItemDetail() {
         </div>
       )}
 
+      {/* Edit Design Item Dialog */}
+      {showEditDialog && item && (
+        <EditDesignItemDialog
+          open={showEditDialog}
+          onClose={() => setShowEditDialog(false)}
+          item={item}
+          projectId={projectId!}
+          userId={user?.email || ''}
+        />
+      )}
+
       {/* Tabs */}
       <div className="border-b border-gray-200">
         <div className="flex gap-1">
@@ -268,7 +292,24 @@ export default function DesignItemDetail() {
       {/* Tab Content */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         {activeTab === 'overview' && (
-          <OverviewTab item={item} projectId={projectId!} />
+          <OverviewTab 
+            item={item} 
+            projectId={projectId!} 
+            onOpenInspiration={() => setShowInspirationDrawer(true)}
+            onOpenParameters={() => setShowParametersDrawer(true)}
+          />
+        )}
+        
+        {activeTab === 'parameters' && (
+          <ParametersTab item={item} projectId={projectId!} />
+        )}
+        
+        {activeTab === 'parts-costing' && (
+          <PartsCostingTab 
+            item={item} 
+            projectId={projectId!} 
+            onOpenCostSummary={() => setShowCostSummaryDrawer(true)}
+          />
         )}
         
         {activeTab === 'rag' && (
@@ -282,38 +323,62 @@ export default function DesignItemDetail() {
           />
         )}
         
-        {activeTab === 'parameters' && (
-          <ParametersTab item={item} projectId={projectId!} />
-        )}
-        
-        {activeTab === 'parts' && (
-          <PartsTab item={item} projectId={projectId!} />
-        )}
-        
-        {activeTab === 'costing' && (
-          <CostingTab item={item} projectId={projectId!} />
-        )}
-        
-        {activeTab === 'files' && (
-          <FilesTab item={item} projectId={projectId!} />
-        )}
-        
-        {activeTab === 'approvals' && (
-          <ApprovalsTab item={item} projectId={projectId!} />
-        )}
-        
-        {activeTab === 'history' && (
-          <HistoryTab item={item} />
+        {activeTab === 'files-approvals' && (
+          <FilesApprovalsTab 
+            item={item} 
+            projectId={projectId!}
+            onOpenHistory={() => setShowHistoryDrawer(true)}
+          />
         )}
         
         {activeTab === 'ai' && (
           <AITab item={item} projectId={projectId!} itemId={itemId!} userId={user?.uid} />
         )}
-        
-        {activeTab === 'inspiration' && (
-          <InspirationTab item={item} projectId={projectId!} itemId={itemId!} />
-        )}
       </div>
+
+      {/* Inspiration Drawer */}
+      <DetailDrawer
+        isOpen={showInspirationDrawer}
+        onClose={() => setShowInspirationDrawer(false)}
+        title="Design Inspiration"
+        subtitle={`Reference images for ${item.name}`}
+        width="lg"
+      >
+        <InspirationDrawerContent item={item} projectId={projectId!} itemId={itemId!} />
+      </DetailDrawer>
+
+      {/* Cost Summary Drawer */}
+      <DetailDrawer
+        isOpen={showCostSummaryDrawer}
+        onClose={() => setShowCostSummaryDrawer(false)}
+        title="Cost Summary"
+        subtitle="Auto-calculated from parts"
+        width="lg"
+      >
+        <CostSummaryDrawerContent item={item} />
+      </DetailDrawer>
+
+      {/* History Drawer */}
+      <DetailDrawer
+        isOpen={showHistoryDrawer}
+        onClose={() => setShowHistoryDrawer(false)}
+        title="Stage History"
+        subtitle="Timeline of stage transitions"
+        width="md"
+      >
+        <HistoryDrawerContent item={item} />
+      </DetailDrawer>
+
+      {/* Parameters Summary Drawer */}
+      <DetailDrawer
+        isOpen={showParametersDrawer}
+        onClose={() => setShowParametersDrawer(false)}
+        title="Parameters Summary"
+        subtitle="Quick view of key specifications"
+        width="md"
+      >
+        <ParametersSummaryDrawerContent item={item} />
+      </DetailDrawer>
 
       {/* Stage Gate Check Modal */}
       {showGateCheck && nextStage && (
@@ -357,14 +422,17 @@ export default function DesignItemDetail() {
 function OverviewTab({
   item,
   projectId,
+  onOpenInspiration,
+  onOpenParameters,
 }: {
   item: NonNullable<ReturnType<typeof useDesignItem>['item']>;
   projectId: string;
+  onOpenInspiration: () => void;
+  onOpenParameters: () => void;
 }) {
   const { user } = useAuth();
   const [isUpdatingSourcing, setIsUpdatingSourcing] = useState(false);
   const [isUpdatingDueDate, setIsUpdatingDueDate] = useState(false);
-  const [showClipGallery, setShowClipGallery] = useState(false);
   const [InspirationPanelComponent, setInspirationPanelComponent] = useState<React.ComponentType<any> | null>(null);
 
   // Lazy load InspirationPanel for sidebar
@@ -574,49 +642,43 @@ function OverviewTab({
         </div>
       </div>
 
-      {/* Sidebar - Inspiration Clips */}
+      {/* Sidebar - Quick Actions */}
       <div className="lg:col-span-1 space-y-4">
+        {/* Inspiration Preview Card */}
         <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-900">Inspiration</h3>
+          </div>
           {InspirationPanelComponent ? (
             <InspirationPanelComponent
               designItemId={item.id}
               projectId={projectId}
               designItemName={item.name}
-              onOpenGallery={() => setShowClipGallery(true)}
+              onOpenGallery={onOpenInspiration}
               compact
-              maxItems={4}
+              maxItems={2}
             />
           ) : (
             <div className="flex items-center justify-center py-4">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#1d1d1f]"></div>
             </div>
           )}
+          <DrawerTrigger
+            label="View All Inspiration"
+            onClick={onOpenInspiration}
+            variant="compact"
+          />
         </div>
-      </div>
 
-      {/* Clip Gallery Modal */}
-      {showClipGallery && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Link Inspiration Clip</h3>
-              <button
-                onClick={() => setShowClipGallery(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div></div>}>
-                <ClipGalleryWrapperForOverview onLinkClip={handleLinkClip} />
-              </Suspense>
-            </div>
-          </div>
-        </div>
-      )}
+        {/* Parameters Quick View Card */}
+        <DrawerTrigger
+          label="Parameters"
+          sublabel={hasDimensions ? `${dimensions.width}×${dimensions.height}×${dimensions.depth}mm` : 'View specifications'}
+          onClick={onOpenParameters}
+          variant="card"
+          icon={<Settings className="w-5 h-5" />}
+        />
+      </div>
     </div>
   );
 }
@@ -1671,4 +1733,586 @@ function ClipGalleryWrapper({ onLinkClip }: { onLinkClip: (clip: any) => void })
   }
 
   return <ClipGallery onLinkClip={onLinkClip} selectable />;
+}
+
+// ==========================================
+// CONSOLIDATED TAB COMPONENTS
+// ==========================================
+
+// Parts & Costing Tab - Combines PartsTab with cost summary drawer trigger
+interface PartsCostingTabProps {
+  item: NonNullable<ReturnType<typeof useDesignItem>['item']>;
+  projectId: string;
+  onOpenCostSummary: () => void;
+}
+
+function PartsCostingTab({ item, projectId, onOpenCostSummary }: PartsCostingTabProps) {
+  const manufacturing = (item as any).manufacturing || {};
+  const totalCost = manufacturing.totalCost || 0;
+  
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { 
+      style: 'decimal', 
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0 
+    }).format(amount);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Cost Summary Bar */}
+      <div className="flex items-center justify-between bg-gradient-to-r from-[#0A7C8E]/10 to-[#0A7C8E]/5 rounded-lg p-4 border border-[#0A7C8E]/20">
+        <div className="flex items-center gap-4">
+          <div>
+            <p className="text-sm text-gray-600">Estimated Cost</p>
+            <p className="text-2xl font-bold text-[#0A7C8E]">
+              {totalCost > 0 ? `UGX ${formatCurrency(totalCost)}` : 'Not calculated'}
+            </p>
+          </div>
+        </div>
+        <DrawerTrigger
+          label="View Cost Breakdown"
+          onClick={onOpenCostSummary}
+          variant="default"
+          icon={<Package className="w-4 h-4" />}
+        />
+      </div>
+
+      {/* Parts List */}
+      <PartsTab item={item} projectId={projectId} />
+    </div>
+  );
+}
+
+// Files & Approvals Tab - Combines Files, Approvals with History drawer trigger
+interface FilesApprovalsTabProps {
+  item: NonNullable<ReturnType<typeof useDesignItem>['item']>;
+  projectId: string;
+  onOpenHistory: () => void;
+}
+
+function FilesApprovalsTab({ item, projectId, onOpenHistory }: FilesApprovalsTabProps) {
+  const { user } = useAuth();
+  const [activeSection, setActiveSection] = useState<'files' | 'approvals'>('files');
+  const [deliverables, setDeliverables] = useState<any[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  
+  // Subscribe to deliverables
+  useEffect(() => {
+    const unsubscribe = subscribeToDeliverables(projectId, item.id, (data) => {
+      setDeliverables(data);
+    });
+    return unsubscribe;
+  }, [projectId, item.id]);
+  
+  const handleUpload = async (file: File, type: any, name: string, description: string) => {
+    if (!user?.email) {
+      alert('You must be logged in to upload files');
+      return;
+    }
+    
+    const validation = validateDeliverableFile(file, type);
+    if (!validation.valid) {
+      alert(validation.error);
+      return;
+    }
+    
+    try {
+      const { promise } = uploadDeliverableFile(
+        file,
+        projectId,
+        item.id,
+        type,
+        item.currentStage,
+        (progress) => setUploadProgress(Math.round(progress.percentage))
+      );
+      
+      const result = await promise;
+      setUploadProgress(null);
+      
+      await createDeliverable(
+        projectId,
+        item.id,
+        {
+          name,
+          type,
+          description,
+          fileName: result.fileName,
+          fileType: result.fileType,
+          fileSize: result.fileSize,
+          storageUrl: result.storageUrl,
+          storagePath: result.storagePath,
+        },
+        user.email,
+        item.currentStage
+      );
+    } catch (error) {
+      setUploadProgress(null);
+      console.error('Upload failed:', error);
+      alert('Failed to upload file. Please try again.');
+    }
+  };
+  
+  const handleDelete = async (deliverableId: string) => {
+    const deliverable = deliverables.find(d => d.id === deliverableId);
+    if (!deliverable) return;
+    
+    if (!confirm('Are you sure you want to delete this deliverable?')) return;
+    
+    try {
+      if (deliverable.storagePath) {
+        await deleteDeliverableFile(deliverable.storagePath);
+      }
+      await deleteDeliverable(projectId, item.id, deliverableId);
+    } catch (error) {
+      console.error('Delete failed:', error);
+      alert('Failed to delete deliverable');
+    }
+  };
+  
+  const handleApprove = async (deliverableId: string) => {
+    if (!user?.email) return;
+    try {
+      await updateDeliverableStatus(projectId, item.id, deliverableId, 'approved', user.email);
+    } catch (error) {
+      console.error('Approve failed:', error);
+      alert('Failed to approve deliverable');
+    }
+  };
+
+  const handleRequestApproval = async (approval: any) => {
+    if (!user?.email) {
+      alert('You must be logged in to request approvals');
+      return;
+    }
+    
+    try {
+      await createApproval(
+        projectId,
+        item.id,
+        {
+          type: approval.type,
+          assignedTo: approval.assignedTo,
+          notes: approval.notes,
+        },
+        user.email
+      );
+    } catch (error) {
+      console.error('Failed to create approval:', error);
+      alert('Failed to create approval request');
+    }
+  };
+  
+  const handleRespondToApproval = async (approvalId: string, status: 'approved' | 'rejected', notes?: string) => {
+    if (!user?.email) {
+      alert('You must be logged in to respond to approvals');
+      return;
+    }
+    
+    try {
+      await respondToApprovalFirestore(
+        projectId,
+        item.id,
+        approvalId,
+        status,
+        notes || '',
+        user.email
+      );
+    } catch (error) {
+      console.error('Failed to respond to approval:', error);
+      alert('Failed to respond to approval');
+    }
+  };
+
+  const approvals = item.approvals.map(a => ({
+    ...a,
+    assignedTo: (a as any).respondedBy || (a as any).assignedTo || '',
+    decidedAt: (a as any).respondedAt || null,
+    decision: (a as any).decision || (a as any).notes || null,
+    attachments: [],
+  })) as any;
+
+  return (
+    <div className="space-y-4">
+      {/* Section Toggle + History Trigger */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveSection('files')}
+            className={cn(
+              'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+              activeSection === 'files'
+                ? 'bg-[#1d1d1f] text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            )}
+          >
+            Files & Deliverables
+          </button>
+          <button
+            onClick={() => setActiveSection('approvals')}
+            className={cn(
+              'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+              activeSection === 'approvals'
+                ? 'bg-[#1d1d1f] text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            )}
+          >
+            Approvals ({item.approvals.length})
+          </button>
+        </div>
+        <DrawerTrigger
+          label="Stage History"
+          onClick={onOpenHistory}
+          variant="compact"
+          badge={item.stageHistory.length}
+        />
+      </div>
+
+      {/* Content */}
+      {activeSection === 'files' && (
+        <div>
+          {uploadProgress !== null && (
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm text-blue-700">Uploading...</span>
+                <span className="text-sm font-medium text-blue-700">{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-blue-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all" 
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+          <DeliverablesManager
+            deliverables={deliverables}
+            currentStage={item.currentStage}
+            onUpload={handleUpload}
+            onDelete={handleDelete}
+            onApprove={handleApprove}
+          />
+        </div>
+      )}
+
+      {activeSection === 'approvals' && (
+        <ApprovalWorkflow
+          designItem={item}
+          projectId={projectId}
+          approvals={approvals}
+          onRequestApproval={handleRequestApproval}
+          onRespondToApproval={handleRespondToApproval}
+        />
+      )}
+    </div>
+  );
+}
+
+// ==========================================
+// DRAWER CONTENT COMPONENTS
+// ==========================================
+
+// Inspiration Drawer Content
+function InspirationDrawerContent({ 
+  item, 
+  projectId, 
+  itemId 
+}: { 
+  item: DesignItem; 
+  projectId: string; 
+  itemId: string;
+}) {
+  const [showGallery, setShowGallery] = useState(false);
+  const [InspirationPanelComponent, setInspirationPanelComponent] = useState<React.ComponentType<any> | null>(null);
+
+  useEffect(() => {
+    import('./InspirationPanel').then((mod) => {
+      setInspirationPanelComponent(() => mod.InspirationPanel);
+    });
+  }, []);
+
+  const handleLinkClip = async (clip: any) => {
+    try {
+      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      const { db } = await import('@/shared/services/firebase');
+      
+      const clipRef = doc(db, 'designClips', clip.id);
+      await updateDoc(clipRef, {
+        projectId,
+        designItemId: itemId,
+        updatedAt: serverTimestamp(),
+      });
+      
+      setShowGallery(false);
+    } catch (error) {
+      console.error('Failed to link clip:', error);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <button
+        onClick={() => setShowGallery(true)}
+        className="w-full px-4 py-2 bg-[#1d1d1f] text-white rounded-lg text-sm font-medium hover:bg-[#424245]"
+      >
+        + Link New Clip
+      </button>
+
+      {InspirationPanelComponent ? (
+        <InspirationPanelComponent
+          designItemId={itemId}
+          projectId={projectId}
+          designItemName={item.name}
+          onOpenGallery={() => setShowGallery(true)}
+        />
+      ) : (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
+        </div>
+      )}
+
+      {showGallery && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Select Inspiration Clip</h3>
+              <button onClick={() => setShowGallery(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div></div>}>
+                <ClipGalleryWrapper onLinkClip={handleLinkClip} />
+              </Suspense>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Cost Summary Drawer Content
+function CostSummaryDrawerContent({ item }: { item: NonNullable<ReturnType<typeof useDesignItem>['item']> }) {
+  const manufacturing = (item as any).manufacturing || {};
+  const sheetMaterials = manufacturing.sheetMaterials || [];
+  const standardParts = manufacturing.standardParts || [];
+  const specialParts = manufacturing.specialParts || [];
+  
+  const sheetMaterialsCost = manufacturing.sheetMaterialsCost || 0;
+  const standardPartsCost = manufacturing.standardPartsCost || 0;
+  const specialPartsCost = manufacturing.specialPartsCost || 0;
+  const laborHours = manufacturing.laborHours || 0;
+  const laborRate = manufacturing.laborRate || 15000;
+  const laborCost = laborHours * laborRate;
+  const totalCost = manufacturing.totalCost || 0;
+  const quantity = manufacturing.quantity || 1;
+  const costPerUnit = quantity > 0 ? totalCost / quantity : totalCost;
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { 
+      style: 'decimal', 
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0 
+    }).format(amount);
+  };
+
+  if ((item as any).sourcingType === 'PROCURED') {
+    return (
+      <div className="text-center py-8">
+        <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+        <h3 className="text-lg font-medium text-gray-900">Procured Item</h3>
+        <p className="text-gray-500 mt-1">Costing managed externally.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Sheet Materials */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h4 className="font-semibold text-blue-800 mb-2">Sheet Materials</h4>
+        {sheetMaterials.length > 0 ? (
+          <div className="space-y-2">
+            {sheetMaterials.map((mat: any, idx: number) => (
+              <div key={idx} className="flex justify-between text-sm">
+                <span>{mat.materialName} ({mat.thickness}mm) × {mat.sheetsRequired}</span>
+                <span className="font-medium">UGX {formatCurrency(mat.totalCost)}</span>
+              </div>
+            ))}
+            <div className="pt-2 border-t border-blue-300 flex justify-between font-semibold">
+              <span>Subtotal</span>
+              <span>UGX {formatCurrency(sheetMaterialsCost)}</span>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-blue-600">Not calculated</p>
+        )}
+      </div>
+
+      {/* Standard Parts */}
+      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+        <h4 className="font-semibold text-orange-800 mb-2">Standard Parts ({standardParts.length})</h4>
+        <div className="flex justify-between font-semibold">
+          <span>Subtotal</span>
+          <span>UGX {formatCurrency(standardPartsCost)}</span>
+        </div>
+      </div>
+
+      {/* Special Parts */}
+      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+        <h4 className="font-semibold text-purple-800 mb-2">Special Parts ({specialParts.length})</h4>
+        <div className="flex justify-between font-semibold">
+          <span>Subtotal</span>
+          <span>UGX {formatCurrency(specialPartsCost)}</span>
+        </div>
+      </div>
+
+      {/* Labor */}
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <h4 className="font-semibold text-green-800 mb-2">Labor</h4>
+        <div className="text-sm text-green-700 mb-1">
+          {laborHours} hours @ UGX {formatCurrency(laborRate)}/hr
+        </div>
+        <div className="flex justify-between font-semibold">
+          <span>Subtotal</span>
+          <span>UGX {formatCurrency(laborCost)}</span>
+        </div>
+      </div>
+
+      {/* Total */}
+      <div className="bg-gradient-to-r from-[#0A7C8E] to-[#0A7C8E]/80 rounded-lg p-4 text-white">
+        <div className="flex justify-between items-center">
+          <div>
+            <h4 className="font-semibold">Total Cost</h4>
+            {quantity > 1 && (
+              <p className="text-sm text-white/80">UGX {formatCurrency(costPerUnit)} per unit × {quantity}</p>
+            )}
+          </div>
+          <p className="text-2xl font-bold">UGX {formatCurrency(totalCost)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// History Drawer Content
+function HistoryDrawerContent({ item }: { item: NonNullable<ReturnType<typeof useDesignItem>['item']> }) {
+  if (item.stageHistory.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+        <p className="text-gray-500">No stage transitions yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {item.stageHistory.map((transition, index) => (
+        <div key={index} className="flex items-start gap-4 pb-4 border-b border-gray-100 last:border-0">
+          <div className="w-2 h-2 bg-[#1d1d1f] rounded-full mt-2 flex-shrink-0" />
+          <div>
+            <p className="font-medium text-gray-900">
+              {transition.fromStage} → {transition.toStage}
+            </p>
+            <p className="text-sm text-gray-500">
+              {formatDateTime(transition.transitionedAt)} by {transition.transitionedBy}
+            </p>
+            {transition.notes && (
+              <p className="text-sm text-gray-600 mt-1 bg-gray-50 p-2 rounded">{transition.notes}</p>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Parameters Summary Drawer Content
+function ParametersSummaryDrawerContent({ item }: { item: NonNullable<ReturnType<typeof useDesignItem>['item']> }) {
+  const params = (item as any).parameters || {};
+  const dimensions = params.dimensions || {};
+
+  return (
+    <div className="space-y-4">
+      {/* Dimensions */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-2">Dimensions</h4>
+        {dimensions.width || dimensions.height || dimensions.depth ? (
+          <p className="text-lg font-medium">
+            {dimensions.width || '-'} × {dimensions.height || '-'} × {dimensions.depth || '-'} {dimensions.unit || 'mm'}
+          </p>
+        ) : (
+          <p className="text-gray-400 italic">Not specified</p>
+        )}
+      </div>
+
+      {/* Primary Material */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-2">Primary Material</h4>
+        <p className="text-lg font-medium">
+          {params.primaryMaterial?.name || <span className="text-gray-400 italic">Not specified</span>}
+        </p>
+      </div>
+
+      {/* Finish */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-2">Finish</h4>
+        <p className="text-lg font-medium">
+          {params.finish ? (
+            typeof params.finish === 'string' 
+              ? params.finish 
+              : `${params.finish.type || 'Unknown'}${params.finish.color ? ` - ${params.finish.color}` : ''}`
+          ) : (
+            <span className="text-gray-400 italic">Not specified</span>
+          )}
+        </p>
+      </div>
+
+      {/* Construction */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-2">Construction Method</h4>
+        <p className="text-lg font-medium capitalize">
+          {params.constructionMethod || <span className="text-gray-400 italic">Not specified</span>}
+        </p>
+      </div>
+
+      {/* AWI Grade */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-2">AWI Grade</h4>
+        <p className="text-lg font-medium uppercase">
+          {params.awiGrade || <span className="text-gray-400 italic">Not specified</span>}
+        </p>
+      </div>
+
+      {/* Hardware */}
+      {params.hardware?.length > 0 && (
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">Hardware ({params.hardware.length})</h4>
+          <ul className="space-y-1">
+            {params.hardware.map((hw: any, idx: number) => (
+              <li key={idx} className="text-sm text-gray-600">• {hw.name || hw.type}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Special Requirements */}
+      {params.specialRequirements?.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-amber-800 mb-2">Special Requirements</h4>
+          <div className="flex flex-wrap gap-2">
+            {params.specialRequirements.map((req: string, idx: number) => (
+              <span key={idx} className="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-full">
+                {req}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

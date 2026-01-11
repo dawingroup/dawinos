@@ -22,8 +22,7 @@ import {
   uploadBytes,
   getDownloadURL,
 } from 'firebase/storage';
-import { httpsCallable } from 'firebase/functions';
-import { db, storage, functions } from '@/core/services/firebase';
+import { db, storage } from '@/core/services/firebase';
 import type { BOQParsingResult, ParsedBOQItem } from '../ai/schemas/boqSchema';
 import { BOQStatus } from '../types';
 
@@ -102,7 +101,7 @@ export async function uploadBOQFile(
 // ============================================================================
 
 /**
- * Create a new parsing job and trigger Cloud Function
+ * Create a new parsing job
  */
 export async function createParsingJob(
   organizationId: string,
@@ -130,15 +129,8 @@ export async function createParsingJob(
   
   await setDoc(jobRef, jobData);
   
-  // Trigger Cloud Function to process the job (fire and forget)
-  try {
-    const processBOQ = httpsCallable(functions, 'processBOQParsingJob');
-    processBOQ({ jobId: jobRef.id, organizationId, projectId }).catch(err => {
-      console.error('Failed to trigger BOQ parsing:', err);
-    });
-  } catch (err) {
-    console.error('Cloud Function not available:', err);
-  }
+  // Note: Parsing is now handled client-side via processParsingJobLocally
+  // Cloud Functions are not used to avoid CORS issues
   
   return jobRef.id;
 }
@@ -196,6 +188,7 @@ export async function updateParsingJobStatus(
   updates?: {
     progress?: number;
     result?: BOQParsingResult;
+    parsedItems?: ParsedBOQItem[];
     errorMessage?: string;
   }
 ): Promise<void> {
@@ -211,6 +204,11 @@ export async function updateParsingJobStatus(
   if (updates?.result) {
     updateData.result = updates.result;
     updateData.parsedItems = updates.result.items;
+  }
+  
+  // Allow directly setting parsedItems (for client-side parsing)
+  if (updates?.parsedItems) {
+    updateData.parsedItems = updates.parsedItems;
   }
   
   if (updates?.errorMessage) {
@@ -259,6 +257,13 @@ export async function importParsedItems(
   items: ParsedBOQItem[],
   userId: string
 ): Promise<string[]> {
+  console.log('importParsedItems called:', { organizationId, projectId, itemCount: items?.length, userId });
+  
+  if (!items || items.length === 0) {
+    console.warn('No items to import');
+    return [];
+  }
+  
   const boqCollection = collection(
     db,
     'organizations',
@@ -270,7 +275,9 @@ export async function importParsedItems(
   
   const importedIds: string[] = [];
   
-  for (const item of items) {
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    console.log(`Importing item ${i + 1}/${items.length}:`, item.description?.substring(0, 50));
     const boqItemData = {
       projectId,
       itemCode: item.itemCode,
@@ -282,11 +289,11 @@ export async function importParsedItems(
       rate: item.rate || 0,
       amount: item.amount || (item.quantity * (item.rate || 0)),
       stage: item.stage || 'uncategorized',
-      formulaId: undefined,
-      formulaCode: item.suggestedFormulaCode,
+      formulaId: null,
+      formulaCode: item.suggestedFormulaCode || null,
       materialRequirements: [],
-      aiConfidence: item.confidence,
-      isVerified: item.confidence >= 0.8,
+      aiConfidence: item.confidence || 0.8,
+      isVerified: (item.confidence || 0.8) >= 0.8,
       source: { type: 'ai_import' as const },
       version: 1,
       lastModifiedAt: serverTimestamp(),

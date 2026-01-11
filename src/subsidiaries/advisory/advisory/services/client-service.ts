@@ -31,9 +31,10 @@ import type { InvestmentMandate, MandateStatus } from '../types';
 import type { RiskAssessment } from '../types';
 import type { ComplianceStatus } from '../types';
 
-const CLIENTS_COLLECTION = 'advisoryPlatform/advisory/clients';
-const MANDATES_COLLECTION = 'advisoryPlatform/advisory/mandates';
-const RISK_ASSESSMENTS_COLLECTION = 'advisoryPlatform/advisory/riskAssessments';
+// Use root-level collections to match Firestore rules
+const CLIENTS_COLLECTION = 'clients';
+const MANDATES_COLLECTION = 'mandates';
+const RISK_ASSESSMENTS_COLLECTION = 'riskAssessments';
 
 // ==================== Client CRUD ====================
 

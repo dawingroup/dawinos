@@ -71,6 +71,34 @@ export interface StrategyMetadata {
   year: number;
   totalAvailableFeatures: number;
   featuresProposed: number;
+  catalogProductsConsidered?: number;
+  inspirationsConsidered?: number;
+  userSelectedProducts?: number;
+  hasProjectContext?: boolean;
+  hasScopingContext?: boolean;
+}
+
+export interface ProductRecommendation {
+  productId: string;
+  productName: string;
+  category: string;
+  rationale: string;
+  priority: 'essential' | 'recommended' | 'optional';
+  source?: 'user-selected' | 'ai-recommended';
+  productDetails?: {
+    description?: string;
+    materials?: string[];
+    tags?: string[];
+  };
+}
+
+export interface InspirationGalleryItem {
+  title: string;
+  relevance: string;
+  designElements: string[];
+  clipId?: string;
+  imageUrl?: string;
+  tags?: string[];
 }
 
 export interface StrategyReport {
@@ -84,6 +112,8 @@ export interface StrategyReport {
   productionFeasibility: ProductionFeasibility;
   productionDetails: ProductionDetail[];
   nextSteps: string[];
+  productRecommendations?: ProductRecommendation[];
+  inspirationGallery?: InspirationGalleryItem[];
   metadata: StrategyMetadata;
 }
 
@@ -127,5 +157,56 @@ export interface GenerateStrategyInput {
       roomGroups?: Array<{ type: string; quantity: number }>;
     };
     trendInsights?: string[];
+  };
+  // Enhanced project context
+  projectContext?: {
+    customer?: {
+      name?: string;
+      company?: string;
+      industry?: string;
+      previousProjects?: number;
+    };
+    timeline?: {
+      startDate?: string;
+      targetCompletion?: string;
+      urgency?: 'flexible' | 'normal' | 'urgent' | 'critical';
+    };
+    style?: {
+      primary?: string;
+      secondary?: string;
+      colorPreferences?: string[];
+      materialPreferences?: string[];
+      inspirationNotes?: string;
+    };
+    targetUsers?: {
+      demographic?: string;
+      usagePattern?: string;
+      specialNeeds?: string[];
+      capacity?: number;
+    };
+    requirements?: {
+      sustainability?: boolean;
+      localSourcing?: boolean;
+      accessibilityCompliant?: boolean;
+      brandGuidelines?: boolean;
+      customFinishes?: boolean;
+      notes?: string;
+    };
+  };
+  // Product recommendations from catalog
+  recommendedProducts?: Array<{
+    productId: string;
+    productName: string;
+    category: string;
+    quantity?: number;
+    reason?: string;
+  }>;
+  // Customer intelligence enrichment
+  customerIntelligence?: {
+    segment?: string;
+    materialPreferences?: string[];
+    preferredSuppliers?: string[];
+    qualityExpectations?: string;
+    priceSensitivity?: number;
   };
 }

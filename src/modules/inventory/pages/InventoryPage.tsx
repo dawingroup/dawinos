@@ -9,6 +9,8 @@ import { InventoryList } from '../components/InventoryList';
 import { InventoryItemModal } from '../components/InventoryItemModal';
 import { InventoryItemDetail } from '../components/InventoryItemDetail';
 import type { InventoryListItem } from '../types';
+import { db } from '@/firebase/config';
+import { collection, addDoc, onSnapshot, serverTimestamp, doc } from 'firebase/firestore';
 
 export function InventoryPage() {
   const { user } = useAuth();
@@ -37,20 +39,48 @@ export function InventoryPage() {
   }
 
   const handleSyncKatana = async () => {
+    if (!user) return;
+    
     try {
-      const response = await fetch(
-        'https://us-central1-dawinos.cloudfunctions.net/triggerKatanaSync?apiKey=dawin-internal-sync-key'
-      );
-      const data = await response.json();
+      // Create a sync request document - Firestore trigger will process it
+      const syncRequestsRef = collection(db, 'syncRequests');
+      const requestDoc = await addDoc(syncRequestsRef, {
+        type: 'katana-sync',
+        status: 'pending',
+        requestedBy: user.uid,
+        requestedByEmail: user.email,
+        requestedAt: serverTimestamp(),
+      });
       
-      if (data.success) {
-        alert(`Sync complete: ${data.stats.updated} updated, ${data.stats.created} created`);
-        setRefreshKey(k => k + 1);
-      } else {
-        alert(`Sync failed: ${data.error}`);
-      }
-    } catch (error) {
-      alert('Failed to trigger sync');
+      // Wait for the sync to complete by listening to the document
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          unsubscribe();
+          reject(new Error('Sync timed out after 120 seconds'));
+        }, 120000);
+        
+        const unsubscribe = onSnapshot(doc(db, 'syncRequests', requestDoc.id), (snapshot) => {
+          const data = snapshot.data();
+          if (!data) return;
+          
+          if (data.status === 'completed') {
+            clearTimeout(timeout);
+            unsubscribe();
+            console.log('Katana sync completed:', data.stats);
+            alert(`Sync complete: ${data.stats?.catalogWritten || 0} catalog items, ${data.stats?.updated || 0} updated, ${data.stats?.created || 0} created`);
+            setRefreshKey(k => k + 1);
+            resolve();
+          } else if (data.status === 'error') {
+            clearTimeout(timeout);
+            unsubscribe();
+            alert(`Sync failed: ${data.error}`);
+            reject(new Error(data.error || 'Sync failed'));
+          }
+        });
+      });
+      
+    } catch (error: any) {
+      alert(`Failed to sync: ${error?.message || 'Unknown error'}`);
       console.error(error);
     }
   };

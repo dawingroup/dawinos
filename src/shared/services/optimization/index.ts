@@ -20,6 +20,8 @@ export {
   runProjectEstimation,
   runProjectProduction,
   aggregatePartsFromProject,
+  aggregateStandardPartsFromProject,
+  aggregateSpecialPartsFromProject,
   needsReOptimization,
   getOptimizationStatus,
   updateProjectConfig,

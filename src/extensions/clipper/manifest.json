@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Dawin Design Clipper",
   "version": "1.0.0",
-  "description": "Clip furniture and millwork product images for design inspiration",
+  "description": "Clip furniture, millwork, and design inspiration images directly to your projects. Features one-click capture, automatic price detection, and cloud sync.",
   "icons": {
     "16": "public/icons/icon16.png",
     "48": "public/icons/icon48.png",

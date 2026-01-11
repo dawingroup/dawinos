@@ -2,7 +2,7 @@
  * Delivery Dashboard - Portfolio overview for program managers
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Building2, 
@@ -15,28 +15,69 @@ import {
   Loader2
 } from 'lucide-react';
 import { MetricCard } from '../components/common/MetricCard';
+import { useAllPrograms } from '../hooks/program-hooks';
+import { useAllProjects } from '../hooks/project-hooks';
+import { usePendingApprovals } from '../hooks/payment-hooks';
+import { db } from '@/core/services/firebase';
 
 export function DeliveryDashboard() {
   const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null);
-  const [loading] = useState(false);
 
-  // Mock data for demonstration
-  const stats = {
-    totalPrograms: 3,
-    totalProjects: 12,
-    activeProjects: 8,
-    completedProjects: 3,
-    delayedProjects: 2,
-    totalBudget: 5200000000,
-    totalSpent: 2340000000,
-    avgProgress: 45,
-  };
+  // Fetch real data
+  const { programs, loading: programsLoading } = useAllPrograms(db, {});
+  const { projects, loading: projectsLoading } = useAllProjects(db, {});
+  const { approvals } = usePendingApprovals(db, 'project_manager', { realtime: true });
 
-  const programs = [
-    { id: 'prg-1', name: 'ARISE Health Centers', code: 'ARISE-2024' },
-    { id: 'prg-2', name: 'UREP Schools', code: 'UREP-2024' },
-    { id: 'prg-3', name: 'Rural Water Supply', code: 'RWS-2024' },
-  ];
+  const loading = programsLoading || projectsLoading;
+
+  // Calculate stats from real data
+  const stats = useMemo(() => {
+    const filteredProjects = selectedProgramId 
+      ? projects.filter(p => p.programId === selectedProgramId)
+      : projects;
+
+    const activeProjects = filteredProjects.filter(p => 
+      ['active', 'in_progress', 'mobilization'].includes(p.status)
+    ).length;
+    
+    const completedProjects = filteredProjects.filter(p => p.status === 'completed').length;
+    
+    const delayedProjects = filteredProjects.filter(p => 
+      p.timeline?.isDelayed || 
+      ['slightly_behind', 'significantly_behind', 'critical'].includes(p.progress?.progressStatus || '')
+    ).length;
+
+    const totalBudget = filteredProjects.reduce((sum, p) => sum + (p.budget?.totalBudget || 0), 0);
+    const totalSpent = filteredProjects.reduce((sum, p) => sum + (p.budget?.spent || 0), 0);
+    
+    const avgProgress = filteredProjects.length > 0
+      ? Math.round(filteredProjects.reduce((sum, p) => sum + (p.progress?.physicalProgress || 0), 0) / filteredProjects.length)
+      : 0;
+
+    return {
+      totalPrograms: programs.length,
+      totalProjects: filteredProjects.length,
+      activeProjects,
+      completedProjects,
+      delayedProjects,
+      totalBudget,
+      totalSpent,
+      avgProgress,
+      pendingApprovals: approvals.length,
+    };
+  }, [programs, projects, approvals, selectedProgramId]);
+
+  // Top projects by progress
+  const topProjects = useMemo(() => {
+    const filteredProjects = selectedProgramId 
+      ? projects.filter(p => p.programId === selectedProgramId)
+      : projects;
+
+    return filteredProjects
+      .filter(p => p.status !== 'completed')
+      .sort((a, b) => (b.progress?.physicalProgress || 0) - (a.progress?.physicalProgress || 0))
+      .slice(0, 4);
+  }, [projects, selectedProgramId]);
 
   const formatCurrency = (amount: number): string => {
     if (amount >= 1000000000) return `UGX ${(amount / 1000000000).toFixed(1)}B`;
@@ -136,24 +177,42 @@ export function DeliveryDashboard() {
           </div>
           
           <div className="space-y-4">
-            {/* Placeholder project items */}
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <div className="font-medium text-gray-900">Project {i}</div>
-                  <div className="text-sm text-gray-500">Location • District</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-medium">{40 + i * 10}%</div>
-                  <div className="w-24 h-2 bg-gray-200 rounded-full mt-1">
-                    <div 
-                      className="h-full bg-green-500 rounded-full" 
-                      style={{ width: `${40 + i * 10}%` }}
-                    />
-                  </div>
-                </div>
+            {topProjects.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Building2 className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                <p>No active projects</p>
               </div>
-            ))}
+            ) : (
+              topProjects.map(project => (
+                <Link 
+                  key={project.id} 
+                  to={`/advisory/delivery/projects/${project.id}`}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <div>
+                    <div className="font-medium text-gray-900">{project.name}</div>
+                    <div className="text-sm text-gray-500">
+                      {project.location?.district || 'Location TBD'} • {project.location?.region || ''}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-medium">{project.progress?.physicalProgress || 0}%</div>
+                    <div className="w-24 h-2 bg-gray-200 rounded-full mt-1">
+                      <div 
+                        className={`h-full rounded-full ${
+                          project.progress?.progressStatus === 'on_track' || project.progress?.progressStatus === 'ahead'
+                            ? 'bg-green-500'
+                            : project.progress?.progressStatus === 'slightly_behind'
+                            ? 'bg-yellow-500'
+                            : 'bg-red-500'
+                        }`}
+                        style={{ width: `${project.progress?.physicalProgress || 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </Link>
+              ))
+            )}
           </div>
         </div>
 
@@ -219,7 +278,11 @@ export function DeliveryDashboard() {
         >
           <CheckCircle className="w-8 h-8 text-green-500 mb-2" />
           <div className="font-medium">Approvals</div>
-          <div className="text-sm text-gray-500">3 pending approvals</div>
+          <div className="text-sm text-gray-500">
+            {stats.pendingApprovals > 0 
+              ? `${stats.pendingApprovals} pending approval${stats.pendingApprovals !== 1 ? 's' : ''}`
+              : 'No pending approvals'}
+          </div>
         </Link>
         
         <Link 

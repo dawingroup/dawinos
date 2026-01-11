@@ -9,7 +9,9 @@ import {
   TrendingUp, 
   Calendar, 
   Users, 
-  FileText 
+  FileText,
+  Receipt,
+  MapPin
 } from 'lucide-react';
 
 export type ProjectTabId = 
@@ -19,7 +21,9 @@ export type ProjectTabId =
   | 'progress' 
   | 'timeline' 
   | 'team' 
-  | 'documents';
+  | 'documents'
+  | 'payments'
+  | 'visits';
 
 interface Tab {
   id: ProjectTabId;
@@ -31,7 +35,9 @@ const TABS: Tab[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'scope', label: 'Scope', icon: Target },
   { id: 'budget', label: 'Budget', icon: DollarSign },
+  { id: 'payments', label: 'Payments', icon: Receipt },
   { id: 'progress', label: 'Progress', icon: TrendingUp },
+  { id: 'visits', label: 'Site Visits', icon: MapPin },
   { id: 'timeline', label: 'Timeline', icon: Calendar },
   { id: 'team', label: 'Team', icon: Users },
   { id: 'documents', label: 'Documents', icon: FileText },

@@ -59,15 +59,29 @@ export class DealService {
     const dealRef = doc(collection(db, DEALS_COLLECTION));
     const dealCode = await this.generateDealCode(data.sector);
 
+    // Sanitize investment structure - Firestore doesn't accept undefined
+    const sanitizedInvestmentStructure = {
+      primaryType: data.investmentStructure?.primaryType || 'equity',
+      instruments: data.investmentStructure?.instruments || [],
+    } as InvestmentStructure;
+
+    // Sanitize geography
+    const sanitizedGeography = {
+      country: data.geography?.country || 'UG',
+      region: data.geography?.region || '',
+      city: data.geography?.city || '',
+    } as DealGeography;
+
+    // Build deal object, excluding undefined fields
     const deal: Deal = {
       id: dealRef.id,
-      engagementId,
+      engagementId: engagementId || '',
       dealCode,
       name: data.name,
-      description: data.description,
+      description: data.description || '',
       dealType: data.dealType,
       sector: data.sector,
-      subsector: data.subsector,
+      subsector: data.subsector || '',
       status: 'active',
       currentStage: 'screening',
       stageHistory: [{
@@ -75,21 +89,14 @@ export class DealService {
         enteredAt: Timestamp.now(),
       }],
       stageEnteredAt: Timestamp.now(),
-      expectedCloseDate: data.expectedCloseDate,
-      investmentStructure: {
-        primaryType: data.investmentStructure.primaryType || 'equity',
-        instruments: [],
-        ...data.investmentStructure,
-      } as InvestmentStructure,
-      targetAmount: data.targetAmount,
-      geography: {
-        country: data.geography.country || 'UG',
-        ...data.geography,
-      } as DealGeography,
+      ...(data.expectedCloseDate && { expectedCloseDate: data.expectedCloseDate }),
+      investmentStructure: sanitizedInvestmentStructure,
+      targetAmount: data.targetAmount || { amount: 0, currency: 'USD' },
+      geography: sanitizedGeography,
       dealTeam: {
         dealLead: {
           userId: createdBy,
-          name: '', // To be populated
+          name: '',
           email: '',
           role: 'deal_lead',
           joinedAt: new Date(),

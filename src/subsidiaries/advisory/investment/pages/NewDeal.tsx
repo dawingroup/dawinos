@@ -12,8 +12,11 @@ import {
   MapPin,
   DollarSign,
   Users,
-  FileText
+  FileText,
+  Loader2
 } from 'lucide-react';
+import { dealService } from '../services/deal-service';
+import { useAuth } from '@/shared/hooks';
 
 interface DealFormData {
   name: string;
@@ -90,9 +93,11 @@ const investmentTypes = [
 
 export function NewDeal() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [formData, setFormData] = useState<DealFormData>(initialFormData);
   const [errors, setErrors] = useState<Partial<Record<keyof DealFormData, string>>>({});
   const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleChange = (field: keyof DealFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -128,24 +133,68 @@ export function NewDeal() {
     
     if (!validate()) return;
     
+    if (!user) {
+      setSubmitError('You must be logged in to create a deal');
+      return;
+    }
+    
     setSaving(true);
+    setSubmitError(null);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Generate deal code
-    const countryCode = formData.country.substring(0, 3).toUpperCase();
-    const year = new Date().getFullYear();
-    const dealCode = `${countryCode}-${year}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
-    
-    console.log('Creating deal:', { ...formData, dealCode });
-    
-    setSaving(false);
-    navigate('/advisory/investment/deals');
+    try {
+      // Transform form data to match DealFormData type expected by service
+      // Note: Firestore does not accept undefined values, use null instead
+      const dealData = {
+        name: formData.name,
+        description: formData.description || '',
+        dealType: formData.dealType as any,
+        sector: formData.sector as any,
+        subsector: formData.subsector || '',
+        expectedCloseDate: formData.expectedCloseDate ? new Date(formData.expectedCloseDate) : null,
+        targetAmount: {
+          amount: parseFloat(formData.targetInvestment) || 0,
+          currency: formData.currency,
+        },
+        investmentStructure: {
+          primaryType: formData.investmentType as any,
+          equityPercentage: formData.equityPercentage ? parseFloat(formData.equityPercentage) : null,
+        },
+        geography: {
+          country: formData.country,
+          region: formData.region || '',
+          city: formData.city || '',
+        },
+      };
+      
+      // Create deal using service - using empty engagementId for now
+      await dealService.createDeal('', dealData as any, user.uid);
+      
+      navigate('/advisory/investment/deals');
+    } catch (err: any) {
+      console.error('Error creating deal:', err);
+      setSubmitError(err.message || 'Failed to create deal');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
+      {/* Error Display */}
+      {submitError && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          {submitError}
+        </div>
+      )}
+
+      {/* Loading State */}
+      {saving && (
+        <div className="mb-4 flex items-center gap-2 text-emerald-600">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span>Creating deal...</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">

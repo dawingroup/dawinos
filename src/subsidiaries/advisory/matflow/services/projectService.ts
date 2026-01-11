@@ -143,8 +143,15 @@ export async function createProject(
     updatedAt: serverTimestamp(),
   });
   
-  // Update customer engagement
-  await updateAdvisoryEngagement(input.customerId, { projectCreated: true });
+  // Update customer engagement (only if a real customer ID is provided)
+  if (input.customerId && input.customerId !== 'default') {
+    try {
+      await updateAdvisoryEngagement(input.customerId, { projectCreated: true });
+    } catch (err) {
+      // Log but don't fail project creation if customer update fails
+      console.warn('Could not update customer engagement:', err);
+    }
+  }
   
   return docRef.id;
 }
@@ -175,9 +182,9 @@ export async function getProjects(
     limitCount?: number;
   }
 ): Promise<MatFlowProject[]> {
+  // Query all projects ordered by createdAt (filter isDeleted client-side for backward compatibility)
   let q = query(
     projectsCollection(orgId),
-    where('isDeleted', '==', false),
     orderBy('createdAt', 'desc')
   );
   
@@ -195,10 +202,13 @@ export async function getProjects(
   
   const snapshot = await getDocs(q);
   
-  return snapshot.docs.map(docSnap => ({
-    id: docSnap.id,
-    ...docSnap.data(),
-  })) as MatFlowProject[];
+  // Filter out deleted projects client-side (for backward compatibility with projects missing isDeleted field)
+  return snapshot.docs
+    .map(docSnap => ({
+      id: docSnap.id,
+      ...docSnap.data(),
+    }) as MatFlowProject)
+    .filter(project => project.isDeleted !== true);
 }
 
 export function subscribeToProject(

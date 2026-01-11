@@ -26,6 +26,7 @@ import { ProductionTab } from './ProductionTab';
 import { StrategyCanvas } from '../strategy';
 import type { Project } from '@/shared/types';
 import { BulkImporter } from '../ProjectEstimation/BulkImporter';
+import { runProjectProduction } from '@/shared/services/optimization';
 
 type ViewMode = 'kanban' | 'list';
 type ProjectTab = 'items' | 'cutlist' | 'estimate' | 'production';
@@ -421,7 +422,14 @@ export default function ProjectView() {
       )}
 
       {activeTab === 'production' && (
-        <ProductionTab project={project} onRefresh={() => {}} />
+        <ProductionTab 
+          project={project} 
+          onRefresh={async () => {
+            if (projectId && user?.email) {
+              await runProjectProduction(projectId, user.email);
+            }
+          }} 
+        />
       )}
 
       {/* New Item Dialog */}

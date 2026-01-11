@@ -17,13 +17,13 @@ import {
   Box,
   Sparkles,
 } from 'lucide-react';
-import type { ClipRecord } from '../../types/database';
+import type { PopupClipRecord } from '../types';
 import { SyncBadge } from './SyncBadge';
 
 interface ClipDetailProps {
-  clip: ClipRecord;
+  clip: PopupClipRecord;
   onBack: () => void;
-  onUpdate: (id: string, updates: Partial<ClipRecord>) => void;
+  onUpdate: (id: string, updates: Partial<PopupClipRecord>) => void;
   onDelete: (id: string) => void;
   onAnalyze?: (id: string) => void;
 }
@@ -65,9 +65,7 @@ export function ClipDetail({ clip, onBack, onUpdate, onDelete, onAnalyze }: Clip
     });
   };
 
-  const imageUrl = clip.imageBlob 
-    ? URL.createObjectURL(clip.imageBlob) 
-    : clip.imageUrl;
+  const imageUrl = clip.thumbnailDataUrl || clip.imageUrl;
 
   return (
     <div className="flex flex-col h-full">

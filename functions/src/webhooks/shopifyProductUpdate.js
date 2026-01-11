@@ -163,7 +163,6 @@ function getDefaultAuditConfig() {
 exports.shopifyProductUpdate = onRequest(
   {
     cors: true,
-    invoker: 'public',
   },
   async (req, res) => {
     // Only accept POST requests
@@ -257,7 +256,6 @@ exports.shopifyProductUpdate = onRequest(
 exports.shopifyProductDelete = onRequest(
   {
     cors: true,
-    invoker: 'public',
   },
   async (req, res) => {
     if (req.method !== 'POST') {

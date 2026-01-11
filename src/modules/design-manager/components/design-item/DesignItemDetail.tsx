@@ -5,8 +5,11 @@
 
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Activity, CheckSquare, History, Sparkles, Settings, Package, Trash2, DollarSign, Image } from 'lucide-react';
+import { ArrowLeft, FileText, Activity, CheckSquare, Sparkles, Settings, Package, Trash2, Edit2, Layers } from 'lucide-react';
+import { DetailDrawer, DrawerTrigger } from './DetailDrawer';
+import { ProjectItemsDrawer } from './ProjectItemsDrawer';
 import { cn } from '@/shared/lib/utils';
+import { ResponsiveTabs } from '@/shared/components/ui/ResponsiveTabs';
 import { useDesignItem, useProject, useRAGUpdate } from '../../hooks';
 import { StageBadge } from './StageBadge';
 import { ReadinessGauge } from './ReadinessGauge';
@@ -32,7 +35,7 @@ import {
 } from '../../services/firestore';
 import { uploadDeliverableFile, validateDeliverableFile, deleteDeliverableFile } from '../../services/storage';
 import { useAuth } from '@/contexts/AuthContext';
-import type { RAGStatus, RAGValue, RAGStatusValue, DesignItem, BriefAnalysisResult, DfMIssue } from '../../types';
+import type { RAGStatus, RAGValue, RAGStatusValue, DesignItem, DfMIssue } from '../../types';
 
 // Lazy load AI components to prevent blocking main bundle
 const DfMChecker = lazy(() => 
@@ -49,8 +52,9 @@ const DesignChat = lazy(() =>
 );
 
 import { useAIContext } from '../../hooks/useAIContext';
+import { EditDesignItemDialog } from './EditDesignItemDialog';
 
-type Tab = 'overview' | 'rag' | 'parameters' | 'parts' | 'costing' | 'files' | 'inspiration' | 'approvals' | 'history' | 'ai';
+type Tab = 'overview' | 'parameters' | 'parts-costing' | 'rag' | 'files-approvals' | 'ai';
 
 // Aspect labels for display
 const ASPECT_LABELS: Record<string, string> = {
@@ -86,6 +90,7 @@ export default function DesignItemDetail() {
   const [showGateCheck, setShowGateCheck] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   
   // RAG Edit Modal state
   const [editingAspect, setEditingAspect] = useState<{
@@ -93,6 +98,13 @@ export default function DesignItemDetail() {
     key: string;
     value: RAGValue;
   } | null>(null);
+
+  // Drawer states - must be before any conditional returns
+  const [showInspirationDrawer, setShowInspirationDrawer] = useState(false);
+  const [showCostSummaryDrawer, setShowCostSummaryDrawer] = useState(false);
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
+  const [showParametersDrawer, setShowParametersDrawer] = useState(false);
+  const [showProjectItemsDrawer, setShowProjectItemsDrawer] = useState(false);
 
   if (loading) {
     return (
@@ -142,65 +154,114 @@ export default function DesignItemDetail() {
   const tabs = [
     { id: 'overview' as Tab, label: 'Overview', icon: FileText },
     { id: 'parameters' as Tab, label: 'Parameters', icon: Settings },
-    { id: 'parts' as Tab, label: 'Parts', icon: Package },
-    { id: 'costing' as Tab, label: 'Costing', icon: DollarSign },
-    { id: 'rag' as Tab, label: 'RAG Status', icon: Activity },
-    { id: 'files' as Tab, label: 'Files', icon: FileText },
-    { id: 'inspiration' as Tab, label: 'Inspiration', icon: Image },
-    { id: 'approvals' as Tab, label: 'Approvals', icon: CheckSquare },
-    { id: 'history' as Tab, label: 'History', icon: History },
-    { id: 'ai' as Tab, label: 'AI Analysis', icon: Sparkles },
+    { id: 'parts-costing' as Tab, label: 'Parts', icon: Package },
+    { id: 'rag' as Tab, label: 'RAG', icon: Activity },
+    { id: 'files-approvals' as Tab, label: 'Files', icon: CheckSquare },
+    { id: 'ai' as Tab, label: 'AI', icon: Sparkles },
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start gap-4">
-        <Link
-          to={`/design/project/${projectId}`}
-          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">{item.name}</h1>
-            <span className="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-              {item.itemCode}
-            </span>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header - Mobile Responsive */}
+      <div className="flex flex-col gap-4">
+        {/* Top row: Back button + Title */}
+        <div className="flex items-start gap-3">
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <Link
+              to={`/design/project/${projectId}`}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+              title="Back to Project"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <button
+              onClick={() => setShowProjectItemsDrawer(true)}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg sm:hidden"
+              title="Switch items"
+            >
+              <Layers className="w-5 h-5" />
+            </button>
           </div>
           
-          <div className="flex items-center gap-4 mt-2">
-            <span className="text-sm text-gray-600">
-              {project?.name || 'Unknown Project'}
-            </span>
-            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-              {CATEGORY_LABELS[item.category]}
-            </span>
-            <StageBadge stage={item.currentStage} size="sm" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">{item.name}</h1>
+              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded hidden sm:inline">
+                {item.itemCode}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2 sm:gap-4 mt-1 flex-wrap">
+              <button
+                onClick={() => setShowProjectItemsDrawer(true)}
+                className="text-sm text-gray-600 hover:text-[#1d1d1f] hover:underline cursor-pointer hidden sm:block"
+              >
+                {project?.name || 'Unknown Project'}
+              </button>
+              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                {CATEGORY_LABELS[item.category]}
+              </span>
+              <StageBadge stage={item.currentStage} size="sm" />
+            </div>
+          </div>
+
+          {/* Desktop actions */}
+          <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
+            <ReadinessGauge value={item.overallReadiness} size="lg" />
+            
+            {nextStage && (
+              <button
+                onClick={() => setShowGateCheck(true)}
+                className="px-3 py-2 bg-[#1d1d1f] text-white rounded-lg hover:bg-[#424245] text-sm font-medium"
+              >
+                Advance
+              </button>
+            )}
+            
+            <button
+              onClick={() => setShowEditDialog(true)}
+              className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Edit Item"
+            >
+              <Edit2 className="w-5 h-5" />
+            </button>
+            
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              title="Delete Item"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <ReadinessGauge value={item.overallReadiness} size="lg" />
+        {/* Mobile action bar */}
+        <div className="flex sm:hidden items-center justify-between gap-2 px-1">
+          <ReadinessGauge value={item.overallReadiness} size="md" />
           
-          {nextStage && (
+          <div className="flex items-center gap-1">
+            {nextStage && (
+              <button
+                onClick={() => setShowGateCheck(true)}
+                className="px-3 py-1.5 bg-[#1d1d1f] text-white rounded-lg text-sm font-medium"
+              >
+                Advance
+              </button>
+            )}
             <button
-              onClick={() => setShowGateCheck(true)}
-              className="px-4 py-2 bg-[#1d1d1f] text-white rounded-lg hover:bg-[#424245] text-sm font-medium"
+              onClick={() => setShowEditDialog(true)}
+              className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
             >
-              Advance Stage
+              <Edit2 className="w-4 h-4" />
             </button>
-          )}
-          
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-            title="Delete Item"
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -241,34 +302,46 @@ export default function DesignItemDetail() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <div className="flex gap-1">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-                  activeTab === tab.id
-                    ? 'border-[#1d1d1f] text-[#1d1d1f]'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                )}
-              >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {/* Edit Design Item Dialog */}
+      {showEditDialog && item && (
+        <EditDesignItemDialog
+          open={showEditDialog}
+          onClose={() => setShowEditDialog(false)}
+          item={item}
+          projectId={projectId!}
+          userId={user?.email || ''}
+        />
+      )}
+
+      {/* Tabs - Responsive */}
+      <ResponsiveTabs
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={(id) => setActiveTab(id as Tab)}
+        variant="underline"
+      />
 
       {/* Tab Content */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         {activeTab === 'overview' && (
-          <OverviewTab item={item} projectId={projectId!} />
+          <OverviewTab 
+            item={item} 
+            projectId={projectId!} 
+            onOpenInspiration={() => setShowInspirationDrawer(true)}
+            onOpenParameters={() => setShowParametersDrawer(true)}
+          />
+        )}
+        
+        {activeTab === 'parameters' && (
+          <ParametersTab item={item} projectId={projectId!} />
+        )}
+        
+        {activeTab === 'parts-costing' && (
+          <PartsCostingTab 
+            item={item} 
+            projectId={projectId!} 
+            onOpenCostSummary={() => setShowCostSummaryDrawer(true)}
+          />
         )}
         
         {activeTab === 'rag' && (
@@ -282,38 +355,71 @@ export default function DesignItemDetail() {
           />
         )}
         
-        {activeTab === 'parameters' && (
-          <ParametersTab item={item} projectId={projectId!} />
-        )}
-        
-        {activeTab === 'parts' && (
-          <PartsTab item={item} projectId={projectId!} />
-        )}
-        
-        {activeTab === 'costing' && (
-          <CostingTab item={item} projectId={projectId!} />
-        )}
-        
-        {activeTab === 'files' && (
-          <FilesTab item={item} projectId={projectId!} />
-        )}
-        
-        {activeTab === 'approvals' && (
-          <ApprovalsTab item={item} projectId={projectId!} />
-        )}
-        
-        {activeTab === 'history' && (
-          <HistoryTab item={item} />
+        {activeTab === 'files-approvals' && (
+          <FilesApprovalsTab 
+            item={item} 
+            projectId={projectId!}
+            onOpenHistory={() => setShowHistoryDrawer(true)}
+          />
         )}
         
         {activeTab === 'ai' && (
           <AITab item={item} projectId={projectId!} itemId={itemId!} userId={user?.uid} />
         )}
-        
-        {activeTab === 'inspiration' && (
-          <InspirationTab item={item} projectId={projectId!} itemId={itemId!} />
-        )}
       </div>
+
+      {/* Inspiration Drawer */}
+      <DetailDrawer
+        isOpen={showInspirationDrawer}
+        onClose={() => setShowInspirationDrawer(false)}
+        title="Design Inspiration"
+        subtitle={`Reference images for ${item.name}`}
+        width="lg"
+      >
+        <InspirationDrawerContent item={item} projectId={projectId!} itemId={itemId!} />
+      </DetailDrawer>
+
+      {/* Cost Summary Drawer */}
+      <DetailDrawer
+        isOpen={showCostSummaryDrawer}
+        onClose={() => setShowCostSummaryDrawer(false)}
+        title="Cost Summary"
+        subtitle="Auto-calculated from parts"
+        width="lg"
+      >
+        <CostSummaryDrawerContent item={item} />
+      </DetailDrawer>
+
+      {/* History Drawer */}
+      <DetailDrawer
+        isOpen={showHistoryDrawer}
+        onClose={() => setShowHistoryDrawer(false)}
+        title="Stage History"
+        subtitle="Timeline of stage transitions"
+        width="md"
+      >
+        <HistoryDrawerContent item={item} />
+      </DetailDrawer>
+
+      {/* Parameters Summary Drawer */}
+      <DetailDrawer
+        isOpen={showParametersDrawer}
+        onClose={() => setShowParametersDrawer(false)}
+        title="Parameters Summary"
+        subtitle="Quick view of key specifications"
+        width="md"
+      >
+        <ParametersSummaryDrawerContent item={item} />
+      </DetailDrawer>
+
+      {/* Project Items Drawer - for switching between deliverables */}
+      <ProjectItemsDrawer
+        isOpen={showProjectItemsDrawer}
+        onClose={() => setShowProjectItemsDrawer(false)}
+        projectId={projectId!}
+        projectName={project?.name}
+        currentItemId={itemId}
+      />
 
       {/* Stage Gate Check Modal */}
       {showGateCheck && nextStage && (
@@ -357,14 +463,17 @@ export default function DesignItemDetail() {
 function OverviewTab({
   item,
   projectId,
+  onOpenInspiration,
+  onOpenParameters,
 }: {
   item: NonNullable<ReturnType<typeof useDesignItem>['item']>;
   projectId: string;
+  onOpenInspiration: () => void;
+  onOpenParameters: () => void;
 }) {
   const { user } = useAuth();
   const [isUpdatingSourcing, setIsUpdatingSourcing] = useState(false);
   const [isUpdatingDueDate, setIsUpdatingDueDate] = useState(false);
-  const [showClipGallery, setShowClipGallery] = useState(false);
   const [InspirationPanelComponent, setInspirationPanelComponent] = useState<React.ComponentType<any> | null>(null);
 
   // Lazy load InspirationPanel for sidebar
@@ -408,8 +517,8 @@ function OverviewTab({
           <p className="text-gray-900">{item.description || 'No description provided.'}</p>
         </div>
       
-      {/* Key Info Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Key Info Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Priority</h3>
           <p className="text-lg font-semibold text-gray-900 capitalize">{item.priority || 'Not set'}</p>
@@ -574,55 +683,49 @@ function OverviewTab({
         </div>
       </div>
 
-      {/* Sidebar - Inspiration Clips */}
+      {/* Sidebar - Quick Actions */}
       <div className="lg:col-span-1 space-y-4">
+        {/* Inspiration Preview Card */}
         <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-900">Inspiration</h3>
+          </div>
           {InspirationPanelComponent ? (
             <InspirationPanelComponent
               designItemId={item.id}
               projectId={projectId}
               designItemName={item.name}
-              onOpenGallery={() => setShowClipGallery(true)}
+              onOpenGallery={onOpenInspiration}
               compact
-              maxItems={4}
+              maxItems={2}
             />
           ) : (
             <div className="flex items-center justify-center py-4">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#1d1d1f]"></div>
             </div>
           )}
+          <DrawerTrigger
+            label="View All Inspiration"
+            onClick={onOpenInspiration}
+            variant="compact"
+          />
         </div>
-      </div>
 
-      {/* Clip Gallery Modal */}
-      {showClipGallery && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Link Inspiration Clip</h3>
-              <button
-                onClick={() => setShowClipGallery(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div></div>}>
-                <ClipGalleryWrapperOverview onLinkClip={handleLinkClip} />
-              </Suspense>
-            </div>
-          </div>
-        </div>
-      )}
+        {/* Parameters Quick View Card */}
+        <DrawerTrigger
+          label="Parameters"
+          sublabel={hasDimensions ? `${dimensions.width}×${dimensions.height}×${dimensions.depth}mm` : 'View specifications'}
+          onClick={onOpenParameters}
+          variant="card"
+          icon={<Settings className="w-5 h-5" />}
+        />
+      </div>
     </div>
   );
 }
 
 // Lazy wrapper for ClipGallery in OverviewTab
-function ClipGalleryWrapperOverview({ onLinkClip }: { onLinkClip: (clip: any) => void }) {
+function ClipGalleryWrapperForOverview({ onLinkClip }: { onLinkClip: (clip: any) => void }) {
   const [ClipGallery, setClipGallery] = useState<React.ComponentType<any> | null>(null);
 
   useEffect(() => {
@@ -1090,21 +1193,12 @@ function CostingTab({
   
   // Read standard and special parts from manufacturing (managed in Parts tab)
   const standardParts: any[] = manufacturing.standardParts || [];
-  const [specialParts, setSpecialParts] = useState<any[]>(manufacturing.specialParts || []);
+  const specialParts: any[] = manufacturing.specialParts || [];
   
-  // Track which special part is being edited for costing
-  const [editingPartId, setEditingPartId] = useState<string | null>(null);
-  
-  // Default exchange rates and currencies
-  const [defaultTargetCurrency] = useState<string>('UGX');
-  const exchangeRates: Record<string, number> = {
-    'USD': 3700,
-    'EUR': 4000,
-    'GBP': 4600,
-    'AED': 1000,
-    'CNY': 510,
-    'KES': 29,
-  };
+  // Special parts rate overrides (per product)
+  const [specialPartsRateOverrides, setSpecialPartsRateOverrides] = useState<Record<string, number>>(
+    manufacturing.specialPartsRateOverrides || {}
+  );
   
   // Labor state
   const [laborHours, setLaborHours] = useState<number>(manufacturing.laborHours || 0);
@@ -1118,9 +1212,19 @@ function CostingTab({
   const partsLastUpdated = partsSummary?.lastUpdated?.seconds ? partsSummary.lastUpdated.seconds * 1000 : 0;
   const partsChanged = partsLastUpdated > lastCalcTime && sheetMaterials.length > 0;
 
-  // Calculate totals (special parts use costing.totalLandedCost)
-  const standardPartsCost = standardParts.reduce((sum, p) => sum + (p.quantity * p.unitCost), 0);
-  const specialPartsCost = specialParts.reduce((sum, p) => sum + (p.costing?.totalLandedCost || 0), 0);
+  // Calculate totals (with rate overrides for special parts)
+  const standardPartsCost = standardParts.reduce((sum, p) => sum + (p.quantity * (p.unitCost || 0)), 0);
+  const specialPartsCost = specialParts.reduce((sum, p) => {
+    const overrideRate = specialPartsRateOverrides[p.id];
+    // Use landed cost from costing object (includes logistics, customs, exchange rate)
+    // Falls back to unitCost if no costing data available
+    const costing = (p as any).costing;
+    const landedUnitCost = costing?.landedUnitCost || 
+      ((costing?.unitCost || 0) + (costing?.transportCost || 0) + (costing?.logisticsCost || 0) + (costing?.customsCost || 0)) * (costing?.exchangeRate || 1) ||
+      p.unitCost || 0;
+    const rate = overrideRate !== undefined ? overrideRate : landedUnitCost;
+    return sum + (p.quantity * rate);
+  }, 0);
   const totalMaterialCost = sheetMaterialsCost + standardPartsCost + specialPartsCost;
   const laborCost = laborHours * laborRate;
   const totalCost = totalMaterialCost + laborCost;
@@ -1152,11 +1256,12 @@ function CostingTab({
     }
   };
 
-  // Update special part costing
-  const updateSpecialPartCosting = (partId: string, costing: any) => {
-    setSpecialParts(prev => prev.map(p => 
-      p.id === partId ? { ...p, costing } : p
-    ));
+  // Update special part rate override
+  const updateSpecialPartRate = (partId: string, newRate: number) => {
+    setSpecialPartsRateOverrides(prev => ({
+      ...prev,
+      [partId]: newRate,
+    }));
   };
 
   // Recursively remove undefined values from objects/arrays for Firestore
@@ -1191,7 +1296,7 @@ function CostingTab({
         ...manufacturing,
         sheetMaterials: cleanSheetMaterials,
         sheetMaterialsCost: sheetMaterialsCost || 0,
-        specialParts: specialParts,
+        specialPartsRateOverrides: specialPartsRateOverrides,
         standardPartsCost: standardPartsCost || 0,
         specialPartsCost: specialPartsCost || 0,
         materialCost: totalMaterialCost || 0,
@@ -1366,208 +1471,65 @@ function CostingTab({
         )}
       </div>
 
-      {/* Special Parts Costing (procurement-style with exchange rates) */}
+      {/* Special Parts with Rate Overrides (for luxury projects) */}
       <div className="bg-white border border-gray-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-            ✨ Special Parts Costing
-            <span className="text-xs font-normal text-gray-500">(price, exchange rate, transport)</span>
+            ✨ Special Parts
+            <span className="text-xs font-normal text-gray-500">(rate overrides for this product)</span>
           </h3>
           {specialPartsCost > 0 && (
             <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-1">
-              <span className="font-bold text-purple-800">{defaultTargetCurrency} {formatCurrency(specialPartsCost)}</span>
+              <span className="font-bold text-purple-800">UGX {formatCurrency(specialPartsCost)}</span>
             </div>
           )}
         </div>
 
         {specialParts.length > 0 ? (
-          <div className="space-y-3">
-            {specialParts.map((part) => {
-              const costing = part.costing || {};
-              const currency = costing.currency || 'USD';
-              const unitCost = costing.unitCost || 0;
-              const rate = costing.exchangeRate || exchangeRates[currency] || 1;
-              const transport = costing.transportCost || 0;
-              const logistics = costing.logisticsCost || 0;
-              const customs = costing.customsCost || 0;
-              const totalSource = (unitCost + transport + logistics + customs) * part.quantity;
-              const totalLanded = totalSource * rate;
-              
-              return (
-                <div key={part.id} className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs bg-purple-300 text-purple-900 px-1.5 py-0.5 rounded capitalize">{part.category}</span>
-                      <span className="font-medium text-gray-900">{part.name}</span>
-                      {part.supplier && <span className="text-xs text-gray-500">({part.supplier})</span>}
-                      <span className="text-xs text-gray-400">×{part.quantity}</span>
-                    </div>
-                    {part.costing ? (
-                      <span className="text-sm font-bold text-purple-800">
-                        {defaultTargetCurrency} {formatCurrency(part.costing.totalLandedCost)}
-                      </span>
-                    ) : (
-                      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">Not priced</span>
-                    )}
-                  </div>
-                  
-                  {editingPartId === part.id ? (
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-2 p-2 bg-white rounded border border-purple-200">
-                      <div>
-                        <label className="text-xs text-gray-500">Unit Cost</label>
-                        <div className="flex gap-1">
-                          <select
-                            value={currency}
-                            onChange={(e) => {
-                              const newCurrency = e.target.value;
-                              const newRate = exchangeRates[newCurrency] || 1;
-                              updateSpecialPartCosting(part.id, {
-                                ...costing,
-                                currency: newCurrency,
-                                exchangeRate: newRate,
-                              });
-                            }}
-                            className="w-16 text-xs border border-gray-300 rounded px-1 py-1"
-                          >
-                            {Object.keys(exchangeRates).map(c => (
-                              <option key={c} value={c}>{c}</option>
-                            ))}
-                          </select>
-                          <input
-                            type="number"
-                            value={unitCost || ''}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              const newTotal = (val + transport + logistics + customs) * part.quantity;
-                              updateSpecialPartCosting(part.id, {
-                                ...costing,
-                                unitCost: val,
-                                currency,
-                                exchangeRate: rate,
-                                targetCurrency: defaultTargetCurrency,
-                                transportCost: transport,
-                                logisticsCost: logistics,
-                                customsCost: customs,
-                                totalSourceCost: newTotal,
-                                landedUnitCost: (newTotal / part.quantity) * rate,
-                                totalLandedCost: newTotal * rate,
-                                pricedAt: { seconds: Date.now() / 1000, nanoseconds: 0 },
-                                pricedBy: user?.email,
-                              });
-                            }}
-                            placeholder="0"
-                            className="flex-1 text-sm border border-gray-300 rounded px-2 py-1"
-                          />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-purple-50 border-b border-purple-200">
+                <tr>
+                  <th className="px-2 py-1.5 text-left font-medium text-purple-800">Part</th>
+                  <th className="px-2 py-1.5 text-center font-medium text-purple-800">Qty</th>
+                  <th className="px-2 py-1.5 text-right font-medium text-purple-800">Base Rate</th>
+                  <th className="px-2 py-1.5 text-right font-medium text-purple-800">Override Rate</th>
+                  <th className="px-2 py-1.5 text-right font-medium text-purple-800">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-purple-100">
+                {specialParts.map((part) => {
+                  const overrideRate = specialPartsRateOverrides[part.id];
+                  const effectiveRate = overrideRate !== undefined ? overrideRate : part.unitCost;
+                  return (
+                    <tr key={part.id} className="hover:bg-purple-50/50">
+                      <td className="px-2 py-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded capitalize">{part.category}</span>
+                          <span className="font-medium">{part.name}</span>
+                          {part.supplier && <span className="text-xs text-gray-500">({part.supplier})</span>}
                         </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500">Exchange Rate</label>
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs text-gray-400">1 {currency} =</span>
-                          <input
-                            type="number"
-                            value={rate || ''}
-                            onChange={(e) => {
-                              const newRate = parseFloat(e.target.value) || 1;
-                              updateSpecialPartCosting(part.id, {
-                                ...costing,
-                                exchangeRate: newRate,
-                                totalLandedCost: totalSource * newRate,
-                                landedUnitCost: (totalSource / part.quantity) * newRate,
-                              });
-                            }}
-                            className="w-20 text-sm border border-gray-300 rounded px-2 py-1"
-                          />
-                          <span className="text-xs text-gray-400">{defaultTargetCurrency}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500">Transport ({currency})</label>
+                      </td>
+                      <td className="px-2 py-1.5 text-center text-gray-700">{part.quantity}</td>
+                      <td className="px-2 py-1.5 text-right text-gray-500">UGX {formatCurrency(part.unitCost)}</td>
+                      <td className="px-2 py-1.5 text-right">
                         <input
                           type="number"
-                          value={transport || ''}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
-                            const newTotal = (unitCost + val + logistics + customs) * part.quantity;
-                            updateSpecialPartCosting(part.id, {
-                              ...costing,
-                              transportCost: val,
-                              totalSourceCost: newTotal,
-                              totalLandedCost: newTotal * rate,
-                              landedUnitCost: (newTotal / part.quantity) * rate,
-                            });
-                          }}
-                          placeholder="0"
-                          className="w-full text-sm border border-gray-300 rounded px-2 py-1"
+                          value={overrideRate !== undefined ? overrideRate : ''}
+                          onChange={(e) => updateSpecialPartRate(part.id, parseFloat(e.target.value) || 0)}
+                          placeholder={String(part.unitCost)}
+                          min="0"
+                          className="w-24 px-2 py-1 text-sm border border-purple-300 rounded text-right focus:ring-1 focus:ring-purple-500"
                         />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500">Logistics ({currency})</label>
-                        <input
-                          type="number"
-                          value={logistics || ''}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
-                            const newTotal = (unitCost + transport + val + customs) * part.quantity;
-                            updateSpecialPartCosting(part.id, {
-                              ...costing,
-                              logisticsCost: val,
-                              totalSourceCost: newTotal,
-                              totalLandedCost: newTotal * rate,
-                              landedUnitCost: (newTotal / part.quantity) * rate,
-                            });
-                          }}
-                          placeholder="0"
-                          className="w-full text-sm border border-gray-300 rounded px-2 py-1"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500">Taxes/Customs ({currency})</label>
-                        <input
-                          type="number"
-                          value={customs || ''}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
-                            const newTotal = (unitCost + transport + logistics + val) * part.quantity;
-                            updateSpecialPartCosting(part.id, {
-                              ...costing,
-                              customsCost: val,
-                              totalSourceCost: newTotal,
-                              totalLandedCost: newTotal * rate,
-                              landedUnitCost: (newTotal / part.quantity) * rate,
-                            });
-                          }}
-                          placeholder="0"
-                          className="w-full text-sm border border-gray-300 rounded px-2 py-1"
-                        />
-                      </div>
-                      <div className="col-span-2 md:col-span-5 flex justify-between items-center pt-2 border-t">
-                        <div className="text-xs text-gray-500">
-                          Source: {currency} {totalSource.toFixed(2)} → Landed: {defaultTargetCurrency} {formatCurrency(totalLanded)}
-                        </div>
-                        <button
-                          onClick={() => setEditingPartId(null)}
-                          className="text-xs text-purple-600 hover:underline"
-                        >
-                          Done
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setEditingPartId(part.id)}
-                      className={`mt-2 px-3 py-1.5 text-xs font-medium rounded-lg ${
-                        part.costing 
-                          ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
-                          : 'bg-amber-500 text-white hover:bg-amber-600'
-                      }`}
-                    >
-                      {part.costing ? '✏️ Edit Costing' : '💰 Add Costing'}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-medium text-purple-900">
+                        UGX {formatCurrency(part.quantity * effectiveRate)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         ) : (
           <p className="text-sm text-gray-500 text-center py-3">
@@ -1818,4 +1780,586 @@ function ClipGalleryWrapper({ onLinkClip }: { onLinkClip: (clip: any) => void })
   }
 
   return <ClipGallery onLinkClip={onLinkClip} selectable />;
+}
+
+// ==========================================
+// CONSOLIDATED TAB COMPONENTS
+// ==========================================
+
+// Parts & Costing Tab - Combines PartsTab with cost summary drawer trigger
+interface PartsCostingTabProps {
+  item: NonNullable<ReturnType<typeof useDesignItem>['item']>;
+  projectId: string;
+  onOpenCostSummary: () => void;
+}
+
+function PartsCostingTab({ item, projectId, onOpenCostSummary }: PartsCostingTabProps) {
+  const manufacturing = (item as any).manufacturing || {};
+  const totalCost = manufacturing.totalCost || 0;
+  
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { 
+      style: 'decimal', 
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0 
+    }).format(amount);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Cost Summary Bar */}
+      <div className="flex items-center justify-between bg-gradient-to-r from-[#0A7C8E]/10 to-[#0A7C8E]/5 rounded-lg p-4 border border-[#0A7C8E]/20">
+        <div className="flex items-center gap-4">
+          <div>
+            <p className="text-sm text-gray-600">Estimated Cost</p>
+            <p className="text-2xl font-bold text-[#0A7C8E]">
+              {totalCost > 0 ? `UGX ${formatCurrency(totalCost)}` : 'Not calculated'}
+            </p>
+          </div>
+        </div>
+        <DrawerTrigger
+          label="View Cost Breakdown"
+          onClick={onOpenCostSummary}
+          variant="default"
+          icon={<Package className="w-4 h-4" />}
+        />
+      </div>
+
+      {/* Parts List */}
+      <PartsTab item={item} projectId={projectId} />
+    </div>
+  );
+}
+
+// Files & Approvals Tab - Combines Files, Approvals with History drawer trigger
+interface FilesApprovalsTabProps {
+  item: NonNullable<ReturnType<typeof useDesignItem>['item']>;
+  projectId: string;
+  onOpenHistory: () => void;
+}
+
+function FilesApprovalsTab({ item, projectId, onOpenHistory }: FilesApprovalsTabProps) {
+  const { user } = useAuth();
+  const [activeSection, setActiveSection] = useState<'files' | 'approvals'>('files');
+  const [deliverables, setDeliverables] = useState<any[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  
+  // Subscribe to deliverables
+  useEffect(() => {
+    const unsubscribe = subscribeToDeliverables(projectId, item.id, (data) => {
+      setDeliverables(data);
+    });
+    return unsubscribe;
+  }, [projectId, item.id]);
+  
+  const handleUpload = async (file: File, type: any, name: string, description: string) => {
+    if (!user?.email) {
+      alert('You must be logged in to upload files');
+      return;
+    }
+    
+    const validation = validateDeliverableFile(file, type);
+    if (!validation.valid) {
+      alert(validation.error);
+      return;
+    }
+    
+    try {
+      const { promise } = uploadDeliverableFile(
+        file,
+        projectId,
+        item.id,
+        type,
+        item.currentStage,
+        (progress) => setUploadProgress(Math.round(progress.percentage))
+      );
+      
+      const result = await promise;
+      setUploadProgress(null);
+      
+      await createDeliverable(
+        projectId,
+        item.id,
+        {
+          name,
+          type,
+          description,
+          fileName: result.fileName,
+          fileType: result.fileType,
+          fileSize: result.fileSize,
+          storageUrl: result.storageUrl,
+          storagePath: result.storagePath,
+        },
+        user.email,
+        item.currentStage
+      );
+    } catch (error) {
+      setUploadProgress(null);
+      console.error('Upload failed:', error);
+      alert('Failed to upload file. Please try again.');
+    }
+  };
+  
+  const handleDelete = async (deliverableId: string) => {
+    const deliverable = deliverables.find(d => d.id === deliverableId);
+    if (!deliverable) return;
+    
+    if (!confirm('Are you sure you want to delete this deliverable?')) return;
+    
+    try {
+      if (deliverable.storagePath) {
+        await deleteDeliverableFile(deliverable.storagePath);
+      }
+      await deleteDeliverable(projectId, item.id, deliverableId);
+    } catch (error) {
+      console.error('Delete failed:', error);
+      alert('Failed to delete deliverable');
+    }
+  };
+  
+  const handleApprove = async (deliverableId: string) => {
+    if (!user?.email) return;
+    try {
+      await updateDeliverableStatus(projectId, item.id, deliverableId, 'approved', user.email);
+    } catch (error) {
+      console.error('Approve failed:', error);
+      alert('Failed to approve deliverable');
+    }
+  };
+
+  const handleRequestApproval = async (approval: any) => {
+    if (!user?.email) {
+      alert('You must be logged in to request approvals');
+      return;
+    }
+    
+    try {
+      await createApproval(
+        projectId,
+        item.id,
+        {
+          type: approval.type,
+          assignedTo: approval.assignedTo,
+          notes: approval.notes,
+        },
+        user.email
+      );
+    } catch (error) {
+      console.error('Failed to create approval:', error);
+      alert('Failed to create approval request');
+    }
+  };
+  
+  const handleRespondToApproval = async (approvalId: string, status: 'approved' | 'rejected', notes?: string) => {
+    if (!user?.email) {
+      alert('You must be logged in to respond to approvals');
+      return;
+    }
+    
+    try {
+      await respondToApprovalFirestore(
+        projectId,
+        item.id,
+        approvalId,
+        status,
+        notes || '',
+        user.email
+      );
+    } catch (error) {
+      console.error('Failed to respond to approval:', error);
+      alert('Failed to respond to approval');
+    }
+  };
+
+  const approvals = item.approvals.map(a => ({
+    ...a,
+    assignedTo: (a as any).respondedBy || (a as any).assignedTo || '',
+    decidedAt: (a as any).respondedAt || null,
+    decision: (a as any).decision || (a as any).notes || null,
+    attachments: [],
+  })) as any;
+
+  return (
+    <div className="space-y-4">
+      {/* Section Toggle + History Trigger */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveSection('files')}
+            className={cn(
+              'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+              activeSection === 'files'
+                ? 'bg-[#1d1d1f] text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            )}
+          >
+            Files & Deliverables
+          </button>
+          <button
+            onClick={() => setActiveSection('approvals')}
+            className={cn(
+              'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+              activeSection === 'approvals'
+                ? 'bg-[#1d1d1f] text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            )}
+          >
+            Approvals ({item.approvals.length})
+          </button>
+        </div>
+        <DrawerTrigger
+          label="Stage History"
+          onClick={onOpenHistory}
+          variant="compact"
+          badge={item.stageHistory.length}
+        />
+      </div>
+
+      {/* Content */}
+      {activeSection === 'files' && (
+        <div>
+          {uploadProgress !== null && (
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm text-blue-700">Uploading...</span>
+                <span className="text-sm font-medium text-blue-700">{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-blue-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all" 
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+          <DeliverablesManager
+            deliverables={deliverables}
+            currentStage={item.currentStage}
+            onUpload={handleUpload}
+            onDelete={handleDelete}
+            onApprove={handleApprove}
+          />
+        </div>
+      )}
+
+      {activeSection === 'approvals' && (
+        <ApprovalWorkflow
+          designItem={item}
+          projectId={projectId}
+          approvals={approvals}
+          onRequestApproval={handleRequestApproval}
+          onRespondToApproval={handleRespondToApproval}
+        />
+      )}
+    </div>
+  );
+}
+
+// ==========================================
+// DRAWER CONTENT COMPONENTS
+// ==========================================
+
+// Inspiration Drawer Content
+function InspirationDrawerContent({ 
+  item, 
+  projectId, 
+  itemId 
+}: { 
+  item: DesignItem; 
+  projectId: string; 
+  itemId: string;
+}) {
+  const [showGallery, setShowGallery] = useState(false);
+  const [InspirationPanelComponent, setInspirationPanelComponent] = useState<React.ComponentType<any> | null>(null);
+
+  useEffect(() => {
+    import('./InspirationPanel').then((mod) => {
+      setInspirationPanelComponent(() => mod.InspirationPanel);
+    });
+  }, []);
+
+  const handleLinkClip = async (clip: any) => {
+    try {
+      const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+      const { db } = await import('@/shared/services/firebase');
+      
+      const clipRef = doc(db, 'designClips', clip.id);
+      await updateDoc(clipRef, {
+        projectId,
+        designItemId: itemId,
+        updatedAt: serverTimestamp(),
+      });
+      
+      setShowGallery(false);
+    } catch (error) {
+      console.error('Failed to link clip:', error);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <button
+        onClick={() => setShowGallery(true)}
+        className="w-full px-4 py-2 bg-[#1d1d1f] text-white rounded-lg text-sm font-medium hover:bg-[#424245]"
+      >
+        + Link New Clip
+      </button>
+
+      {InspirationPanelComponent ? (
+        <InspirationPanelComponent
+          designItemId={itemId}
+          projectId={projectId}
+          designItemName={item.name}
+          onOpenGallery={() => setShowGallery(true)}
+        />
+      ) : (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div>
+        </div>
+      )}
+
+      {showGallery && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Select Inspiration Clip</h3>
+              <button onClick={() => setShowGallery(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d1d1f]"></div></div>}>
+                <ClipGalleryWrapper onLinkClip={handleLinkClip} />
+              </Suspense>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Cost Summary Drawer Content
+function CostSummaryDrawerContent({ item }: { item: NonNullable<ReturnType<typeof useDesignItem>['item']> }) {
+  const manufacturing = (item as any).manufacturing || {};
+  const sheetMaterials = manufacturing.sheetMaterials || [];
+  const standardParts = manufacturing.standardParts || [];
+  const specialParts = manufacturing.specialParts || [];
+  
+  const sheetMaterialsCost = manufacturing.sheetMaterialsCost || 0;
+  const standardPartsCost = manufacturing.standardPartsCost || 0;
+  const specialPartsCost = manufacturing.specialPartsCost || 0;
+  const laborHours = manufacturing.laborHours || 0;
+  const laborRate = manufacturing.laborRate || 15000;
+  const laborCost = laborHours * laborRate;
+  const totalCost = manufacturing.totalCost || 0;
+  const quantity = manufacturing.quantity || 1;
+  const costPerUnit = quantity > 0 ? totalCost / quantity : totalCost;
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { 
+      style: 'decimal', 
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0 
+    }).format(amount);
+  };
+
+  if ((item as any).sourcingType === 'PROCURED') {
+    return (
+      <div className="text-center py-8">
+        <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+        <h3 className="text-lg font-medium text-gray-900">Procured Item</h3>
+        <p className="text-gray-500 mt-1">Costing managed externally.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Sheet Materials */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h4 className="font-semibold text-blue-800 mb-2">Sheet Materials</h4>
+        {sheetMaterials.length > 0 ? (
+          <div className="space-y-2">
+            {sheetMaterials.map((mat: any, idx: number) => (
+              <div key={idx} className="flex justify-between text-sm">
+                <span>{mat.materialName} ({mat.thickness}mm) × {mat.sheetsRequired}</span>
+                <span className="font-medium">UGX {formatCurrency(mat.totalCost)}</span>
+              </div>
+            ))}
+            <div className="pt-2 border-t border-blue-300 flex justify-between font-semibold">
+              <span>Subtotal</span>
+              <span>UGX {formatCurrency(sheetMaterialsCost)}</span>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-blue-600">Not calculated</p>
+        )}
+      </div>
+
+      {/* Standard Parts */}
+      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+        <h4 className="font-semibold text-orange-800 mb-2">Standard Parts ({standardParts.length})</h4>
+        <div className="flex justify-between font-semibold">
+          <span>Subtotal</span>
+          <span>UGX {formatCurrency(standardPartsCost)}</span>
+        </div>
+      </div>
+
+      {/* Special Parts */}
+      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+        <h4 className="font-semibold text-purple-800 mb-2">Special Parts ({specialParts.length})</h4>
+        <div className="flex justify-between font-semibold">
+          <span>Subtotal</span>
+          <span>UGX {formatCurrency(specialPartsCost)}</span>
+        </div>
+      </div>
+
+      {/* Labor */}
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <h4 className="font-semibold text-green-800 mb-2">Labor</h4>
+        <div className="text-sm text-green-700 mb-1">
+          {laborHours} hours @ UGX {formatCurrency(laborRate)}/hr
+        </div>
+        <div className="flex justify-between font-semibold">
+          <span>Subtotal</span>
+          <span>UGX {formatCurrency(laborCost)}</span>
+        </div>
+      </div>
+
+      {/* Total */}
+      <div className="bg-gradient-to-r from-[#0A7C8E] to-[#0A7C8E]/80 rounded-lg p-4 text-white">
+        <div className="flex justify-between items-center">
+          <div>
+            <h4 className="font-semibold">Total Cost</h4>
+            {quantity > 1 && (
+              <p className="text-sm text-white/80">UGX {formatCurrency(costPerUnit)} per unit × {quantity}</p>
+            )}
+          </div>
+          <p className="text-2xl font-bold">UGX {formatCurrency(totalCost)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// History Drawer Content
+function HistoryDrawerContent({ item }: { item: NonNullable<ReturnType<typeof useDesignItem>['item']> }) {
+  if (item.stageHistory.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+        <p className="text-gray-500">No stage transitions yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {item.stageHistory.map((transition, index) => (
+        <div key={index} className="flex items-start gap-4 pb-4 border-b border-gray-100 last:border-0">
+          <div className="w-2 h-2 bg-[#1d1d1f] rounded-full mt-2 flex-shrink-0" />
+          <div>
+            <p className="font-medium text-gray-900">
+              {transition.fromStage} → {transition.toStage}
+            </p>
+            <p className="text-sm text-gray-500">
+              {formatDateTime(transition.transitionedAt)} by {transition.transitionedBy}
+            </p>
+            {transition.notes && (
+              <p className="text-sm text-gray-600 mt-1 bg-gray-50 p-2 rounded">{transition.notes}</p>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Parameters Summary Drawer Content
+function ParametersSummaryDrawerContent({ item }: { item: NonNullable<ReturnType<typeof useDesignItem>['item']> }) {
+  const params = (item as any).parameters || {};
+  const dimensions = params.dimensions || {};
+
+  return (
+    <div className="space-y-4">
+      {/* Dimensions */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-2">Dimensions</h4>
+        {dimensions.width || dimensions.height || dimensions.depth ? (
+          <p className="text-lg font-medium">
+            {dimensions.width || '-'} × {dimensions.height || '-'} × {dimensions.depth || '-'} {dimensions.unit || 'mm'}
+          </p>
+        ) : (
+          <p className="text-gray-400 italic">Not specified</p>
+        )}
+      </div>
+
+      {/* Primary Material */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-2">Primary Material</h4>
+        <p className="text-lg font-medium">
+          {params.primaryMaterial?.name || <span className="text-gray-400 italic">Not specified</span>}
+        </p>
+      </div>
+
+      {/* Finish */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-2">Finish</h4>
+        <p className="text-lg font-medium">
+          {params.finish ? (
+            typeof params.finish === 'string' 
+              ? params.finish 
+              : `${params.finish.type || 'Unknown'}${params.finish.color ? ` - ${params.finish.color}` : ''}`
+          ) : (
+            <span className="text-gray-400 italic">Not specified</span>
+          )}
+        </p>
+      </div>
+
+      {/* Construction */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-2">Construction Method</h4>
+        <p className="text-lg font-medium capitalize">
+          {params.constructionMethod || <span className="text-gray-400 italic">Not specified</span>}
+        </p>
+      </div>
+
+      {/* AWI Grade */}
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-2">AWI Grade</h4>
+        <p className="text-lg font-medium uppercase">
+          {params.awiGrade || <span className="text-gray-400 italic">Not specified</span>}
+        </p>
+      </div>
+
+      {/* Hardware */}
+      {params.hardware?.length > 0 && (
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">Hardware ({params.hardware.length})</h4>
+          <ul className="space-y-1">
+            {params.hardware.map((hw: any, idx: number) => (
+              <li key={idx} className="text-sm text-gray-600">• {hw.name || hw.type}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Special Requirements */}
+      {params.specialRequirements?.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-amber-800 mb-2">Special Requirements</h4>
+          <div className="flex flex-wrap gap-2">
+            {params.specialRequirements.map((req: string, idx: number) => (
+              <span key={idx} className="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-full">
+                {req}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

@@ -1,34 +1,13 @@
-import { useEffect, useState } from 'react';
 import { Trash2, RefreshCw, Image as ImageIcon } from 'lucide-react';
-import type { ClipRecord } from '../../types/database';
+import type { PopupClipRecord } from '../types';
 import { SyncBadge } from './SyncBadge';
 
 interface ClipCardProps {
-  clip: ClipRecord;
+  clip: PopupClipRecord;
   isSelected: boolean;
   onSelect: () => void;
   onDelete: () => void;
   onRetry?: () => void;
-}
-
-function useObjectUrl(blob: Blob | undefined): string | undefined {
-  const [url, setUrl] = useState<string>();
-
-  useEffect(() => {
-    if (!blob) {
-      setUrl(undefined);
-      return;
-    }
-
-    const objectUrl = URL.createObjectURL(blob);
-    setUrl(objectUrl);
-
-    return () => {
-      URL.revokeObjectURL(objectUrl);
-    };
-  }, [blob]);
-
-  return url;
 }
 
 function formatRelativeTime(date: Date): string {
@@ -52,7 +31,7 @@ export function ClipCard({
   onDelete,
   onRetry,
 }: ClipCardProps) {
-  const thumbnailUrl = useObjectUrl(clip.thumbnailBlob);
+  const thumbnailUrl = clip.thumbnailDataUrl || clip.imageUrl;
 
   return (
     <div

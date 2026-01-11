@@ -47,6 +47,7 @@ export interface SheetLayout {
   usedArea: number;
   wastedArea: number;
   utilization: number;
+  wasteRegions?: { x: number; y: number; width: number; height: number }[];
 }
 
 export interface PanelPlacement {
@@ -232,6 +233,7 @@ export class OptimizationService {
           usedArea: packResult.usedArea,
           wastedArea: totalArea - packResult.usedArea,
           utilization: (packResult.usedArea / totalArea) * 100,
+          wasteRegions: packResult.freeRects,  // Actual waste regions from panel saw cuts
         });
 
         remainingPanels = packResult.remaining;
@@ -249,7 +251,7 @@ export class OptimizationService {
     panels: Panel[],
     stockSheet: StockSheet,
     kerf: number
-  ): { placements: PanelPlacement[]; remaining: Panel[]; usedArea: number } {
+  ): { placements: PanelPlacement[]; remaining: Panel[]; usedArea: number; freeRects: { x: number; y: number; width: number; height: number }[] } {
     const placements: PanelPlacement[] = [];
     const remaining: Panel[] = [];
     let usedArea = 0;
@@ -259,14 +261,21 @@ export class OptimizationService {
 
     interface FreeRect { x: number; y: number; width: number; height: number; }
     let freeRects: FreeRect[] = [{ x: 0, y: 0, width: sheetWidth, height: sheetHeight }];
+    
+    // Track used positions to prevent duplicates
+    const usedPositions = new Set<string>();
 
     for (const panel of panels) {
-      const position = this.findBestPosition(panel, freeRects);
+      const position = this.findBestPosition(panel, freeRects, usedPositions);
 
       if (position) {
         const { rect, rotated, index } = position;
         const placedWidth = rotated ? panel.length : panel.width;
         const placedHeight = rotated ? panel.width : panel.length;
+        
+        // Create position key and mark as used
+        const posKey = `${rect.x},${rect.y}`;
+        usedPositions.add(posKey);
 
         placements.push({
           panel,
@@ -290,7 +299,8 @@ export class OptimizationService {
       }
     }
 
-    return { placements, remaining, usedArea };
+    // Return remaining free rectangles as waste regions for panel saw cutting
+    return { placements, remaining, usedArea, freeRects };
   }
 
   /**
@@ -298,7 +308,8 @@ export class OptimizationService {
    */
   private findBestPosition(
     panel: Panel,
-    freeRects: { x: number; y: number; width: number; height: number }[]
+    freeRects: { x: number; y: number; width: number; height: number }[],
+    usedPositions?: Set<string>
   ): { rect: typeof freeRects[0]; rotated: boolean; index: number } | null {
     let bestScore = Infinity;
     let bestRect: typeof freeRects[0] | null = null;
@@ -307,6 +318,12 @@ export class OptimizationService {
 
     for (let i = 0; i < freeRects.length; i++) {
       const rect = freeRects[i];
+      
+      // Skip positions already used (defensive check)
+      const posKey = `${rect.x},${rect.y}`;
+      if (usedPositions?.has(posKey)) {
+        continue;
+      }
 
       // Try without rotation
       if (panel.width <= rect.width && panel.length <= rect.height) {
@@ -379,9 +396,17 @@ export class OptimizationService {
       if (!groups[key]) {
         groups[key] = [];
       }
-      // Expand by quantity
-      for (let i = 0; i < (panel.quantity || 1); i++) {
-        groups[key].push({ ...panel, quantity: 1 });
+      // Expand by quantity - create unique ID for each copy
+      const qty = panel.quantity || 1;
+      for (let i = 0; i < qty; i++) {
+        const uniqueId = qty > 1 ? `${panel.id}-${i + 1}` : panel.id;
+        const uniqueLabel = qty > 1 ? `${panel.label} (${i + 1}/${qty})` : panel.label;
+        groups[key].push({ 
+          ...panel, 
+          id: uniqueId,
+          label: uniqueLabel,
+          quantity: 1 
+        });
       }
     }
 

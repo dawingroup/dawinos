@@ -29,6 +29,8 @@ import {
   useUsers,
   useCurrentDawinUser,
   useUserMutations,
+  uploadOrganizationLogo,
+  deleteOrganizationLogo,
   GLOBAL_ROLE_DEFINITIONS,
   type DawinUser,
   type GlobalRole,
@@ -344,6 +346,40 @@ function BrandingTab({ canEdit }: { canEdit: boolean }) {
   const { settings, isLoading, updateSettings } = useOrganizationSettings();
   const [primaryColor, setPrimaryColor] = useState('#872E5C');
   const [secondaryColor, setSecondaryColor] = useState('#E18425');
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setUploading(true);
+    setUploadError(null);
+    
+    try {
+      await uploadOrganizationLogo(file, 'default', 'primary');
+    } catch (error) {
+      console.error('Failed to upload logo:', error);
+      setUploadError(error instanceof Error ? error.message : 'Failed to upload logo');
+    } finally {
+      setUploading(false);
+      // Reset file input
+      e.target.value = '';
+    }
+  };
+
+  const handleDeleteLogo = async () => {
+    if (!confirm('Are you sure you want to delete the logo?')) return;
+    
+    setUploading(true);
+    try {
+      await deleteOrganizationLogo('default', 'primary');
+    } catch (error) {
+      console.error('Failed to delete logo:', error);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -357,27 +393,55 @@ function BrandingTab({ canEdit }: { canEdit: boolean }) {
     <div className="p-6 space-y-6">
       <h3 className="text-lg font-semibold text-gray-900">Branding & Appearance</h3>
 
+      {uploadError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
+          <AlertCircle className="w-4 h-4" />
+          {uploadError}
+        </div>
+      )}
+
       {/* Logo Upload */}
       <div className="space-y-4">
         <label className="block text-sm font-medium text-gray-700">Organization Logo</label>
+        <p className="text-sm text-gray-500">This logo will appear on quotes, client portal, and documents.</p>
         <div className="flex items-center gap-6">
-          <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
-            {settings?.branding?.logoUrl ? (
+          <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300 overflow-hidden">
+            {uploading ? (
+              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+            ) : settings?.branding?.logoUrl ? (
               <img
                 src={settings.branding.logoUrl}
                 alt="Logo"
-                className="w-full h-full object-contain rounded-lg"
+                className="w-full h-full object-contain p-2"
               />
             ) : (
               <Upload className="w-8 h-8 text-gray-400" />
             )}
           </div>
           {canEdit && (
-            <div>
-              <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">
-                Upload Logo
-              </button>
-              <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 2MB</p>
+            <div className="space-y-2">
+              <label className="inline-block">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                  onChange={handleLogoUpload}
+                  disabled={uploading}
+                  className="hidden"
+                />
+                <span className="px-4 py-2 bg-[#872E5C] text-white rounded-lg hover:bg-[#6a2449] text-sm cursor-pointer inline-block">
+                  {uploading ? 'Uploading...' : settings?.branding?.logoUrl ? 'Change Logo' : 'Upload Logo'}
+                </span>
+              </label>
+              {settings?.branding?.logoUrl && (
+                <button
+                  onClick={handleDeleteLogo}
+                  disabled={uploading}
+                  className="block px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm"
+                >
+                  Remove Logo
+                </button>
+              )}
+              <p className="text-xs text-gray-500">PNG, JPG, SVG, WebP up to 2MB</p>
             </div>
           )}
         </div>

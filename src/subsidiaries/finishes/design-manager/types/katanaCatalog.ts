@@ -8,6 +8,7 @@ export interface KatanaCatalogItem {
   type: string;
   unit: string;
   costPerUnit: number;
+  currency: string;
   inStock: number;
   barcode: string;
   source: KatanaCatalogSource;

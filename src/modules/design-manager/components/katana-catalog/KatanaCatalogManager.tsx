@@ -3,11 +3,10 @@ import { RefreshCw, Search, Check, X, Pencil, Database } from 'lucide-react';
 import { useKatanaCatalog } from '../../hooks/useKatanaCatalog';
 import {
   updateKatanaCatalogItem,
-  upsertKatanaCatalogFromMaterials,
 } from '../../services/katanaCatalogService';
-import type { KatanaCatalogItem, KatanaCatalogSource } from '../../types/katanaCatalog';
-
-const API_BASE = 'https://api-okekivpl2a-uc.a.run.app';
+import type { KatanaCatalogItem } from '../../types/katanaCatalog';
+import { auth, db } from '@/firebase/config';
+import { collection, addDoc, onSnapshot, serverTimestamp, doc } from 'firebase/firestore';
 
 type EditFormState = {
   katanaId: string;
@@ -57,17 +56,52 @@ export function KatanaCatalogManager() {
     setSyncError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/api/katana/get-materials`);
-      const data = await response.json();
-
-      if (!response.ok || !data?.success) {
-        throw new Error(data?.error || data?.message || 'Failed to fetch Katana items');
+      // Verify user is authenticated
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('You must be signed in to sync from Katana');
       }
-
-      const source: KatanaCatalogSource = data.source === 'katana-api' || data.source === 'sample-data' ? data.source : 'unknown';
-      await upsertKatanaCatalogFromMaterials(data.materials || [], source);
+      
+      // Create a sync request document - Firestore trigger will process it
+      const syncRequestsRef = collection(db, 'syncRequests');
+      const requestDoc = await addDoc(syncRequestsRef, {
+        type: 'katana-sync',
+        status: 'pending',
+        requestedBy: user.uid,
+        requestedByEmail: user.email,
+        requestedAt: serverTimestamp(),
+      });
+      
+      // Wait for the sync to complete by listening to the document
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          unsubscribe();
+          reject(new Error('Sync timed out after 60 seconds'));
+        }, 60000);
+        
+        const unsubscribe = onSnapshot(doc(db, 'syncRequests', requestDoc.id), (snapshot) => {
+          const data = snapshot.data();
+          if (!data) return;
+          
+          if (data.status === 'completed') {
+            clearTimeout(timeout);
+            unsubscribe();
+            console.log('Katana sync completed:', data.stats);
+            resolve();
+          } else if (data.status === 'error') {
+            clearTimeout(timeout);
+            unsubscribe();
+            reject(new Error(data.error || 'Sync failed'));
+          }
+          // Still processing or pending - keep waiting
+        });
+      });
+      
+      // Catalog will be updated automatically via the hook's Firestore subscription
+      
     } catch (e: any) {
-      setSyncError(e?.message || 'Sync failed');
+      const message = e?.message || e?.code || 'Sync failed';
+      setSyncError(message.replace('Firebase: ', ''));
     } finally {
       setIsSyncing(false);
     }
@@ -182,7 +216,7 @@ export function KatanaCatalogManager() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">In Stock</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Unit Cost</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Landed Cost</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
@@ -208,8 +242,14 @@ export function KatanaCatalogManager() {
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{item.categoryOverride || item.type || '-'}</td>
                   <td className="px-4 py-3 text-right text-sm text-gray-600">{item.inStock}</td>
-                  <td className="px-4 py-3 text-right text-sm text-gray-600">
-                    {item.costPerUnit ? item.costPerUnit.toLocaleString() : '-'}
+                  <td className="px-4 py-3 text-right text-sm">
+                    {item.costPerUnit > 0 ? (
+                      <span className="font-medium text-green-700">
+                        {item.costPerUnit.toLocaleString()} {item.currency || 'UGX'}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button

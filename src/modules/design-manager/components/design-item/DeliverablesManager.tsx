@@ -6,18 +6,24 @@
 import { useState } from 'react';
 import { 
   FileText, Upload, Download, Trash2, Eye, Check, 
-  FileImage, Box, FileSpreadsheet, Clock, ChevronDown, ChevronUp
+  FileImage, Box, FileSpreadsheet, Clock, ChevronDown, ChevronUp,
+  Share2, Globe, CheckCircle
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import type { Deliverable, DeliverableType, DesignStage } from '../../types';
 import { STAGE_ORDER } from '../../utils/stage-gate';
+import { toggleDeliverablePortalSharing } from '../../services/firestore';
 
 export interface DeliverablesManagerProps {
   deliverables: Deliverable[];
   currentStage: DesignStage;
+  projectId: string;
+  itemId: string;
+  userId: string;
   onUpload: (file: File, type: DeliverableType, name: string, description: string) => Promise<void>;
   onDelete: (deliverableId: string) => Promise<void>;
   onApprove: (deliverableId: string) => Promise<void>;
+  onRefresh?: () => void;
   isReadOnly?: boolean;
   className?: string;
 }
@@ -66,9 +72,13 @@ function formatFileSize(bytes: number): string {
 export function DeliverablesManager({
   deliverables,
   currentStage,
+  projectId,
+  itemId,
+  userId,
   onUpload,
   onDelete,
   onApprove,
+  onRefresh,
   isReadOnly = false,
   className,
 }: DeliverablesManagerProps) {
@@ -79,6 +89,27 @@ export function DeliverablesManager({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [expandedStages, setExpandedStages] = useState<Set<DesignStage>>(new Set([currentStage]));
+  const [sharingId, setSharingId] = useState<string | null>(null);
+
+  const handleTogglePortalShare = async (deliverable: Deliverable) => {
+    if (!projectId || !itemId || !userId) return;
+    
+    setSharingId(deliverable.id);
+    try {
+      await toggleDeliverablePortalSharing(
+        projectId,
+        itemId,
+        deliverable.id,
+        !deliverable.sharedToPortal,
+        userId
+      );
+      onRefresh?.();
+    } catch (error) {
+      console.error('Failed to toggle portal sharing:', error);
+    } finally {
+      setSharingId(null);
+    }
+  };
 
   const handleUpload = async () => {
     if (!selectedFile || !uploadName.trim()) return;
@@ -348,6 +379,26 @@ export function DeliverablesManager({
                         </div>
                         
                         <div className="flex items-center gap-2">
+                          {/* Share to Portal Button */}
+                          {!isReadOnly && (
+                            <button
+                              onClick={() => handleTogglePortalShare(deliverable)}
+                              disabled={sharingId === deliverable.id}
+                              className={cn(
+                                'p-2 rounded transition-colors',
+                                deliverable.sharedToPortal
+                                  ? 'text-green-600 bg-green-50 hover:bg-green-100'
+                                  : 'text-gray-500 hover:bg-gray-100'
+                              )}
+                              title={deliverable.sharedToPortal ? 'Shared to Portal (click to unshare)' : 'Share to Client Portal'}
+                            >
+                              {deliverable.sharedToPortal ? (
+                                <Globe className="w-4 h-4" />
+                              ) : (
+                                <Share2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
                           {deliverable.storageUrl && (
                             <a
                               href={deliverable.storageUrl}

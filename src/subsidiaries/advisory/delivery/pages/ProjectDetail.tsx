@@ -3,69 +3,50 @@
  */
 
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ChevronLeft, Loader2 } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ChevronLeft, Loader2, Edit, Trash2, AlertCircle } from 'lucide-react';
 import { ProjectHeader } from '../components/projects/ProjectHeader';
 import { ProjectTabs, ProjectTabId } from '../components/projects/ProjectTabs';
 import { StatCard } from '../components/common/MetricCard';
 import { ProgressBar, DualProgressBar } from '../components/common/ProgressBar';
 import { SCurveChart } from '../components/charts/SCurveChart';
 import { SimpleBudgetBar } from '../components/charts/BudgetBarChart';
-import { Project } from '../types/project';
+import { useProject, useProjectMutations } from '../hooks/project-hooks';
+import { db } from '@/core/services/firebase';
+import { useAuth } from '@/shared/hooks';
 
 export function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<ProjectTabId>('overview');
-  const [loading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Mock project data - cast to avoid strict type checking on demo data
-  const project: Project | null = projectId ? ({
-    id: projectId,
-    programId: 'prg-1',
-    projectCode: 'ARISE-001',
-    name: 'Rushoroza Health Center IV',
-    description: 'Construction of a new Health Center IV facility including OPD, maternity ward, and staff quarters.',
-    status: 'active',
-    implementationType: 'contractor',
-    projectType: 'new_construction',
-    location: {
-      siteName: 'Rushoroza HC IV',
-      region: 'Western Region',
-      district: 'Rukungiri',
-    },
-    budget: {
-      totalBudget: 450000000,
-      currency: 'UGX',
-      committed: 280000000,
-      spent: 180000000,
-      remaining: 270000000,
-      varianceStatus: 'on_budget',
-    },
-    progress: {
-      physicalProgress: 65,
-      financialProgress: 40,
-      progressStatus: 'on_track',
-    },
-    timeline: {
-      currentStartDate: new Date('2024-01-15'),
-      currentEndDate: new Date('2024-12-15'),
-      currentDuration: 335,
-      isDelayed: false,
-      delayDays: 0,
-      daysRemaining: 180,
-      percentTimeElapsed: 46,
-      milestones: [],
-    },
-    contractor: {
-      companyName: 'ABC Contractors Ltd',
-      contactPerson: {
-        name: 'John Smith',
-        role: 'Project Manager',
-      },
-      contractNumber: 'CON-2024-001',
-      contractValue: 420000000,
-    },
-  } as unknown as Project) : null;
+  // Handle tab changes - some tabs navigate to separate pages
+  const handleTabChange = (tabId: ProjectTabId) => {
+    if (tabId === 'payments') {
+      navigate(`/advisory/delivery/projects/${projectId}/payments`);
+      return;
+    }
+    if (tabId === 'visits') {
+      navigate(`/advisory/delivery/projects/${projectId}/visits`);
+      return;
+    }
+    setActiveTab(tabId);
+  };
+  
+  const { project, loading, error } = useProject(db, projectId || null);
+  const { deleteProject, loading: deleting } = useProjectMutations(db, user?.uid || '');
+
+  const handleDelete = async () => {
+    if (!projectId || !user) return;
+    try {
+      await deleteProject(projectId, 'Deleted by user');
+      navigate('/advisory/delivery/projects');
+    } catch (err) {
+      console.error('Failed to delete project:', err);
+    }
+  };
 
   // Mock S-curve data
   const scurveData = Array.from({ length: 20 }, (_, i) => ({
@@ -80,6 +61,18 @@ export function ProjectDetail() {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <span className="ml-2 text-gray-600">Loading project...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-500" />
+          <span className="text-red-700">{error.message}</span>
+        </div>
       </div>
     );
   }
@@ -98,20 +91,58 @@ export function ProjectDetail() {
 
   return (
     <div className="space-y-6 p-6">
-      {/* Breadcrumb */}
-      <Link 
-        to="/advisory/delivery/projects" 
-        className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900"
-      >
-        <ChevronLeft className="w-4 h-4 mr-1" />
-        Back to Projects
-      </Link>
+      {/* Breadcrumb & Actions */}
+      <div className="flex items-center justify-between">
+        <Link 
+          to="/advisory/delivery/projects" 
+          className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900"
+        >
+          <ChevronLeft className="w-4 h-4 mr-1" />
+          Back to Projects
+        </Link>
+        
+        <div className="flex items-center gap-2">
+          <Link
+            to={`/advisory/delivery/projects/${projectId}/edit`}
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-50"
+          >
+            <Edit className="w-4 h-4" />
+            Edit
+          </Link>
+          {!showDeleteConfirm ? (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-red-600">Confirm?</span>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Header */}
       <ProjectHeader project={project} />
 
       {/* Tabs */}
-      <ProjectTabs activeTab={activeTab} onTabChange={setActiveTab} />
+      <ProjectTabs activeTab={activeTab} onTabChange={handleTabChange} />
 
       {/* Tab Content */}
       <div className="bg-white rounded-lg border">

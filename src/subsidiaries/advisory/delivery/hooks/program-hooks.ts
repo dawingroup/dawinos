@@ -212,6 +212,60 @@ export function useProgramsForEngagement(
 }
 
 // ─────────────────────────────────────────────────────────────────
+// HOOK: useAllPrograms
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Hook to fetch all programs
+ */
+export function useAllPrograms(
+  db: Firestore,
+  options: {
+    status?: ProgramStatus[];
+    orderBy?: 'name' | 'createdAt' | 'startDate' | 'updatedAt';
+    orderDirection?: 'asc' | 'desc';
+    limit?: number;
+  } = {}
+): UseProgramsResult {
+  const [programs, setPrograms] = useState<Program[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = useMemo(() => ProgramService.getInstance(db), [db]);
+  const optionsKey = JSON.stringify(options);
+
+  const fetchPrograms = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await service.getAllPrograms({
+        status: options.status,
+        orderByField: options.orderBy,
+        orderDirection: options.orderDirection,
+        limitCount: options.limit,
+      });
+      setPrograms(result);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch programs'));
+    } finally {
+      setLoading(false);
+    }
+  }, [service, optionsKey]);
+
+  useEffect(() => {
+    fetchPrograms();
+  }, [fetchPrograms]);
+
+  return {
+    programs,
+    loading,
+    error,
+    refresh: fetchPrograms,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
 // HOOK: useMyPrograms
 // ─────────────────────────────────────────────────────────────────
 

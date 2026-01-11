@@ -12,7 +12,7 @@ import {
 import { db } from '@/firebase/config';
 import type { KatanaCatalogItem, KatanaCatalogSource } from '../types/katanaCatalog';
 
-const KATANA_CATALOG_COLLECTION = 'katanaCatalogItems';
+const KATANA_CATALOG_COLLECTION = 'katanaCatalog';
 
 export function subscribeToKatanaCatalogItems(
   callback: (items: KatanaCatalogItem[]) => void,
@@ -34,6 +34,7 @@ export function subscribeToKatanaCatalogItems(
           type: data.type || '',
           unit: data.unit || '',
           costPerUnit: typeof data.costPerUnit === 'number' ? data.costPerUnit : 0,
+          currency: data.currency || 'UGX',
           inStock: typeof data.inStock === 'number' ? data.inStock : 0,
           barcode: data.barcode || '',
           source: (data.source as KatanaCatalogSource) || 'unknown',

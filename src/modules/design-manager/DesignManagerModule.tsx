@@ -12,7 +12,6 @@ const DesignManagerPageNew = lazy(() => import('./components/dashboard/DesignMan
 const ProjectView = lazy(() => import('./components/project/ProjectView'));
 const ItemDetailRouter = lazy(() => import('./components/design-item/ItemDetailRouter'));
 const MaterialsPage = lazy(() => import('./pages/MaterialsPage'));
-const KatanaCatalogPage = lazy(() => import('./pages/KatanaCatalogPage'));
 const FeatureLibraryPage = lazy(() => import('./components/feature-library/FeatureLibraryPage'));
 const StrategyCanvasPage = lazy(() => import('./pages/StrategyCanvasPage'));
 
@@ -36,7 +35,6 @@ export default function DesignManagerModule() {
       <Routes>
         <Route index element={<DesignManagerPageNew />} />
         <Route path="materials" element={<MaterialsPage />} />
-        <Route path="katana" element={<KatanaCatalogPage />} />
         <Route path="features" element={<FeatureLibraryPage />} />
         <Route path="roadmap" element={<Navigate to="/design" replace />} />
         <Route path="shopify" element={<Navigate to="/design" replace />} />

@@ -11,13 +11,18 @@ import {
   Loader2,
   Table,
   CheckCircle,
+  Settings,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
 } from 'lucide-react';
 import { 
   downloadShopTraveler, 
   downloadLabelsCSV,
   downloadCutListCSV,
-} from '@/shared/services/pdf/shopTravelerService';
-import type { Project } from '@/shared/types';
+} from '@/shared/services/pdf/shopTravelerService.tsx';
+import type { Project, ShopTravelerSettings } from '@/shared/types';
+import { DEFAULT_SHOP_TRAVELER_SETTINGS } from '@/shared/types/project';
 
 // ============================================
 // Types
@@ -26,6 +31,8 @@ import type { Project } from '@/shared/types';
 interface ShopTravelerSectionProps {
   project: Project;
   onError?: (error: string) => void;
+  onSettingsChange?: (settings: ShopTravelerSettings) => void;
+  onRefresh?: () => Promise<void>;
 }
 
 type DownloadType = 'pdf' | 'labels' | 'cutlist';
@@ -37,18 +44,52 @@ type DownloadType = 'pdf' | 'labels' | 'cutlist';
 export const ShopTravelerSection: React.FC<ShopTravelerSectionProps> = ({ 
   project,
   onError,
+  onSettingsChange,
+  onRefresh,
 }) => {
   const [isGenerating, setIsGenerating] = useState<DownloadType | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastDownloaded, setLastDownloaded] = useState<DownloadType | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settings, setSettings] = useState<ShopTravelerSettings>(
+    project.optimizationState?.shopTravelerSettings || DEFAULT_SHOP_TRAVELER_SETTINGS
+  );
 
   const production = project.optimizationState?.production;
   const hasProduction = !!production && !!production.nestingSheets?.length;
   const isOutdated = !!production?.invalidatedAt;
 
+  const handleSettingToggle = (key: keyof ShopTravelerSettings) => {
+    const newSettings = { ...settings, [key]: !settings[key] };
+    setSettings(newSettings);
+    onSettingsChange?.(newSettings);
+  };
+
+  const handleRefresh = async () => {
+    if (!onRefresh || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+    } catch (error: any) {
+      console.error('Refresh error:', error);
+      onError?.(error.message || 'Failed to refresh production data');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const handleDownloadPDF = async () => {
     setIsGenerating('pdf');
     try {
-      await downloadShopTraveler(project.id);
+      // Convert ShopTravelerSettings to ShopTravelerOptions format
+      const pdfOptions = {
+        includeCoverPage: settings.includeCoverPage,
+        includeCuttingMaps: settings.includeCuttingMaps,
+        includeEdgeBanding: settings.includeEdgeBandingSchedule,
+        includeRemnants: settings.includeRemnantRegister,
+        includeLabels: settings.includePartLabels,
+      };
+      await downloadShopTraveler(project.id, pdfOptions);
       setLastDownloaded('pdf');
     } catch (error: any) {
       console.error('PDF generation error:', error);
@@ -92,12 +133,25 @@ export const ShopTravelerSection: React.FC<ShopTravelerSectionProps> = ({
           <FileText className="w-5 h-5 text-blue-600" />
           <h4 className="font-medium text-gray-900">Shop Traveler</h4>
         </div>
-        {hasProduction && !isOutdated && (
-          <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">
-            <CheckCircle className="w-3 h-3" />
-            Ready
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {onRefresh && (
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors disabled:opacity-50"
+              title="Refresh production data"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          )}
+          {hasProduction && !isOutdated && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+              <CheckCircle className="w-3 h-3" />
+              Ready
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="p-4 space-y-4">
@@ -186,32 +240,89 @@ export const ShopTravelerSection: React.FC<ShopTravelerSectionProps> = ({
           </p>
         )}
 
-        {/* Contents Description */}
+        {/* Section Settings */}
         {hasProduction && (
           <div className="pt-3 border-t border-gray-100">
-            <p className="text-xs text-gray-500 mb-2">PDF includes:</p>
-            <ul className="text-xs text-gray-600 space-y-1">
-              <li className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                Cover page with project summary
-              </li>
-              <li className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                Cutting maps ({production.nestingSheets?.length || 0} sheets)
-              </li>
-              <li className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                Edge banding schedule
-              </li>
-              <li className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                Remnant register
-              </li>
-              <li className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                Part labels
-              </li>
-            </ul>
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="w-full flex items-center justify-between text-xs text-gray-600 hover:text-gray-800"
+            >
+              <span className="flex items-center gap-1">
+                <Settings className="w-3 h-3" />
+                PDF Sections
+              </span>
+              {showSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            
+            {showSettings && (
+              <div className="mt-3 space-y-2">
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.includeCoverPage}
+                    onChange={() => handleSettingToggle('includeCoverPage')}
+                    className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-gray-700">Cover page with project summary</span>
+                </label>
+                
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.includeCuttingMaps}
+                    onChange={() => handleSettingToggle('includeCuttingMaps')}
+                    className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-gray-700">Cutting maps ({production.nestingSheets?.length || 0} sheets)</span>
+                </label>
+                
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.includeEdgeBandingSchedule}
+                    onChange={() => handleSettingToggle('includeEdgeBandingSchedule')}
+                    className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-gray-700">Edge banding schedule</span>
+                </label>
+                
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.includeRemnantRegister}
+                    onChange={() => handleSettingToggle('includeRemnantRegister')}
+                    className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-gray-700">Remnant register</span>
+                </label>
+                
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.includePartLabels}
+                    onChange={() => handleSettingToggle('includePartLabels')}
+                    className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-gray-700">Part labels</span>
+                </label>
+                
+                <p className="text-[10px] text-gray-400 mt-2 italic">
+                  Settings are saved per project
+                </p>
+              </div>
+            )}
+            
+            {!showSettings && (
+              <p className="text-[10px] text-gray-400 mt-1">
+                {[
+                  settings.includeCoverPage && 'Cover',
+                  settings.includeCuttingMaps && 'Cutting Maps',
+                  settings.includeEdgeBandingSchedule && 'Edge Banding',
+                  settings.includeRemnantRegister && 'Remnants',
+                  settings.includePartLabels && 'Labels',
+                ].filter(Boolean).join(' • ')}
+              </p>
+            )}
           </div>
         )}
       </div>

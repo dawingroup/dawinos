@@ -7,9 +7,10 @@ import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, FileText, Package, ShoppingCart, ClipboardList, 
-  History, Trash2, DollarSign, Truck, CheckCircle, Clock
+  History, Trash2, DollarSign, Truck, CheckCircle, Clock, Edit2
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { ResponsiveTabs } from '@/shared/components/ui/ResponsiveTabs';
 import { useDesignItem, useProject } from '../../hooks';
 import { StageBadge } from './StageBadge';
 import { CATEGORY_LABELS, formatDateTime, STAGE_LABELS } from '../../utils/formatting';
@@ -89,56 +90,82 @@ export default function ProcuredItemDetail() {
   const currentStageIndex = PROCUREMENT_STAGE_ORDER.indexOf(item.currentStage);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start gap-4">
-        <Link
-          to={`/design/project/${projectId}`}
-          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">{item.name}</h1>
-            <span className="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-              {item.itemCode}
-            </span>
-            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-medium">
-              PROCURED
-            </span>
-          </div>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header - Mobile Responsive */}
+      <div className="flex flex-col gap-4">
+        {/* Top row */}
+        <div className="flex items-start gap-3">
+          <Link
+            to={`/design/project/${projectId}`}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg flex-shrink-0"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
           
-          <div className="flex items-center gap-4 mt-2">
-            <span className="text-sm text-gray-600">
-              {project?.name || 'Unknown Project'}
-            </span>
-            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-              {CATEGORY_LABELS[item.category]}
-            </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">{item.name}</h1>
+              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-medium">
+                PROCURED
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2 sm:gap-4 mt-1 flex-wrap">
+              <span className="text-sm text-gray-600 hidden sm:inline">
+                {project?.name || 'Unknown Project'}
+              </span>
+              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded hidden sm:inline">
+                {item.itemCode}
+              </span>
+              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                {CATEGORY_LABELS[item.category]}
+              </span>
+            </div>
+          </div>
+
+          {/* Desktop actions */}
+          <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
+            <StageBadge stage={item.currentStage} size="sm" />
+            
+            {nextStage && (
+              <button
+                onClick={() => setShowGateCheck(true)}
+                className="px-3 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#0A7C8E]/90 text-sm font-medium"
+              >
+                Advance
+              </button>
+            )}
+            
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+              title="Delete Item"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <StageBadge stage={item.currentStage} />
+        {/* Mobile action bar */}
+        <div className="flex sm:hidden items-center justify-between gap-2 px-1">
+          <StageBadge stage={item.currentStage} size="sm" />
           
-          {nextStage && (
+          <div className="flex items-center gap-1">
+            {nextStage && (
+              <button
+                onClick={() => setShowGateCheck(true)}
+                className="px-3 py-1.5 bg-[#0A7C8E] text-white rounded-lg text-sm font-medium"
+              >
+                Advance
+              </button>
+            )}
             <button
-              onClick={() => setShowGateCheck(true)}
-              className="px-4 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#0A7C8E]/90 text-sm font-medium"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
             >
-              Advance Stage
+              <Trash2 className="w-4 h-4" />
             </button>
-          )}
-          
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-            title="Delete Item"
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
+          </div>
         </div>
       </div>
 
@@ -216,29 +243,13 @@ export default function ProcuredItemDetail() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <div className="flex gap-1">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-                  activeTab === tab.id
-                    ? 'border-[#0A7C8E] text-[#0A7C8E]'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                )}
-              >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {/* Tabs - Responsive */}
+      <ResponsiveTabs
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={(id) => setActiveTab(id as Tab)}
+        variant="underline"
+      />
 
       {/* Tab Content */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">

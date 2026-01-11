@@ -7,10 +7,12 @@ import LoadingScreen from './components/LoadingScreen';
 import { ClipGallery } from './components/ClipGallery';
 import { ClipDetail } from './components/ClipDetail';
 import { DetailedClipForm } from './components/DetailedClipForm';
+import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import type { ClipType } from './components/DetailedClipForm';
 import { useAuth } from './hooks/useAuth';
 import { useClips } from './hooks/useClips';
-import type { ClipRecord } from '../types/database';
+import { useSyncStatus } from './hooks/useSyncStatus';
+import type { PopupClipRecord } from './types';
 
 type View = 'gallery' | 'detail' | 'settings' | 'clip-form';
 
@@ -45,8 +47,9 @@ interface PendingClip {
 export default function App() {
   const { user, isLoading: authLoading, signIn, signOut } = useAuth();
   const { clips, pendingCount, syncClips, deleteClip, updateClip } = useClips();
+  const { syncStatus, triggerSync } = useSyncStatus();
   const [currentView, setCurrentView] = useState<View>('gallery');
-  const [selectedClip, setSelectedClip] = useState<ClipRecord | null>(null);
+  const [selectedClip, setSelectedClip] = useState<PopupClipRecord | null>(null);
   const [pendingClip, setPendingClip] = useState<PendingClip | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -147,7 +150,7 @@ export default function App() {
     setCurrentView('gallery');
   };
 
-  const handleSelectClip = (clip: ClipRecord) => {
+  const handleSelectClip = (clip: PopupClipRecord) => {
     setSelectedClip(clip);
     setCurrentView('detail');
   };
@@ -179,8 +182,15 @@ export default function App() {
 
           <QuickActions
             onStartClipping={handleStartClipping}
-            onSyncNow={syncClips}
+            onSyncNow={triggerSync}
           />
+          
+          {/* Sync Status Banner */}
+          {(syncStatus.pendingCount > 0 || syncStatus.status !== 'idle') && (
+            <div className="px-3 pb-2">
+              <SyncStatusIndicator status={syncStatus} onSync={triggerSync} />
+            </div>
+          )}
         </>
       )}
 

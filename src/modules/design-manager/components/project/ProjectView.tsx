@@ -1,6 +1,6 @@
 /**
  * Project View
- * Project detail page with design items, cutlist, and estimates
+ * Project detail page with design items, cutlist, estimates, and client quotes
  */
 
 import { useState } from 'react';
@@ -8,9 +8,10 @@ import { useParams, Link } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, LayoutGrid, List, FolderOpen, Calendar, User, Clock, 
   CheckCircle, AlertTriangle, Package, Edit2, Scissors, Sparkles, Calculator, Upload,
-  X, Library
+  X, Library, FileText
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { ResponsiveTabs } from '@/shared/components/ui/ResponsiveTabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProject, useDesignItems } from '../../hooks';
 import { ProjectDialog } from './ProjectDialog';
@@ -29,9 +30,12 @@ import type { Project } from '@/shared/types';
 import { BulkImporter } from '../ProjectEstimation/BulkImporter';
 import { ProjectInspirationSummary } from './ProjectInspirationSummary';
 import { ProjectPartsLibrary } from './ProjectPartsLibrary';
+import { runProjectProduction } from '@/shared/services/optimization';
+import QuoteManagement from '../client-portal/QuoteManagement';
+import ClientPortalManager from '../client-portal/ClientPortalManager';
 
 type ViewMode = 'kanban' | 'list';
-type ProjectTab = 'items' | 'cutlist' | 'estimate' | 'production';
+type ProjectTab = 'items' | 'cutlist' | 'estimate' | 'production' | 'quotes' | 'portal';
 
 export default function ProjectView() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -105,21 +109,31 @@ export default function ProjectView() {
 
   const statusConfig = STATUS_CONFIG[project.status] || STATUS_CONFIG['active'];
 
+  const projectTabs = [
+    { id: 'items' as ProjectTab, label: 'Items', icon: Package },
+    { id: 'cutlist' as ProjectTab, label: 'Cutlist', icon: Scissors },
+    { id: 'estimate' as ProjectTab, label: 'Estimate', icon: Calculator },
+    { id: 'production' as ProjectTab, label: 'Production', icon: Scissors },
+    { id: 'quotes' as ProjectTab, label: 'Quotes', icon: FileText },
+    { id: 'portal' as ProjectTab, label: 'Portal', icon: Package },
+  ];
+
   return (
-    <div className="px-6 py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-4">
+    <div className="px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+      {/* Header - Mobile Responsive */}
+      <div className="flex flex-col gap-4">
+        {/* Top row */}
+        <div className="flex items-start gap-3">
           <Link
             to="/design"
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg flex-shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-              <span className="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">{project.name}</h1>
+              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded hidden sm:inline">
                 {project.code}
               </span>
               <span className={cn('px-2 py-0.5 text-xs font-medium rounded-full', statusConfig.bg, statusConfig.text)}>
@@ -127,7 +141,7 @@ export default function ProjectView() {
               </span>
             </div>
             {project.customerName && (
-              <p className="text-gray-600 mt-1 flex items-center gap-2">
+              <p className="text-sm text-gray-600 mt-1 flex items-center gap-2">
                 <User className="w-4 h-4" />
                 {project.customerName}
               </p>
@@ -135,34 +149,36 @@ export default function ProjectView() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Action buttons - responsive */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => setShowBulkImport(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            onClick={() => setShowNewItem(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#086a7a] transition-colors text-sm"
           >
-            <Upload className="w-4 h-4" />
-            Bulk Import
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Add Item</span>
+            <span className="sm:hidden">Add</span>
           </button>
           <button
             onClick={() => setShowStrategy(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:opacity-90 transition-opacity text-sm"
           >
             <Sparkles className="w-4 h-4" />
-            AI Strategy
+            <span className="hidden sm:inline">AI Strategy</span>
+          </button>
+          <button
+            onClick={() => setShowBulkImport(true)}
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+          >
+            <Upload className="w-4 h-4" />
+            <span className="hidden sm:inline">Import</span>
           </button>
           <button
             onClick={() => setShowEditProject(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
           >
             <Edit2 className="w-4 h-4" />
-            Edit Project
-          </button>
-          <button
-            onClick={() => setShowNewItem(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#0A7C8E] text-white rounded-lg hover:bg-[#086a7a] transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Add Design Item
+            <span className="hidden sm:inline">Edit</span>
           </button>
         </div>
       </div>
@@ -294,62 +310,13 @@ export default function ProjectView() {
         </div>
       )}
 
-      {/* Project Tabs */}
-      <div className="border-b border-gray-200">
-        <div className="flex gap-1">
-          <button
-            onClick={() => setActiveTab('items')}
-            className={cn(
-              'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-              activeTab === 'items'
-                ? 'border-[#0A7C8E] text-[#0A7C8E]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            )}
-          >
-            <Package className="w-4 h-4" />
-            Design Items
-          </button>
-          <button
-            onClick={() => setActiveTab('cutlist')}
-            className={cn(
-              'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-              activeTab === 'cutlist'
-                ? 'border-[#0A7C8E] text-[#0A7C8E]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            )}
-          >
-            <Scissors className="w-4 h-4" />
-            Cutlist
-          </button>
-          <button
-            onClick={() => setActiveTab('estimate')}
-            className={cn(
-              'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-              activeTab === 'estimate'
-                ? 'border-[#0A7C8E] text-[#0A7C8E]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            )}
-          >
-            <Calculator className="w-4 h-4" />
-            Estimate
-          </button>
-          <button
-            onClick={() => setActiveTab('production')}
-            className={cn(
-              'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-              activeTab === 'production'
-                ? 'border-[#0A7C8E] text-[#0A7C8E]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            )}
-          >
-            <Scissors className="w-4 h-4" />
-            Production
-            {(project as unknown as Project).optimizationState?.production?.invalidatedAt && (
-              <span className="w-2 h-2 bg-amber-500 rounded-full" title="Optimization outdated" />
-            )}
-          </button>
-        </div>
-      </div>
+      {/* Project Tabs - Responsive */}
+      <ResponsiveTabs
+        tabs={projectTabs}
+        activeTab={activeTab}
+        onTabChange={(id) => setActiveTab(id as ProjectTab)}
+        variant="underline"
+      />
 
       {activeTab === 'items' && (
         <>
@@ -471,7 +438,33 @@ export default function ProjectView() {
       )}
 
       {activeTab === 'production' && (
-        <ProductionTab project={project} onRefresh={() => {}} />
+        <ProductionTab 
+          project={project} 
+          onRefresh={async () => {
+            if (projectId && user?.email) {
+              await runProjectProduction(projectId, user.email);
+            }
+          }} 
+        />
+      )}
+
+      {activeTab === 'quotes' && projectId && (
+        <QuoteManagement
+          projectId={projectId}
+          projectName={project.name}
+          customerId={project.customerId}
+          customerName={project.customerName}
+          customerEmail={(project as any).customerEmail}
+        />
+      )}
+
+      {activeTab === 'portal' && projectId && (
+        <ClientPortalManager
+          projectId={projectId}
+          projectName={project.name}
+          clientName={project.customerName}
+          clientEmail={(project as any).customerEmail}
+        />
       )}
 
       {/* New Item Dialog */}

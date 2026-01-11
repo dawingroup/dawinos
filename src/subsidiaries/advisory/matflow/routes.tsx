@@ -13,10 +13,13 @@ const ProjectDetail = React.lazy(() => import('./pages/ProjectDetail'));
 const ProjectCreate = React.lazy(() => import('./pages/ProjectCreate'));
 const BOQManagement = React.lazy(() => import('./pages/BOQManagement'));
 const BOQImport = React.lazy(() => import('./pages/BOQImport'));
-const Procurement = React.lazy(() => import('./pages/Procurement'));
+const ProcurementPage = React.lazy(() => import('./pages/ProcurementPage'));
+const SuppliersPage = React.lazy(() => import('./pages/SuppliersPage'));
 const Reports = React.lazy(() => import('./pages/Reports'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const AdminSeed = React.lazy(() => import('./pages/AdminSeed'));
+const MaterialLibrary = React.lazy(() => import('./pages/MaterialLibrary'));
+const FormulaDatabase = React.lazy(() => import('./pages/FormulaDatabase'));
 
 // Loading fallback
 const PageLoader = () => (
@@ -90,7 +93,37 @@ export const MatFlowRoutes: React.FC = () => {
           path="procurement" 
           element={
             <React.Suspense fallback={<PageLoader />}>
-              <Procurement />
+              <ProcurementPage />
+            </React.Suspense>
+          } 
+        />
+        
+        {/* Suppliers */}
+        <Route 
+          path="suppliers" 
+          element={
+            <React.Suspense fallback={<PageLoader />}>
+              <SuppliersPage />
+            </React.Suspense>
+          } 
+        />
+        
+        {/* Material Library */}
+        <Route 
+          path="materials" 
+          element={
+            <React.Suspense fallback={<PageLoader />}>
+              <MaterialLibrary />
+            </React.Suspense>
+          } 
+        />
+        
+        {/* Formula Database */}
+        <Route 
+          path="formulas" 
+          element={
+            <React.Suspense fallback={<PageLoader />}>
+              <FormulaDatabase />
             </React.Suspense>
           } 
         />

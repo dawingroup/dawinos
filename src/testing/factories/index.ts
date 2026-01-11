@@ -15,3 +15,12 @@ export type {
   DealStage,
   BOQStatus,
 } from './test-data.factory';
+
+// Phase 8.3 Employee factories
+export {
+  employeeFactory,
+  payrollFactory,
+  resetEmployeeSequence,
+  type TestEmployee,
+  type TestPayrollData,
+} from './employee.factory';

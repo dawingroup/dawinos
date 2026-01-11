@@ -1,0 +1,95 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // ==========================================================================
+    // HELPER FUNCTIONS
+    // ==========================================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isValidImage() {
+      return request.resource.contentType.matches('image/.*') &&
+             request.resource.size < 5 * 1024 * 1024; // 5MB max
+    }
+    
+    function isValidDocument() {
+      return request.resource.contentType.matches('application/pdf') ||
+             request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.*') ||
+             request.resource.contentType.matches('text/.*') &&
+             request.resource.size < 25 * 1024 * 1024; // 25MB max
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // ==========================================================================
+    // USER FILES
+    // ==========================================================================
+    
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if isAuthenticated() && isOwner(userId) && 
+                      (isValidImage() || isValidDocument());
+    }
+    
+    // ==========================================================================
+    // DESIGN CLIPS (Dawin Finishes)
+    // ==========================================================================
+    
+    match /designClips/{userId}/{clipId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isOwner(userId) && isValidImage();
+    }
+    
+    // ==========================================================================
+    // EMPLOYEE DOCUMENTS
+    // ==========================================================================
+    
+    match /employees/{employeeId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+                      (isValidImage() || isValidDocument());
+    }
+    
+    // ==========================================================================
+    // PROJECT FILES
+    // ==========================================================================
+    
+    match /projects/{projectId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+                      (isValidImage() || isValidDocument());
+    }
+    
+    // ==========================================================================
+    // COMPANY ASSETS
+    // ==========================================================================
+    
+    match /company/{subsidiaryId}/assets/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+                      (isValidImage() || isValidDocument());
+    }
+    
+    // ==========================================================================
+    // REPORTS & EXPORTS
+    // ==========================================================================
+    
+    match /reports/{subsidiaryId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isValidDocument();
+    }
+    
+    // ==========================================================================
+    // TEMPORARY UPLOADS
+    // ==========================================================================
+    
+    match /temp/{userId}/{fileName} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+      // Temp files should be cleaned up by Cloud Functions
+    }
+  }
+}

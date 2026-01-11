@@ -1,5 +1,10 @@
+// Buffer polyfill for libraries that use Node.js Buffer (e.g., @react-pdf/renderer)
+import { Buffer } from 'buffer';
+globalThis.Buffer = Buffer;
+
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { HelmetProvider } from 'react-helmet-async'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import { ConfigProvider } from './contexts/ConfigContext.jsx'
 import { OffcutProvider } from './contexts/OffcutContext.jsx'
