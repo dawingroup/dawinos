@@ -20,8 +20,9 @@ import {
   getCurrentItemState,
   validateItemForImport,
   hasModifications,
+  ConstructionStage,
+  MeasurementUnit,
 } from '../../utils/reviewHelpers';
-import { ConstructionStage, MeasurementUnit } from '../../types';
 
 interface ParsedItemCardProps {
   item: ReviewableItem;

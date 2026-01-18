@@ -206,7 +206,7 @@ export function RequisitionsPage() {
         </div>
 
         <button
-          onClick={() => navigate(`/advisory/delivery/projects/${projectId}/requisitions/new`)}
+          onClick={() => navigate(`/advisory/delivery/projects/${projectId}/requisitions/new/manual`)}
           className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
         >
           <Plus className="w-4 h-4" />
@@ -327,7 +327,7 @@ export function RequisitionsPage() {
           </p>
           {requisitions.length === 0 && (
             <button
-              onClick={() => navigate(`/advisory/delivery/projects/${projectId}/requisitions/new`)}
+              onClick={() => navigate(`/advisory/delivery/projects/${projectId}/requisitions/new/manual`)}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
             >
               <Plus className="w-4 h-4" />

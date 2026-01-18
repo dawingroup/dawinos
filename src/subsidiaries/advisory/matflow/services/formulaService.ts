@@ -8,16 +8,29 @@ import {
   doc,
   getDoc,
   getDocs,
+  setDoc,
   query,
   where,
   orderBy,
   updateDoc,
   increment,
+  serverTimestamp,
+  deleteDoc,
 } from 'firebase/firestore';
 import { db } from '@/core/services/firebase';
-import type { StandardFormula, MaterialCategory } from '../types';
+import type { StandardFormula, FormulaComponent, MaterialCategory } from '../types';
 
 const FORMULAS_COLLECTION = 'matflow/data/formulas';
+
+export interface CreateFormulaInput {
+  code: string;
+  name: string;
+  description?: string;
+  category: string;
+  subcategory?: string;
+  outputUnit: string;
+  components: FormulaComponent[];
+}
 
 export async function getFormulas(category?: MaterialCategory): Promise<StandardFormula[]> {
   let q = query(
@@ -75,4 +88,78 @@ export async function incrementFormulaUsage(formulaId: string): Promise<void> {
   await updateDoc(doc(db, FORMULAS_COLLECTION, formulaId), {
     usageCount: increment(1),
   });
+}
+
+// CREATE
+export async function createFormula(input: CreateFormulaInput, userId: string): Promise<string> {
+  const formulaRef = doc(collection(db, FORMULAS_COLLECTION));
+
+  // Generate keywords from code and name
+  const keywords = [
+    input.code.toLowerCase(),
+    ...input.name.toLowerCase().split(' '),
+    input.category.toLowerCase(),
+  ];
+
+  const formula: Omit<StandardFormula, 'id'> = {
+    code: input.code,
+    name: input.name,
+    description: input.description,
+    category: input.category,
+    subcategory: input.subcategory,
+    outputUnit: input.outputUnit,
+    components: input.components,
+    keywords,
+    usageCount: 0,
+    isActive: true,
+    createdAt: serverTimestamp() as any,
+    createdBy: userId,
+    updatedAt: serverTimestamp() as any,
+    updatedBy: userId,
+  };
+
+  await setDoc(formulaRef, formula);
+  return formulaRef.id;
+}
+
+// UPDATE
+export async function updateFormula(
+  formulaId: string,
+  updates: Partial<CreateFormulaInput>,
+  userId: string
+): Promise<void> {
+  const updateData: any = {
+    ...updates,
+    updatedAt: serverTimestamp(),
+    updatedBy: userId,
+  };
+
+  // Regenerate keywords if code or name changed
+  if (updates.code || updates.name || updates.category) {
+    const formula = await getFormulaById(formulaId);
+    if (formula) {
+      const keywords = [
+        (updates.code || formula.code).toLowerCase(),
+        ...(updates.name || formula.name).toLowerCase().split(' '),
+        (updates.category || formula.category).toLowerCase(),
+      ];
+      updateData.keywords = keywords;
+    }
+  }
+
+  await updateDoc(doc(db, FORMULAS_COLLECTION, formulaId), updateData);
+}
+
+// DELETE (soft delete)
+export async function deleteFormula(formulaId: string, userId: string): Promise<void> {
+  await updateDoc(doc(db, FORMULAS_COLLECTION, formulaId), {
+    isActive: false,
+    updatedAt: serverTimestamp(),
+    updatedBy: userId,
+  });
+}
+
+// HARD DELETE (use with caution)
+export async function permanentlyDeleteFormula(formulaId: string): Promise<void> {
+  await deleteDoc(doc(db, FORMULAS_COLLECTION, formulaId));
 }

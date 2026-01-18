@@ -57,7 +57,7 @@ function BOQItemRow({
   onUpdateQuantity,
 }: BOQItemRowProps) {
   const availableQty = getAvailableQuantity(item);
-  const statusConfig = BOQ_ITEM_STATUS_CONFIG[item.status];
+  const statusConfig = BOQ_ITEM_STATUS_CONFIG[item.status] || { label: item.status || 'Unknown', color: 'gray' };
 
   return (
     <div className={`border rounded-lg p-3 transition-colors ${

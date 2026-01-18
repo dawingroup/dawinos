@@ -5,6 +5,33 @@
  */
 
 import { Payment } from './payment';
+import { Timestamp } from 'firebase/firestore';
+
+// ─────────────────────────────────────────────────────────────────
+// QUOTATION MANAGEMENT (Optional - PM Responsibility)
+// ─────────────────────────────────────────────────────────────────
+
+export interface RequisitionQuotation {
+  id: string;
+  supplierName: string;
+  contactInfo: string;
+  quotedAmount: number;
+  currency: string;
+  validUntil?: Date;
+  documentUrl?: string;
+  documentName?: string;
+  receivedAt: Timestamp;
+  notes?: string;
+}
+
+export interface SelectedSupplier {
+  name: string;
+  contactInfo: string;
+  quotedAmount: number;
+  quotationReference?: string;
+  selectionReason?: string; // Why this supplier was chosen
+  alternativesConsidered: number; // How many other quotes were obtained
+}
 
 // ─────────────────────────────────────────────────────────────────
 // ADVANCE & EXPENSE TYPES
@@ -128,32 +155,52 @@ export interface RequisitionBOQItem {
 
 export interface Requisition extends Payment {
   paymentType: 'requisition';
-  
+
   // Requisition-specific fields
   requisitionNumber: string;
   purpose: string;
-  
+
   // Budget reference
   budgetLineId: string;
   budgetLineName: string;
   budgetLineBalance: number;
-  
+
   // Line items (manual entry or BOQ-based)
   items: RequisitionItem[];
-  
+
   // BOQ-based items (selected from Control BOQ)
   boqItems?: RequisitionBOQItem[];
   sourceType: 'manual' | 'boq' | 'mixed';
-  
+
   // Accountability tracking
   accountabilityStatus: AccountabilityStatus;
   accountabilityDueDate: Date;
   linkedAccountabilityIds: string[];
   unaccountedAmount: number;
-  
+
   // Advance details
   advanceType: AdvanceType;
   expectedReturnDate?: Date;
+
+  // ADD-FIN-001: Quotation management (optional, PM responsibility)
+  quotations?: RequisitionQuotation[];
+  selectedSupplier?: SelectedSupplier;
+
+  // ADD-FIN-001: Dual-approval tracking
+  technicalApprover?: string;
+  technicalApprovalDate?: Timestamp;
+  financialApprover?: string;
+  financialApprovalDate?: Timestamp;
+
+  // ADD-FIN-001: Custom approval override
+  useCustomApprovalChain: boolean;
+  customApprovalChainId?: string;
+
+  // ADD-FIN-001: Notion integration
+  notionPageId?: string;
+  notionSyncStatus?: 'pending' | 'synced' | 'error';
+  notionSyncError?: string;
+  lastNotionSyncAt?: Timestamp;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -167,15 +214,23 @@ export interface RequisitionFormData {
   advanceType: AdvanceType;
   expectedReturnDate?: Date;
   accountabilityDueDate: Date;
-  
+
   // Source type determines which items array to use
   sourceType: 'manual' | 'boq' | 'mixed';
-  
+
   // Manual entry items
   items: Omit<RequisitionItem, 'id'>[];
-  
+
   // BOQ-based items (selected from Control BOQ)
   boqItems?: Omit<RequisitionBOQItem, 'id' | 'quantityExecuted'>[];
+
+  // ADD-FIN-001: Optional quotation tracking
+  quotations?: Omit<RequisitionQuotation, 'id' | 'receivedAt'>[];
+  selectedSupplier?: SelectedSupplier;
+
+  // ADD-FIN-001: Custom approval override
+  useCustomApprovalChain?: boolean;
+  customApprovalChainId?: string;
 }
 
 export interface BOQItemSelection {

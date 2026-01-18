@@ -566,7 +566,7 @@ export function AppShell({ children }: AppShellProps) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 min-h-0 lg:ml-0">
+        <main className="flex-1 lg:ml-0">
           {children}
         </main>
       </div>

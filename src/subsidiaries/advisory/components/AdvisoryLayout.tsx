@@ -22,14 +22,8 @@ const ADVISORY_TABS: TabNavItem[] = [
     icon: 'Briefcase',
   },
   {
-    id: 'matflow',
-    label: 'MatFlow',
-    path: '/advisory/matflow',
-    icon: 'HardHat',
-  },
-  {
     id: 'delivery',
-    label: 'Delivery',
+    label: 'Infrastructure Delivery',
     path: '/advisory/delivery',
     icon: 'Building2',
   },

@@ -139,44 +139,85 @@ export const MATFLOW_ROLE_TEMPLATES: Record<MatFlowRole, MatFlowCapability[]> = 
 export interface BOQItem {
   id: string;
   projectId: string;
-  
-  // Hierarchy
+
+  // Hierarchy (4-level structure)
   billNumber?: string;
+  billName?: string;
   elementCode?: string;
+  elementName?: string;
   sectionCode?: string;
+  sectionName?: string;
   itemNumber: string;
-  
+  itemName?: string;
+  hierarchyPath?: string;  // e.g., "1.1.1.1"
+  hierarchyLevel?: number; // 1=Bill, 2=Element, 3=Section, 4=Work Item
+  isSummaryRow?: boolean;  // True for Level 1/2 header rows
+
   // Description
   description: string;
   specification?: string;
-  
+  specifications?: string; // Alternative field name from parsing
+  governingSpecs?: {
+    materialGrade?: string;
+    brand?: string;
+    standard?: string;
+    finish?: string;
+    color?: string;
+  };
+
   // Quantities
-  quantity: number;
+  quantity: number; // For backward compatibility with parsed items
+  quantityContract?: number; // Contract quantity (what's saved to Firestore)
+  quantityExecuted?: number; // Actual quantity executed
+  quantityRemaining?: number; // Remaining quantity
   unit: string;
-  
+
   // Rates
   laborRate?: number;
   materialRate?: number;
   equipmentRate?: number;
-  unitRate: number;
+  rate?: number; // Unit rate (what's saved to Firestore)
+  unitRate: number; // For backward compatibility
   amount: number;
-  
+
   // Status
   status: 'draft' | 'reviewed' | 'approved' | 'rejected';
-  
+
   // Tracking
   procuredQuantity?: number;
   deliveredQuantity?: number;
   installedQuantity?: number;
-  
-  // Formula
+
+  // Formula & Materials
   formulaId?: string;
   formulaName?: string;
-  
+  formulaCode?: string;
+  suggestedFormula?: {
+    formulaCode?: string;
+    confidence?: number;
+    materialRequirements?: any[];
+  };
+  materialRequirements?: any[];
+  isBulkItem?: boolean; // True if item description IS the material itself, purchased as-is
+  isCustomFormula?: boolean; // True if using one-time formula variant (not saved to library)
+
   // AI Parsing
   confidence?: number;
+  aiConfidence?: number;
   aiSuggestions?: string[];
-  
+  isVerified?: boolean;
+  needsEnhancement?: boolean;
+  enhancementReasons?: string[];
+  cleanupNotes?: string[];
+
+  // Source tracking
+  source?: {
+    type: 'manual' | 'ai_import' | 'template';
+    parsingJobId?: string;
+  };
+  version?: number;
+  lastModifiedAt?: Timestamp;
+
   // Audit
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -188,30 +229,48 @@ export interface BOQItem {
 // STANDARD FORMULA
 // ─────────────────────────────────────────────────────────────────
 
+export interface FormulaComponent {
+  materialId: string;
+  materialName: string;
+  quantity: number;
+  unit: string;
+  wastagePercent: number;
+}
+
 export interface StandardFormula {
   id: string;
+  code: string; // e.g., "C25", "BRICK_230"
   name: string;
   description?: string;
   category: string;
   subcategory?: string;
-  
-  // Formula components
+  outputUnit: string; // e.g., "m³", "m²"
+
+  // Material components (NEW - what makes up this formula)
+  components: FormulaComponent[];
+
+  // Formula components (OLD - for calculations)
   laborFormula?: string;
   materialFormula?: string;
   equipmentFormula?: string;
-  
+
   // Default rates
   defaultLaborRate?: number;
   defaultMaterialRate?: number;
   defaultEquipmentRate?: number;
-  
+
+  // Search keywords for easier discovery
+  keywords?: string[];
+
   // Usage
   usageCount: number;
   isActive: boolean;
-  
+
   // Audit
   createdAt: Timestamp;
+  createdBy: string;
   updatedAt: Timestamp;
+  updatedBy: string;
 }
 
 // ─────────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { MeasurementUnit, ConstructionStage } from '../../types';
+import { MeasurementUnit, ConstructionStage } from '../.*/utils/reviewHelpers';
 import type { CreateBOQItemInput } from '../../services/boqService';
 
 interface BOQItemFormProps {

@@ -43,25 +43,43 @@ export function useBOQParsing({ projectId }: UseBOQParsingOptions) {
 
   // Subscribe to active job updates
   useEffect(() => {
-    if (!activeJobId || !projectId) return;
-    
+    if (!activeJobId || !projectId) {
+      console.log('Subscription skipped:', { activeJobId, projectId });
+      return;
+    }
+
+    console.log('Setting up subscription for job:', { orgId, projectId, activeJobId });
+
     const unsubscribe = subscribeToParsingJob(
       orgId,
       projectId,
       activeJobId,
       (job) => {
+        console.log('Job update received:', {
+          jobId: job?.id,
+          status: job?.status,
+          progress: job?.progress,
+          parsedItemsCount: job?.parsedItems?.length || 0,
+          hasJob: !!job
+        });
+
         setActiveJob(job);
-        
+
         if (job?.status === 'completed') {
+          console.log('Job completed, parsed items:', job.parsedItems?.length || 0);
           // Refresh parsing history when job completes
           loadParsingHistory();
         } else if (job?.status === 'failed') {
+          console.error('Job failed:', job.errorMessage);
           setError(job.errorMessage || 'Parsing failed');
         }
       }
     );
-    
-    return () => unsubscribe();
+
+    return () => {
+      console.log('Unsubscribing from job:', activeJobId);
+      unsubscribe();
+    };
   }, [activeJobId, orgId, projectId]);
 
   // Load parsing history
@@ -194,19 +212,25 @@ export function useBOQParsing({ projectId }: UseBOQParsingOptions) {
 
   // Start parsing a file
   const startParsing = useCallback(async (file: File) => {
+    console.log('startParsing called with file:', file.name, 'orgId:', orgId, 'projectId:', projectId);
+
     if (!userId) {
+      console.error('User not authenticated');
       setError('User not authenticated');
       return;
     }
-    
+
     setIsUploading(true);
     setError(null);
-    
+
     try {
       // Upload file
+      console.log('Uploading file to Firebase Storage...');
       const { fileUrl, fileType } = await uploadBOQFile(orgId, projectId, file);
-      
+      console.log('File uploaded:', { fileUrl, fileType });
+
       // Create parsing job
+      console.log('Creating parsing job in Firestore...');
       const jobId = await createParsingJob(
         orgId,
         projectId,
@@ -215,13 +239,17 @@ export function useBOQParsing({ projectId }: UseBOQParsingOptions) {
         fileUrl,
         fileType
       );
-      
+      console.log('Parsing job created with ID:', jobId);
+
       setActiveJobId(jobId);
-      
+      console.log('Active job ID set to:', jobId);
+
       // Process file locally (client-side parsing)
       if (fileType === 'excel' || fileType === 'csv') {
         try {
+          console.log('Starting local Excel parsing...');
           await parseExcelLocally(file, jobId);
+          console.log('Local parsing completed successfully');
         } catch (parseErr) {
           console.error('Local parsing failed:', parseErr);
           await updateParsingJobStatus(orgId, projectId, jobId, 'failed', {

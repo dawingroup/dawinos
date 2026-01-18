@@ -4,7 +4,32 @@
  */
 
 import type { ParsedBOQItem } from '../ai/schemas/boqSchema';
-import { MeasurementUnit, ConstructionStage } from '../types';
+
+// Measurement units enum (local definition)
+export enum MeasurementUnit {
+  M = 'm',
+  M2 = 'm²',
+  M3 = 'm³',
+  KG = 'kg',
+  TONNE = 'tonne',
+  NO = 'No',
+  ITEM = 'item',
+  SUM = 'sum',
+  LOT = 'lot',
+  LITRE = 'litre',
+  BAG = 'bag',
+  LENGTH = 'length',
+}
+
+// Construction stages enum (local definition)
+export enum ConstructionStage {
+  PRELIMINARIES = 'preliminaries',
+  SUBSTRUCTURE = 'substructure',
+  SUPERSTRUCTURE = 'superstructure',
+  FINISHES = 'finishes',
+  SERVICES = 'services',
+  EXTERNAL_WORKS = 'external_works',
+}
 
 // ============================================================================
 // CONFIDENCE THRESHOLDS

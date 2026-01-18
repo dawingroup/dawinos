@@ -1,26 +1,31 @@
 /**
  * AI Tools Page
- * 
+ *
  * Central hub for all AI-powered design tools:
  * - Project Scoping AI (brief analysis + strategy)
  * - Image Analysis AI
- * - Brief Analyzer (legacy)
- * - DfM Checker
+ * - Design Item Enhancement AI
+ * - Testing & Verification
  */
 
 import { useState } from 'react';
-import { 
-  Sparkles, 
-  FileText, 
-  Image as ImageIcon, 
+import {
+  Sparkles,
+  FileText,
+  Image as ImageIcon,
   Wrench,
   ChevronRight,
+  TestTube,
+  CheckCircle,
+  XCircle,
+  Loader2,
 } from 'lucide-react';
 import { ProjectScopingAI } from '../components/ai/ProjectScopingAI';
 import { ImageAnalysisAI } from '../components/ai/ImageAnalysisAI';
 import { BriefAnalyzer } from '../components/ai/BriefAnalyzer';
+import { testAllAITools, type AIToolsTestResult } from '../services/aiService';
 
-type AITool = 'scoping' | 'image' | 'brief' | null;
+type AITool = 'scoping' | 'image' | 'brief' | 'testing' | null;
 
 const AI_TOOLS = [
   {
@@ -47,10 +52,20 @@ const AI_TOOLS = [
     color: 'from-green-500 to-teal-500',
     badge: null,
   },
+  {
+    id: 'testing' as AITool,
+    name: 'AI Testing & Verification',
+    description: 'Test all AI tools to verify they are working correctly',
+    icon: TestTube,
+    color: 'from-blue-500 to-cyan-500',
+    badge: 'TEST',
+  },
 ];
 
 export function AIToolsPage() {
   const [activeTool, setActiveTool] = useState<AITool>(null);
+  const [testResults, setTestResults] = useState<AIToolsTestResult | null>(null);
+  const [testing, setTesting] = useState(false);
 
   const handleScopingComplete = (result: unknown) => {
     console.log('Scoping complete:', result);
@@ -62,6 +77,34 @@ export function AIToolsPage() {
 
   const handleBriefAnalysisComplete = (result: unknown) => {
     console.log('Brief analysis complete:', result);
+  };
+
+  const runTests = async () => {
+    setTesting(true);
+    setTestResults(null);
+
+    try {
+      const results = await testAllAITools({
+        briefText: `We need 32 guest rooms for a boutique hotel. Each room should have:
+- 1 nightstand with 2 drawers
+- 1 desk with chair
+- 1 wardrobe with sliding doors
+
+Plus 2 executive suites with king-sized beds and sitting areas.`,
+        imageUrl: 'https://example.com/test-image.jpg', // Replace with actual test image
+        designItem: {
+          name: 'Kitchen Cabinet',
+          category: 'casework',
+        },
+      });
+
+      setTestResults(results);
+    } catch (error) {
+      console.error('Testing failed:', error);
+      alert('Testing failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setTesting(false);
+    }
   };
 
   return (
@@ -189,6 +232,228 @@ export function AIToolsPage() {
                   projectId="test-project"
                   onAnalysisComplete={handleBriefAnalysisComplete}
                 />
+              )}
+
+              {activeTool === 'testing' && (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">
+                      AI Tools Testing & Verification
+                    </h2>
+                    <p className="text-gray-600">
+                      Run comprehensive tests to verify all three AI tools are functioning correctly.
+                      This will test Project Scoping AI, Image Analysis AI, and Design Item Enhancement AI.
+                    </p>
+                  </div>
+
+                  {/* Run Tests Button */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={runTests}
+                      disabled={testing}
+                      className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                    >
+                      {testing ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Running Tests...
+                        </>
+                      ) : (
+                        <>
+                          <TestTube className="w-5 h-5" />
+                          Run All Tests
+                        </>
+                      )}
+                    </button>
+                    {testResults && (
+                      <span className="text-sm text-gray-500">
+                        Last tested: {new Date().toLocaleTimeString()}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Test Results */}
+                  {testResults && (
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Test Results</h3>
+
+                      {/* Project Scoping AI */}
+                      <div className="bg-white border rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-5 h-5 text-purple-500" />
+                            <h4 className="font-medium text-gray-900">Project Scoping AI</h4>
+                          </div>
+                          {testResults.projectScoping.success ? (
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                          ) : (
+                            <XCircle className="w-5 h-5 text-red-500" />
+                          )}
+                        </div>
+                        {testResults.projectScoping.success ? (
+                          <div className="space-y-2 text-sm">
+                            <div className="flex items-center justify-between text-gray-600">
+                              <span>Status:</span>
+                              <span className="font-medium text-green-600">Passing ✓</span>
+                            </div>
+                            {testResults.projectScoping.itemCount !== undefined && (
+                              <div className="flex items-center justify-between text-gray-600">
+                                <span>Items Extracted:</span>
+                                <span className="font-medium">{testResults.projectScoping.itemCount}</span>
+                              </div>
+                            )}
+                            {testResults.projectScoping.multiplierDetected !== undefined && (
+                              <div className="flex items-center justify-between text-gray-600">
+                                <span>Multiplier Detection:</span>
+                                <span className="font-medium">
+                                  {testResults.projectScoping.multiplierDetected ? 'Working ✓' : 'Not Detected'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-red-600">
+                            Error: {testResults.projectScoping.error || 'Unknown error'}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Image Analysis AI */}
+                      <div className="bg-white border rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <ImageIcon className="w-5 h-5 text-pink-500" />
+                            <h4 className="font-medium text-gray-900">Image Analysis AI</h4>
+                          </div>
+                          {testResults.imageAnalysis.success ? (
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                          ) : (
+                            <XCircle className="w-5 h-5 text-red-500" />
+                          )}
+                        </div>
+                        {testResults.imageAnalysis.success ? (
+                          <div className="space-y-2 text-sm">
+                            <div className="flex items-center justify-between text-gray-600">
+                              <span>Status:</span>
+                              <span className="font-medium text-green-600">Passing ✓</span>
+                            </div>
+                            {testResults.imageAnalysis.itemCount !== undefined && (
+                              <div className="flex items-center justify-between text-gray-600">
+                                <span>Items Identified:</span>
+                                <span className="font-medium">{testResults.imageAnalysis.itemCount}</span>
+                              </div>
+                            )}
+                            {testResults.imageAnalysis.confidence !== undefined && (
+                              <div className="flex items-center justify-between text-gray-600">
+                                <span>Confidence Score:</span>
+                                <span className="font-medium">
+                                  {Math.round(testResults.imageAnalysis.confidence * 100)}%
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-red-600">
+                            Error: {testResults.imageAnalysis.error || 'Unknown error'}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Design Item Enhancement AI */}
+                      <div className="bg-white border rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <Wrench className="w-5 h-5 text-green-500" />
+                            <h4 className="font-medium text-gray-900">Design Item Enhancement AI</h4>
+                          </div>
+                          {testResults.designEnhancement.success ? (
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                          ) : (
+                            <XCircle className="w-5 h-5 text-red-500" />
+                          )}
+                        </div>
+                        {testResults.designEnhancement.success ? (
+                          <div className="space-y-2 text-sm">
+                            <div className="flex items-center justify-between text-gray-600">
+                              <span>Status:</span>
+                              <span className="font-medium text-green-600">Passing ✓</span>
+                            </div>
+                            {testResults.designEnhancement.hasSpecifications !== undefined && (
+                              <div className="flex items-center justify-between text-gray-600">
+                                <span>Specifications:</span>
+                                <span className="font-medium">
+                                  {testResults.designEnhancement.hasSpecifications ? 'Generated ✓' : 'Missing'}
+                                </span>
+                              </div>
+                            )}
+                            {testResults.designEnhancement.hasDfM !== undefined && (
+                              <div className="flex items-center justify-between text-gray-600">
+                                <span>DfM Validation:</span>
+                                <span className="font-medium">
+                                  {testResults.designEnhancement.hasDfM ? 'Working ✓' : 'Missing'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-red-600">
+                            Error: {testResults.designEnhancement.error || 'Unknown error'}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Overall Status */}
+                      <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center gap-3">
+                          {testResults.projectScoping.success &&
+                          testResults.imageAnalysis.success &&
+                          testResults.designEnhancement.success ? (
+                            <>
+                              <CheckCircle className="w-6 h-6 text-green-500 flex-shrink-0" />
+                              <div>
+                                <h4 className="font-semibold text-green-900">All Tests Passing</h4>
+                                <p className="text-sm text-green-700">
+                                  All three AI tools are functioning correctly and ready to use.
+                                </p>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="w-6 h-6 text-red-500 flex-shrink-0" />
+                              <div>
+                                <h4 className="font-semibold text-red-900">Some Tests Failed</h4>
+                                <p className="text-sm text-red-700">
+                                  One or more AI tools are not functioning correctly. Please check the errors above.
+                                </p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Test Data Info */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <h4 className="text-sm font-semibold text-gray-900 mb-2">Test Data</h4>
+                    <div className="space-y-2 text-xs text-gray-600">
+                      <div>
+                        <span className="font-medium">Project Scoping Test:</span>
+                        <p className="mt-1 font-mono bg-white p-2 rounded border">
+                          "We need 32 guest rooms... Each room should have: 1 nightstand, 1 desk, 1 wardrobe..."
+                        </p>
+                      </div>
+                      <div>
+                        <span className="font-medium">Image Analysis Test:</span>
+                        <p className="mt-1">Test reference image (furniture mood board)</p>
+                      </div>
+                      <div>
+                        <span className="font-medium">Design Enhancement Test:</span>
+                        <p className="mt-1">Kitchen Cabinet (casework category)</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           </div>

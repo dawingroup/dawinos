@@ -35,7 +35,7 @@ const DEFAULT_ORG_ID = 'default';
 
 // Collection paths
 const getProjectPath = (orgId: string, projectId: string) =>
-  `organizations/${orgId}/matflow_projects/${projectId}`;
+  `organizations/${orgId}/advisory_projects/${projectId}`;
 
 const getBOQCollection = (orgId: string, projectId: string) =>
   collection(db, getProjectPath(orgId, projectId), 'boq_items');

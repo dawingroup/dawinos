@@ -40,10 +40,10 @@ import type {
 // ============================================================================
 
 const getProcurementCollection = (orgId: string, projectId: string) =>
-  collection(db, 'organizations', orgId, 'matflow_projects', projectId, 'procurement_entries');
+  collection(db, 'organizations', orgId, 'advisory_projects', projectId, 'procurement_entries');
 
 const getProcurementSummaryDoc = (orgId: string, projectId: string) =>
-  doc(db, 'organizations', orgId, 'matflow_projects', projectId, 'summaries', 'procurement');
+  doc(db, 'organizations', orgId, 'advisory_projects', projectId, 'summaries', 'procurement');
 
 // Default org for now
 const DEFAULT_ORG_ID = 'default';

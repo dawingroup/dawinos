@@ -22,18 +22,35 @@ import type { BOQItem } from '../types';
 import { ConstructionStage, MeasurementUnit } from '../types';
 
 const boqCollection = (orgId: string, projectId: string) =>
-  collection(db, 'organizations', orgId, 'matflow_projects', projectId, 'boq_items');
+  collection(db, 'organizations', orgId, 'advisory_projects', projectId, 'boq_items');
 
 // CREATE
 export interface CreateBOQItemInput {
   itemCode: string;
   description: string;
-  unit: MeasurementUnit;
+  unit: MeasurementUnit | string;
   quantityContract: number;
   rate?: number;
   stage: ConstructionStage;
   formulaId?: string;
   formulaCode?: string;
+  // Hierarchy fields
+  hierarchyLevel?: number;
+  billNumber?: string;
+  billName?: string;
+  elementCode?: string;
+  elementName?: string;
+  sectionCode?: string;
+  sectionName?: string;
+  itemNumber?: string;
+  itemName?: string;
+  hierarchyPath?: string;
+  isSummaryRow?: boolean;
+  // Additional fields
+  quantity?: number;
+  unitRate?: number;
+  specifications?: string;
+  status?: 'draft' | 'reviewed' | 'approved' | 'rejected';
 }
 
 export async function createBOQItem(
@@ -43,15 +60,17 @@ export async function createBOQItem(
   input: CreateBOQItemInput
 ): Promise<string> {
   const amount = input.rate ? input.quantityContract * input.rate : 0;
-  
+
   const docRef = await addDoc(boqCollection(orgId, projectId), {
     projectId,
     ...input,
+    itemNumber: input.itemNumber || input.itemCode,
     amount,
     quantityExecuted: 0,
     quantityRemaining: input.quantityContract,
     materialRequirements: [],
     isVerified: false,
+    status: input.status || 'draft',
     source: { type: 'manual' },
     version: 1,
     lastModifiedAt: serverTimestamp(),
@@ -60,7 +79,7 @@ export async function createBOQItem(
     updatedAt: serverTimestamp(),
     updatedBy: userId,
   });
-  
+
   return docRef.id;
 }
 
@@ -137,7 +156,7 @@ export async function bulkUpdateStage(
   userId: string
 ): Promise<void> {
   const batch = writeBatch(db);
-  
+
   for (const itemId of itemIds) {
     batch.update(doc(boqCollection(orgId, projectId), itemId), {
       stage,
@@ -145,6 +164,27 @@ export async function bulkUpdateStage(
       updatedBy: userId,
     });
   }
-  
+
   await batch.commit();
+}
+
+// MATERIAL REQUIREMENTS
+export async function updateBOQItemMaterials(
+  orgId: string,
+  projectId: string,
+  itemId: string,
+  userId: string,
+  materialRequirements: any[],
+  formulaId?: string,
+  formulaCode?: string
+): Promise<void> {
+  const docRef = doc(boqCollection(orgId, projectId), itemId);
+  await updateDoc(docRef, {
+    materialRequirements,
+    formulaId: formulaId || null,
+    formulaCode: formulaCode || null,
+    lastModifiedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    updatedBy: userId,
+  });
 }

@@ -82,19 +82,88 @@ export class ProjectService {
   // ─────────────────────────────────────────────────────────────────
   // CREATE (Consolidated)
   // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Get or create default program for projects without a program
+   */
+  private async getOrCreateDefaultProgram(orgId: string, userId: string): Promise<any> {
+    const programsCol = collection(this.db, `organizations/${orgId}/advisory_programs`);
+
+    // Try to find existing default program
+    const q = query(programsCol, where('code', '==', 'DEFAULT'), limit(1));
+    const snapshot = await getDocs(q);
+
+    if (!snapshot.empty) {
+      return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+    }
+
+    // Create default program
+    const defaultProgram = {
+      name: 'General Projects',
+      code: 'DEFAULT',
+      description: 'Default program for projects without a specific program',
+      status: 'active',
+      engagementId: null,
+      customerId: null,
+      customerName: '',
+      location: {
+        country: 'Unknown',
+        region: '',
+      },
+      projectStats: {
+        total: 0,
+        byStatus: {
+          planning: 0,
+          procurement: 0,
+          mobilization: 0,
+          active: 0,
+          substantial_completion: 0,
+          defects_liability: 0,
+          completed: 0,
+          suspended: 0,
+          cancelled: 0,
+        },
+      },
+      createdAt: Timestamp.now(),
+      createdBy: userId,
+      updatedAt: Timestamp.now(),
+      updatedBy: userId,
+      isDeleted: false,
+    };
+
+    const docRef = await addDoc(programsCol, defaultProgram);
+    return { id: docRef.id, ...defaultProgram };
+  }
+
   async createProject(
     orgId: string,
     userId: string,
     data: ProjectFormData
   ): Promise<Project> {
 
-    // 1. Get Program for context
-    const programDocRef = doc(this.db, getProgramDoc(orgId, data.programId));
-    const programDoc = await getDoc(programDocRef);
-    if (!programDoc.exists()) {
-      throw new Error('Program not found');
+    // 1. Get Program for context (or create default if not provided)
+    let program: any;
+    let programId = data.programId;
+
+    if (!programId) {
+      // No program specified, use default
+      const defaultProgram = await this.getOrCreateDefaultProgram(orgId, userId);
+      program = defaultProgram;
+      programId = defaultProgram.id;
+    } else {
+      // Try to get specified program
+      const programDocRef = doc(this.db, getProgramDoc(orgId, programId));
+      const programDoc = await getDoc(programDocRef);
+
+      if (!programDoc.exists()) {
+        // Program doesn't exist, fall back to default
+        const defaultProgram = await this.getOrCreateDefaultProgram(orgId, userId);
+        program = defaultProgram;
+        programId = defaultProgram.id;
+      } else {
+        program = programDoc.data();
+      }
     }
-    const program = programDoc.data();
 
     // 2. Generate Code
     const projectCode = await this.generateProjectCode(orgId, program.code || 'PROG');
@@ -119,23 +188,23 @@ export class ProjectService {
       name: data.name,
       projectCode,
       description: data.description || '',
-      programId: data.programId,
-      engagementId: program.engagementId,
-      customerId: data.customerId || program.customerId,
-      customerName: program.customerName, // Inherit from program
+      programId: programId, // Use resolved programId
+      engagementId: program.engagementId || null,
+      customerId: data.customerId || program.customerId || null,
+      customerName: program.customerName || '', // Inherit from program
       status: 'planning',
-      projectType: data.projectType,
+      projectType: data.projectType || 'new_construction',
       location: {
         country: program.location?.country || 'Unknown',
-        region: data.location.region || program.location?.region || '',
-        district: data.location.district || '',
-        siteName: data.location.siteName || data.name,
+        region: data.location?.region || program.location?.region || '',
+        district: data.location?.district || '',
+        siteName: data.location?.siteName || data.name,
       },
       budget: {
-        currency: data.budgetCurrency,
-        totalBudget: data.budgetAmount,
+        currency: data.budgetCurrency || 'UGX',
+        totalBudget: data.budgetAmount || 0,
         spent: 0,
-        remaining: data.budgetAmount,
+        remaining: data.budgetAmount || 0,
         variance: 0,
         varianceStatus: 'on_track',
         contingencyPercent: 10,
@@ -145,14 +214,21 @@ export class ProjectService {
         financialProgress: 0,
         completionPercent: 0,
       },
-      timeline: {
-        plannedStartDate: data.estimatedStartDate,
-        plannedEndDate: data.estimatedEndDate,
-        currentStartDate: data.estimatedStartDate,
-        currentEndDate: data.estimatedEndDate,
-        isDelayed: false,
-        daysRemaining: Math.floor((data.estimatedEndDate.getTime() - new Date().getTime()) / (1000 * 3600 * 24)),
-      },
+      timeline: (() => {
+        // Provide default dates if not supplied
+        const now = new Date();
+        const defaultStartDate = data.estimatedStartDate || now;
+        const defaultEndDate = data.estimatedEndDate || new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000); // 1 year from now
+
+        return {
+          plannedStartDate: defaultStartDate,
+          plannedEndDate: defaultEndDate,
+          currentStartDate: defaultStartDate,
+          currentEndDate: defaultEndDate,
+          isDelayed: false,
+          daysRemaining: Math.floor((defaultEndDate.getTime() - now.getTime()) / (1000 * 3600 * 24)),
+        };
+      })(),
       settings: defaultSettings,
       stages: defaultStages,
       members: [],
@@ -168,8 +244,9 @@ export class ProjectService {
     // 5. Save to Firestore
     const docRef = await addDoc(collection(this.db, getProjectsCollection(orgId)), newProjectData);
 
-    // 6. Update Program Stats
-    await updateDoc(programDocRef, {
+    // 6. Update Program Stats (use resolved programId)
+    const resolvedProgramRef = doc(this.db, getProgramDoc(orgId, programId));
+    await updateDoc(resolvedProgramRef, {
         'projectStats.total': increment(1),
         'projectStats.byStatus.planning': increment(1),
     });
@@ -190,17 +267,75 @@ export class ProjectService {
     return { id: snapshot.id, ...snapshot.data() } as Project;
   }
 
-  async getProjectsByProgram(orgId: string, programId: string): Promise<Project[]> {
-    const q = query(
-      collection(this.db, getProjectsCollection(orgId)),
+  async getAllProjects(
+    orgId: string,
+    options?: {
+      status?: ProjectStatus[];
+      orderByField?: 'name' | 'createdAt' | 'status';
+      orderDirection?: 'asc' | 'desc';
+      limitCount?: number;
+    }
+  ): Promise<Project[]> {
+    const constraints: QueryConstraint[] = [
+      where('isDeleted', '==', false)
+    ];
+
+    // Add status filter if provided
+    if (options?.status && options.status.length > 0) {
+      // Firestore doesn't support IN queries with more than 10 items
+      // For simplicity, we'll fetch all and filter in memory if needed
+      if (options.status.length === 1) {
+        constraints.push(where('status', '==', options.status[0]));
+      }
+    }
+
+    // Add ordering
+    const orderField = options?.orderByField || 'createdAt';
+    const orderDir = options?.orderDirection || 'desc';
+    constraints.push(orderBy(orderField, orderDir));
+
+    // Add limit if provided
+    if (options?.limitCount) {
+      constraints.push(limit(options.limitCount));
+    }
+
+    const q = query(collection(this.db, getProjectsCollection(orgId)), ...constraints);
+    const snapshot = await getDocs(q);
+    let projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Project[];
+
+    // Filter by status in memory if multiple statuses
+    if (options?.status && options.status.length > 1) {
+      projects = projects.filter(p => options.status!.includes(p.status));
+    }
+
+    return projects;
+  }
+
+  async getProjectsByProgram(
+    orgId: string,
+    programId: string,
+    options?: {
+      status?: ProjectStatus[];
+    }
+  ): Promise<Project[]> {
+    const constraints: QueryConstraint[] = [
       where('programId', '==', programId),
       where('isDeleted', '==', false),
       orderBy('createdAt', 'desc')
-    );
+    ];
+
+    const q = query(collection(this.db, getProjectsCollection(orgId)), ...constraints);
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Project[];
+    let projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Project[];
+
+    // Filter by status if provided
+    if (options?.status && options.status.length > 0) {
+      projects = projects.filter(p => options.status!.includes(p.status));
+    }
+
+    return projects;
   }
-  
+
   subscribeToProject(orgId: string, projectId: string, callback: (project: Project | null) => void): () => void {
     const docRef = doc(this.db, getProjectDoc(orgId, projectId));
     return onSnapshot(docRef, (snapshot) => {
@@ -209,6 +344,24 @@ export class ProjectService {
       } else {
         callback(null);
       }
+    });
+  }
+
+  subscribeToProjectsByProgram(
+    orgId: string,
+    programId: string,
+    callback: (projects: Project[]) => void
+  ): () => void {
+    const q = query(
+      collection(this.db, getProjectsCollection(orgId)),
+      where('programId', '==', programId),
+      where('isDeleted', '==', false),
+      orderBy('createdAt', 'desc')
+    );
+
+    return onSnapshot(q, (snapshot) => {
+      const projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Project[];
+      callback(projects);
     });
   }
 

@@ -44,7 +44,7 @@ const DEFAULT_ORG_ID = 'default';
 // ============================================================================
 
 const getProjectPath = (orgId: string, projectId: string) =>
-  `organizations/${orgId}/matflow_projects/${projectId}`;
+  `organizations/${orgId}/advisory_projects/${projectId}`;
 
 const getStageProgressRef = (orgId: string, projectId: string) =>
   collection(db, getProjectPath(orgId, projectId), 'stage_progress');

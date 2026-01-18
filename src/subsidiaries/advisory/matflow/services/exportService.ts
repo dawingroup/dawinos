@@ -37,34 +37,34 @@ import { calculateTaxComplianceSummary, getProjectValidations } from './efrisSer
 
 // Collection references
 const getReportsRef = (projectId: string) =>
-  collection(db, 'matflow_projects', projectId, 'reports');
+  collection(db, 'advisory_projects', projectId, 'reports');
 
 const getTemplatesRef = () =>
   collection(db, 'reportTemplates');
 
 // Mock service functions (would be implemented in actual services)
 async function getProjectById(projectId: string) {
-  const docSnap = await getDoc(doc(db, 'matflow_projects', projectId));
+  const docSnap = await getDoc(doc(db, 'advisory_projects', projectId));
   return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
 }
 
 async function getBOQStages(projectId: string) {
-  const snapshot = await getDocs(collection(db, 'matflow_projects', projectId, 'stages'));
+  const snapshot = await getDocs(collection(db, 'advisory_projects', projectId, 'stages'));
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 async function getBOQItems(projectId: string) {
-  const snapshot = await getDocs(collection(db, 'matflow_projects', projectId, 'boq_items'));
+  const snapshot = await getDocs(collection(db, 'advisory_projects', projectId, 'boq_items'));
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 async function getDeliveryLogs(projectId: string) {
-  const snapshot = await getDocs(collection(db, 'matflow_projects', projectId, 'deliveries'));
+  const snapshot = await getDocs(collection(db, 'advisory_projects', projectId, 'deliveries'));
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 async function getPurchaseOrders(projectId: string) {
-  const snapshot = await getDocs(collection(db, 'matflow_projects', projectId, 'purchase_orders'));
+  const snapshot = await getDocs(collection(db, 'advisory_projects', projectId, 'purchase_orders'));
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 

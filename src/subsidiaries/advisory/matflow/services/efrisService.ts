@@ -32,7 +32,7 @@ import {
 
 // Collection references
 const getInvoiceValidationsRef = (projectId: string) =>
-  collection(db, 'matflow_projects', projectId, 'invoiceValidations');
+  collection(db, 'advisory_projects', projectId, 'invoiceValidations');
 
 const getSupplierTaxProfilesRef = () =>
   collection(db, 'supplierTaxProfiles');

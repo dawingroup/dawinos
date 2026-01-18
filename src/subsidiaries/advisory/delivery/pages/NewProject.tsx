@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Loader2, AlertCircle } from 'lucide-react';
-import { ProjectForm } from '../components/forms/ProjectForm';
+import { ProjectFormEnhanced } from '../components/forms/ProjectFormEnhanced';
 import { ProjectService } from '../services/project-service';
 import { useAllPrograms } from '../hooks/program-hooks';
 import { db } from '@/core/services/firebase';
@@ -131,9 +131,10 @@ export function NewProject() {
       )}
 
       {/* Form */}
-      <ProjectForm 
+      <ProjectFormEnhanced
         programId={selectedProgramId || undefined}
         programName={selectedProgram?.name || initialProgramName || undefined}
+        programCode={selectedProgram?.code}
         onSubmit={handleSubmit}
         onCancel={handleCancel}
       />

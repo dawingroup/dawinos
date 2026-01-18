@@ -7,7 +7,6 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Loader2, Edit, Trash2, AlertCircle } from 'lucide-react';
 import { ProjectHeader } from '../components/projects/ProjectHeader';
 import { ProjectTabs, ProjectTabId } from '../components/projects/ProjectTabs';
-import { ControlBOQTab } from '../components/projects/ControlBOQTab';
 import { StatCard } from '../components/common/MetricCard';
 import { ProgressBar, DualProgressBar } from '../components/common/ProgressBar';
 import { SCurveChart } from '../components/charts/SCurveChart';
@@ -25,6 +24,11 @@ export function ProjectDetail() {
 
   // Handle tab changes - some tabs navigate to separate pages
   const handleTabChange = (tabId: ProjectTabId) => {
+    if (tabId === 'boq') {
+      console.log('Navigating to BOQ management page:', `/advisory/delivery/projects/${projectId}/boq`);
+      navigate(`/advisory/delivery/projects/${projectId}/boq`);
+      return;
+    }
     if (tabId === 'payments') {
       navigate(`/advisory/delivery/projects/${projectId}/payments`);
       return;
@@ -35,6 +39,10 @@ export function ProjectDetail() {
     }
     if (tabId === 'requisitions') {
       navigate(`/advisory/delivery/projects/${projectId}/requisitions`);
+      return;
+    }
+    if (tabId === 'procurement') {
+      navigate(`/advisory/delivery/projects/${projectId}/procurement`);
       return;
     }
     setActiveTab(tabId);
@@ -155,26 +163,26 @@ export function ProjectDetail() {
           <div className="p-6 space-y-6">
             {/* Quick Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard 
-                label="Physical Progress" 
+              <StatCard
+                label="Physical Progress"
                 value={`${project.progress.physicalProgress}%`}
                 variant={project.progress.progressStatus === 'on_track' ? 'success' : 'warning'}
               />
-              <StatCard 
-                label="Financial Progress" 
-                value={`${project.progress.financialProgress}%`} 
+              <StatCard
+                label="Financial Progress"
+                value={`${project.progress.financialProgress}%`}
               />
-              <StatCard 
-                label="Days Remaining" 
-                value={project.timeline.daysRemaining} 
+              <StatCard
+                label="Days Remaining"
+                value={project.timeline.daysRemaining}
               />
-              <StatCard 
-                label="Budget Status" 
+              <StatCard
+                label="Budget Status"
                 value={project.budget.varianceStatus.replace('_', ' ')}
                 variant={project.budget.varianceStatus === 'on_budget' ? 'success' : 'warning'}
               />
             </div>
-            
+
             {/* Progress section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
@@ -184,7 +192,7 @@ export function ProjectDetail() {
                   financial={project.progress.financialProgress}
                 />
               </div>
-              
+
               <div>
                 <h3 className="text-lg font-medium mb-4">Budget Utilization</h3>
                 <SimpleBudgetBar
@@ -197,10 +205,6 @@ export function ProjectDetail() {
               </div>
             </div>
           </div>
-        )}
-
-        {activeTab === 'boq' && projectId && (
-          <ControlBOQTab projectId={projectId} />
         )}
 
         {activeTab === 'progress' && (
