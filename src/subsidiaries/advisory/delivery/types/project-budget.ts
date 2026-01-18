@@ -1,235 +1,115 @@
 /**
  * PROJECT BUDGET TYPES
  * 
- * Budget allocation, tracking, and variance analysis.
+ * Re-export from core and add delivery-specific budget types.
  */
 
-import { Timestamp } from 'firebase/firestore';
-import { WorkCategory } from './project-scope';
+// Re-export core budget type
+export type { ProjectBudget } from '@/subsidiaries/advisory/core/project/types/project.types';
 
 // ─────────────────────────────────────────────────────────────────
 // VARIANCE STATUS
 // ─────────────────────────────────────────────────────────────────
 
-export type VarianceStatus =
-  | 'on_budget'
-  | 'minor_variance'
-  | 'significant'
-  | 'critical';
+export type VarianceStatus = 'under_budget' | 'on_budget' | 'over_budget' | 'critical';
 
-export const VARIANCE_STATUS_CONFIG: Record<VarianceStatus, {
-  label: string;
-  color: string;
-  threshold: number;
-}> = {
-  on_budget: { label: 'On Budget', color: 'green', threshold: 5 },
-  minor_variance: { label: 'Minor Variance', color: 'yellow', threshold: 10 },
-  significant: { label: 'Significant Variance', color: 'orange', threshold: 20 },
-  critical: { label: 'Critical Variance', color: 'red', threshold: 100 },
+export const VARIANCE_STATUS_CONFIG: Record<VarianceStatus, { label: string; color: string; bgColor: string }> = {
+  under_budget: { label: 'Under Budget', color: 'text-green-600', bgColor: 'bg-green-100' },
+  on_budget: { label: 'On Budget', color: 'text-blue-600', bgColor: 'bg-blue-100' },
+  over_budget: { label: 'Over Budget', color: 'text-yellow-600', bgColor: 'bg-yellow-100' },
+  critical: { label: 'Critical', color: 'text-red-600', bgColor: 'bg-red-100' },
 };
-
-// ─────────────────────────────────────────────────────────────────
-// BUDGET CATEGORY
-// ─────────────────────────────────────────────────────────────────
-
-export interface BudgetCategory {
-  id: string;
-  name: string;
-  category: WorkCategory;
-  budgeted: number;
-  committed: number;
-  spent: number;
-  remaining: number;
-  percentOfTotal: number;
-}
-
-// ─────────────────────────────────────────────────────────────────
-// PROJECT BUDGET
-// ─────────────────────────────────────────────────────────────────
-
-export interface ProjectBudget {
-  // Core amounts
-  currency: string;
-  totalBudget: number;
-  contingency: number;
-  workingBudget: number;
-  
-  // Breakdown by category
-  categoryBreakdown: BudgetCategory[];
-  
-  // Tracking
-  committed: number;
-  spent: number;
-  remaining: number;
-  
-  // Forecasting
-  forecastFinalCost: number;
-  varianceAmount: number;
-  variancePercent: number;
-  varianceStatus: VarianceStatus;
-  
-  // Audit trail
-  lastUpdated: Timestamp;
-  lastUpdatedBy: string;
-}
-
-// ─────────────────────────────────────────────────────────────────
-// BUDGET SUMMARY
-// ─────────────────────────────────────────────────────────────────
-
-export interface BudgetSummary {
-  currency: string;
-  total: number;
-  spent: number;
-  remaining: number;
-  percentSpent: number;
-  varianceStatus: VarianceStatus;
-}
 
 // ─────────────────────────────────────────────────────────────────
 // BUDGET ALLOCATION
 // ─────────────────────────────────────────────────────────────────
 
-export type BudgetAllocationType = 'initial' | 'additional' | 'reallocation';
+export type BudgetAllocationType = 
+  | 'labor'
+  | 'materials'
+  | 'equipment'
+  | 'subcontractor'
+  | 'overhead'
+  | 'contingency'
+  | 'other';
 
 export interface ProjectBudgetAllocation {
   id: string;
-  projectId: string;
-  programId: string;
-  amount: number;
-  currency: string;
-  allocationType: BudgetAllocationType;
-  fundingSourceId?: string;
-  approvalId?: string;
-  allocatedAt: Timestamp;
-  allocatedBy: string;
-  notes?: string;
+  type: BudgetAllocationType;
+  description: string;
+  allocatedAmount: number;
+  spentAmount: number;
+  committedAmount: number;
+}
+
+export interface BudgetSummary {
+  totalBudget: number;
+  totalSpent: number;
+  totalCommitted: number;
+  remaining: number;
+  variancePercent: number;
+  status: VarianceStatus;
 }
 
 // ─────────────────────────────────────────────────────────────────
 // HELPER FUNCTIONS
 // ─────────────────────────────────────────────────────────────────
 
-/**
- * Initialize project budget
- */
-export function initializeProjectBudget(
-  totalAmount: number,
-  currency: string,
-  userId: string
-): ProjectBudget {
-  const contingency = totalAmount * 0.05;
-  const workingBudget = totalAmount - contingency;
-  
+export function initializeProjectBudget(currency: 'UGX' | 'USD' = 'UGX'): { currency: 'UGX' | 'USD'; totalBudget: number; spent: number; committed: number } {
   return {
     currency,
-    totalBudget: totalAmount,
-    contingency,
-    workingBudget,
-    categoryBreakdown: [],
-    committed: 0,
+    totalBudget: 0,
     spent: 0,
-    remaining: workingBudget,
-    forecastFinalCost: totalAmount,
-    varianceAmount: 0,
-    variancePercent: 0,
-    varianceStatus: 'on_budget',
-    lastUpdated: Timestamp.now(),
-    lastUpdatedBy: userId,
+    committed: 0,
   };
 }
 
-/**
- * Calculate variance status from percentage
- */
-export function calculateVarianceStatus(variancePercent: number): VarianceStatus {
-  const absVariance = Math.abs(variancePercent);
-  if (absVariance <= 5) return 'on_budget';
-  if (absVariance <= 10) return 'minor_variance';
-  if (absVariance <= 20) return 'significant';
+export function calculateBudgetVariance(budget: number, spent: number): number {
+  if (budget === 0) return 0;
+  return ((budget - spent) / budget) * 100;
+}
+
+export function getBudgetVarianceStatus(variancePercent: number): VarianceStatus {
+  if (variancePercent > 10) return 'under_budget';
+  if (variancePercent >= 0) return 'on_budget';
+  if (variancePercent >= -10) return 'over_budget';
   return 'critical';
 }
 
-/**
- * Calculate budget summary
- */
-export function calculateBudgetSummary(budget: ProjectBudget): BudgetSummary {
-  const percentSpent = budget.totalBudget > 0
-    ? (budget.spent / budget.totalBudget) * 100
-    : 0;
-  
-  return {
-    currency: budget.currency,
-    total: budget.totalBudget,
-    spent: budget.spent,
-    remaining: budget.remaining,
-    percentSpent,
-    varianceStatus: budget.varianceStatus,
-  };
-}
+export function calculateBudgetSummary(
+  totalBudget: number,
+  spent: number,
+  committed: number
+): BudgetSummary {
+  const remaining = totalBudget - spent - committed;
+  const variancePercent = calculateBudgetVariance(totalBudget, spent + committed);
+  const status = getBudgetVarianceStatus(variancePercent);
 
-/**
- * Update budget after spending
- */
-export function updateBudgetSpending(
-  budget: ProjectBudget,
-  spentAmount: number,
-  userId: string
-): ProjectBudget {
-  const newSpent = budget.spent + spentAmount;
-  const newRemaining = budget.workingBudget - newSpent;
-  const varianceAmount = newSpent - budget.forecastFinalCost;
-  const variancePercent = budget.forecastFinalCost > 0
-    ? (varianceAmount / budget.forecastFinalCost) * 100
-    : 0;
-  
   return {
-    ...budget,
-    spent: newSpent,
-    remaining: newRemaining,
-    varianceAmount,
+    totalBudget,
+    totalSpent: spent,
+    totalCommitted: committed,
+    remaining,
     variancePercent,
-    varianceStatus: calculateVarianceStatus(variancePercent),
-    lastUpdated: Timestamp.now(),
-    lastUpdatedBy: userId,
+    status,
   };
 }
 
-/**
- * Get category budget remaining
- */
-export function getCategoryRemaining(category: BudgetCategory): number {
-  return category.budgeted - category.committed;
+export function isBudgetCritical(spent: number, budget: number): boolean {
+  if (budget === 0) return false;
+  return spent / budget > 1.1;
 }
 
-/**
- * Check if budget is critical
- */
-export function isBudgetCritical(budget: ProjectBudget): boolean {
-  return budget.varianceStatus === 'critical' || budget.remaining < 0;
-}
-
-/**
- * Format currency amount
- */
-export function formatBudgetAmount(amount: number, currency: string): string {
-  return new Intl.NumberFormat('en-US', {
+export function formatBudgetAmount(amount: number, currency: 'UGX' | 'USD' = 'UGX'): string {
+  const formatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount);
+  });
+  return formatter.format(amount);
 }
 
-/**
- * Get variance status color class
- */
 export function getVarianceStatusColor(status: VarianceStatus): string {
-  const colorMap: Record<VarianceStatus, string> = {
-    on_budget: 'text-green-600 bg-green-100',
-    minor_variance: 'text-yellow-600 bg-yellow-100',
-    significant: 'text-orange-600 bg-orange-100',
-    critical: 'text-red-600 bg-red-100',
-  };
-  return colorMap[status];
+  return `${VARIANCE_STATUS_CONFIG[status].color} ${VARIANCE_STATUS_CONFIG[status].bgColor}`;
 }

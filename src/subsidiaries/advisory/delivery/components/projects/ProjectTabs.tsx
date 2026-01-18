@@ -11,7 +11,8 @@ import {
   Users, 
   FileText,
   Receipt,
-  MapPin
+  MapPin,
+  Wallet,
 } from 'lucide-react';
 
 export type ProjectTabId = 
@@ -23,7 +24,9 @@ export type ProjectTabId =
   | 'team' 
   | 'documents'
   | 'payments'
-  | 'visits';
+  | 'requisitions'
+  | 'visits'
+  | 'boq';
 
 interface Tab {
   id: ProjectTabId;
@@ -33,9 +36,11 @@ interface Tab {
 
 const TABS: Tab[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'boq', label: 'Control BOQ', icon: FileText },
   { id: 'scope', label: 'Scope', icon: Target },
   { id: 'budget', label: 'Budget', icon: DollarSign },
   { id: 'payments', label: 'Payments', icon: Receipt },
+  { id: 'requisitions', label: 'Requisitions', icon: Wallet },
   { id: 'progress', label: 'Progress', icon: TrendingUp },
   { id: 'visits', label: 'Site Visits', icon: MapPin },
   { id: 'timeline', label: 'Timeline', icon: Calendar },

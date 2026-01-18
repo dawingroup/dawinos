@@ -55,6 +55,22 @@ export {
 } from './ipc';
 export * from './requisition';
 export * from './accountability';
+export type {
+  BOQItemStatus,
+  BOQCategory,
+  ControlBOQItem,
+  ControlBOQSummary,
+} from './control-boq';
+export {
+  BOQ_ITEM_STATUS_CONFIG,
+  BOQ_CATEGORY_LABELS,
+  getAvailableQuantity,
+  getRequisitionProgress,
+  getExecutionProgress,
+  determineItemStatus,
+  groupByBill,
+  groupBySection,
+} from './control-boq';
 
 // Progress tracking types
 export * from './progress-tracking';

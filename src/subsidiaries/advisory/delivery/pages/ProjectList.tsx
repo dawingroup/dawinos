@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import { Plus, LayoutGrid, List, Loader2, AlertCircle, FolderOpen } from 'lucide-react';
 import { ProjectCard } from '../components/projects/ProjectCard';
 import { FilterBar } from '../components/common/FilterBar';
-import { ProjectStatus } from '../types/project';
+import { ProjectStatus } from '@/subsidiaries/advisory/core/project/types/project.types';
 import { useAllProjects } from '../hooks/project-hooks';
 import { db } from '@/core/services/firebase';
 

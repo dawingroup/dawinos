@@ -11,7 +11,6 @@ import {
   ArrowRight, 
   Wrench, 
   Layers, 
-  Scissors,
   Image,
   Rocket,
   ChevronDown,
@@ -40,13 +39,6 @@ const MODULE_CONFIG: Record<SubsidiaryModule, {
     icon: Palette,
     href: '/design',
     color: 'bg-[#872E5C]',
-  },
-  'cutlist': {
-    title: 'Cutlist Processor',
-    description: 'Process and optimize cutting lists for production',
-    icon: Scissors,
-    href: '/cutlist',
-    color: 'bg-emerald-600',
   },
   'clipper': {
     title: 'Design Clipper',

@@ -60,14 +60,6 @@ export const FINISHES_NAVIGATION: NavItem[] = [
     ],
   },
   {
-    id: 'cutlist',
-    label: 'Cutlist',
-    href: '/cutlist',
-    icon: 'Scissors',
-    description: 'Process cut lists',
-    keywords: ['cut', 'parts', 'panels'],
-  },
-  {
     id: 'customers',
     label: 'Customers',
     href: '/customers',

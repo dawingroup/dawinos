@@ -12,9 +12,11 @@ import {
   importParsedItems,
   getParsingJobs,
   updateParsingJobStatus,
+  deleteParsingJob,
   type ParsingJob,
 } from '../services/parsingService';
 import type { ParsedBOQItem } from '../ai/schemas/boqSchema';
+import { cleanupBOQItems, type CleanedBOQItem, type CleanupResult } from '../ai/boqCleanupService';
 import * as XLSX from 'xlsx';
 
 // Default organization ID
@@ -33,8 +35,11 @@ export function useBOQParsing({ projectId }: UseBOQParsingOptions) {
   const [activeJob, setActiveJob] = useState<ParsingJob | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isCleaning, setIsCleaning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [parsingHistory, setParsingHistory] = useState<ParsingJob[]>([]);
+  const [cleanedItems, setCleanedItems] = useState<CleanedBOQItem[]>([]);
+  const [cleanupStats, setCleanupStats] = useState<CleanupResult['stats'] | null>(null);
 
   // Subscribe to active job updates
   useEffect(() => {
@@ -137,11 +142,12 @@ export function useBOQParsing({ projectId }: UseBOQParsingOptions) {
     });
   };
   
-  // Extract BOQ item from row data
+  // Extract BOQ item from row data - be PERMISSIVE, let cleanup handle filtering
   const extractBOQItem = (row: Record<string, any>, index: number): ParsedBOQItem | null => {
     // Common column name patterns for BOQ items
-    const descKeys = ['description', 'desc', 'item', 'item description', 'particulars', 'work item'];
-    const qtyKeys = ['qty', 'quantity', 'qnty', 'amount'];
+    const itemCodeKeys = ['item', 'item no', 'item code', 'no', 'ref', 'reference', 'code', 'sn', 's/n', 'item ref'];
+    const descKeys = ['description', 'desc', 'item description', 'particulars', 'work item', 'specification'];
+    const qtyKeys = ['qty', 'quantity', 'qnty'];
     const unitKeys = ['unit', 'uom', 'units'];
     const rateKeys = ['rate', 'unit rate', 'price', 'unit price'];
     const amountKeys = ['amount', 'total', 'total amount', 'value'];
@@ -156,20 +162,28 @@ export function useBOQParsing({ projectId }: UseBOQParsingOptions) {
       return null;
     };
     
+    // Extract item code from the actual data - this is CRITICAL for hierarchy
+    const rawItemCode = findValue(itemCodeKeys);
     const description = findValue(descKeys);
-    const quantity = parseFloat(String(findValue(qtyKeys) || 0)) || 0;
+    // Round quantity UP to nearest whole number
+    const rawQuantity = parseFloat(String(findValue(qtyKeys) || 0)) || 0;
+    const quantity = Math.ceil(rawQuantity);
     const unit = String(findValue(unitKeys) || 'nr');
     const rate = parseFloat(String(findValue(rateKeys) || 0)) || 0;
     const amount = parseFloat(String(findValue(amountKeys) || 0)) || quantity * rate;
     
-    // Skip if no meaningful data
-    if (!description || (quantity === 0 && rate === 0 && amount === 0)) {
+    // PERMISSIVE: Only skip if BOTH description AND item code are missing
+    // Header rows (bills, elements, sections) often have no qty/rate/amount but ARE important
+    if (!description && !rawItemCode) {
       return null;
     }
     
+    // Use actual item code from Excel if found, otherwise generate index-based code
+    const itemCode = rawItemCode ? String(rawItemCode).trim() : String(index);
+    
     return {
-      itemCode: String(index),
-      description: String(description),
+      itemCode,
+      description: String(description || ''),
       quantity,
       unit,
       rate,
@@ -269,8 +283,96 @@ export function useBOQParsing({ projectId }: UseBOQParsingOptions) {
   const clearActiveJob = useCallback(() => {
     setActiveJob(null);
     setActiveJobId(null);
+    setCleanedItems([]);
+    setCleanupStats(null);
     setError(null);
   }, []);
+
+  // Cleanup parsed items with AI enrichment
+  const runCleanup = useCallback(async () => {
+    const items = activeJob?.parsedItems;
+    if (!items || items.length === 0) {
+      setError('No items to cleanup');
+      return;
+    }
+    
+    setIsCleaning(true);
+    setError(null);
+    
+    try {
+      console.log('Running cleanup on', items.length, 'items...');
+      const result = await cleanupBOQItems(items);
+      console.log('Cleanup complete:', result.stats);
+      
+      setCleanedItems(result.cleanedItems);
+      setCleanupStats(result.stats);
+      
+      return result;
+    } catch (err) {
+      console.error('Cleanup failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to cleanup items');
+      return null;
+    } finally {
+      setIsCleaning(false);
+    }
+  }, [activeJob?.parsedItems]);
+
+  // Import cleaned items (uses cleaned items if available, otherwise parsed items)
+  const importCleanedItems = useCallback(async (items: CleanedBOQItem[]) => {
+    console.log('importCleanedItems called with', items?.length, 'items');
+    
+    if (!userId) {
+      setError('User not authenticated');
+      return [];
+    }
+    
+    if (!items || items.length === 0) {
+      setError('No items to import');
+      return [];
+    }
+    
+    setIsImporting(true);
+    setError(null);
+    
+    try {
+      // Pass CleanedBOQItem directly - importParsedItems now handles all hierarchy fields
+      // Cast to any to preserve all CleanedBOQItem fields including hierarchy data
+      const importedIds = await importParsedItems(orgId, projectId, items as any, userId);
+      console.log('Imported', importedIds.length, 'items');
+      
+      // Clear state after successful import
+      setActiveJob(null);
+      setActiveJobId(null);
+      setCleanedItems([]);
+      setCleanupStats(null);
+      
+      return importedIds;
+    } catch (err) {
+      console.error('Import failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to import items');
+      return [];
+    } finally {
+      setIsImporting(false);
+    }
+  }, [orgId, projectId, userId]);
+
+  // Delete a parsing job from history
+  const deleteHistoryJob = useCallback(async (jobId: string) => {
+    if (!projectId) return;
+    
+    try {
+      console.log('Deleting parsing job:', { orgId, projectId, jobId });
+      await deleteParsingJob(orgId, projectId, jobId);
+      console.log('Delete successful, refreshing history...');
+      // Optimistically remove from local state immediately
+      setParsingHistory(prev => prev.filter(job => job.id !== jobId));
+      // Then refresh from server
+      await loadParsingHistory();
+    } catch (err) {
+      console.error('Failed to delete parsing job:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete job');
+    }
+  }, [orgId, projectId, loadParsingHistory]);
 
   // Computed states
   const isProcessing = activeJob?.status === 'processing' || isUploading;
@@ -283,15 +385,21 @@ export function useBOQParsing({ projectId }: UseBOQParsingOptions) {
     isProcessing,
     isUploading,
     isImporting,
+    isCleaning,
     progress,
     parsedItems,
+    cleanedItems,
+    cleanupStats,
     parsingHistory,
     error,
     
     // Actions
     startParsing,
     importItems,
+    importCleanedItems,
+    runCleanup,
     clearActiveJob,
     refreshHistory: loadParsingHistory,
+    deleteHistoryJob,
   };
 }

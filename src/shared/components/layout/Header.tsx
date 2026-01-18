@@ -6,7 +6,7 @@
 
 import { useAuth } from '@/shared/hooks';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LogOut, User, Scissors, FolderOpen, Wrench, Layers, Rocket, Image, Package } from 'lucide-react';
+import { LogOut, User, FolderOpen, Wrench, Layers, Rocket, Image, Package } from 'lucide-react';
 
 export interface HeaderProps {
   title?: string;
@@ -24,7 +24,7 @@ export function Header({ title = 'Dawin Finishes' }: HeaderProps) {
     if (location.pathname.startsWith('/assets')) return 'assets';
     if (location.pathname.startsWith('/features')) return 'features';
     if (location.pathname.startsWith('/inventory')) return 'inventory';
-    return 'cutlist';
+    return 'design';
   };
   const currentModule = getCurrentModule();
 
@@ -33,11 +33,7 @@ export function Header({ title = 'Dawin Finishes' }: HeaderProps) {
       {/* Left: Logo and Brand */}
       <div className="flex items-center gap-2">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#872E5C] to-[#E18425]">
-          {currentModule === 'cutlist' ? (
-            <Scissors className="h-5 w-5 text-white" />
-          ) : (
-            <FolderOpen className="h-5 w-5 text-white" />
-          )}
+          <FolderOpen className="h-5 w-5 text-white" />
         </div>
         <div className="hidden sm:block">
           <h1 className="text-sm font-semibold text-gray-900">{title}</h1>
@@ -57,17 +53,6 @@ export function Header({ title = 'Dawin Finishes' }: HeaderProps) {
         >
           <Image className="h-4 w-4" />
           <span className="hidden sm:inline">Clipper</span>
-        </button>
-        <button
-          onClick={() => navigate('/cutlist')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors min-h-[36px] sm:min-h-auto ${
-            currentModule === 'cutlist'
-              ? 'bg-[#1d1d1f] text-white'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          }`}
-        >
-          <Scissors className="h-4 w-4" />
-          <span className="hidden sm:inline">Cutlist</span>
         </button>
         <button
           onClick={() => navigate('/design')}

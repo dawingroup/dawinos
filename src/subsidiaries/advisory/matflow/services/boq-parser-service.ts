@@ -250,8 +250,10 @@ export const parseLocally = async (
       updatedAt: serverTimestamp(),
     });
 
-    // Parse Excel file
-    const excelData = await parseExcelFile(file, options?.selectedSheet);
+    // Parse Excel file - use all sheets if no specific sheet selected
+    const excelData = options?.selectedSheet 
+      ? await parseExcelFile(file, options.selectedSheet)
+      : await parseAllExcelSheets(file);
 
     // Update status to parsing
     await updateDoc(jobRef, {
@@ -705,6 +707,90 @@ export const parseExcelFile = async (
   });
 };
 
+/**
+ * Parse ALL sheets from an Excel file
+ * Returns combined rows from all BOQ-like sheets with sheet name prefixed to bill tracking
+ */
+export const parseAllExcelSheets = async (
+  file: File
+): Promise<ParsedExcelData> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+
+        const allRows: Record<string, any>[] = [];
+        let combinedHeaders: string[] = [];
+        const sheetNames: string[] = [];
+
+        for (const sheetName of workbook.SheetNames) {
+          const sheet = workbook.Sheets[sheetName];
+          if (!sheet) continue;
+
+          // Get headers from first row
+          const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+          const headers = jsonData[0]?.map((h) => String(h || '')) || [];
+
+          // Check if this looks like a BOQ sheet
+          const boqKeywords = ['item', 'description', 'qty', 'quantity', 'unit', 'rate', 'amount'];
+          const headerText = headers.join(' ').toLowerCase();
+          const matchCount = boqKeywords.filter((kw) => headerText.includes(kw)).length;
+          
+          if (matchCount < 2) {
+            // Skip non-BOQ sheets
+            continue;
+          }
+
+          // Use first valid headers as combined headers
+          if (combinedHeaders.length === 0) {
+            combinedHeaders = headers;
+          }
+
+          // Get data rows and add sheet source
+          const rows = XLSX.utils.sheet_to_json(sheet) as Record<string, any>[];
+          
+          // Add a marker row to indicate sheet/bill change
+          if (rows.length > 0) {
+            allRows.push({
+              __sheetName: sheetName,
+              __isSheetHeader: true,
+              description: `BILL: ${sheetName}`,
+              itemCode: '',
+            });
+          }
+          
+          // Add rows with sheet source tracking
+          for (const row of rows) {
+            allRows.push({
+              ...row,
+              __sheetName: sheetName,
+            });
+          }
+          
+          sheetNames.push(sheetName);
+        }
+
+        console.log(`[parseAllExcelSheets] Parsed ${sheetNames.length} BOQ sheets: ${sheetNames.join(', ')}`);
+        console.log(`[parseAllExcelSheets] Total rows: ${allRows.length}`);
+
+        resolve({
+          headers: combinedHeaders,
+          rows: allRows,
+          sheetName: sheetNames.join(', '),
+        });
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+};
+
 export const boqParserService = {
   uploadBOQFile,
   startParsing,
@@ -715,6 +801,7 @@ export const boqParserService = {
   startReview,
   updateItemReview,
   completeReview,
+  parseAllExcelSheets,
   applyToBOQ,
   applyToBOQLocally,
   parseExcelFile,

@@ -63,7 +63,6 @@ const FinishesDashboard = lazy(() => import('@/app/pages/DawinOSDashboard'));
 
 // Finishes Modules
 const DesignManagerModule = lazy(() => import('@/modules/design-manager/DesignManagerModule'));
-const CutlistProcessorPage = lazy(() => import('@/app/pages/CutlistProcessorPage'));
 const CustomerHubModule = lazy(() => import('@/modules/customer-hub/CustomerHubModule'));
 const LaunchPipelineModule = lazy(() => import('@/modules/launch-pipeline/LaunchPipelineModule'));
 const AssetRegistryPage = lazy(() => import('@/modules/assets').then(module => ({ default: module.AssetRegistryPage })));
@@ -200,10 +199,6 @@ export const router = createBrowserRouter([
       {
         path: 'design/*',
         element: <PageWrapper><DesignManagerModule /></PageWrapper>,
-      },
-      {
-        path: 'cutlist/*',
-        element: <PageWrapper><CutlistProcessorPage /></PageWrapper>,
       },
       {
         path: 'customers/*',

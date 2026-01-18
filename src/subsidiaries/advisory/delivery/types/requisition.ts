@@ -69,7 +69,7 @@ export const ACCOUNTABILITY_STATUS_CONFIG: Record<AccountabilityStatus, {
 };
 
 // ─────────────────────────────────────────────────────────────────
-// REQUISITION ITEM
+// REQUISITION ITEM (Manual entry)
 // ─────────────────────────────────────────────────────────────────
 
 export interface RequisitionItem {
@@ -81,6 +81,45 @@ export interface RequisitionItem {
   unitCost: number;
   totalCost: number;
   notes?: string;
+  
+  // BOQ reference (if from Control BOQ)
+  boqItemId?: string;
+  boqItemCode?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// REQUISITION BOQ ITEM (Selected from Control BOQ)
+// ─────────────────────────────────────────────────────────────────
+
+export interface RequisitionBOQItem {
+  id: string;
+  
+  // Reference to source BOQ item
+  boqItemId: string;
+  boqItemCode: string;
+  
+  // Item details (copied from BOQ)
+  description: string;
+  specification?: string;
+  billName?: string;
+  sectionName?: string;
+  category?: ExpenseCategory;
+  
+  // Requisition quantity
+  unit: string;
+  quantityRequested: number;
+  quantityAvailable: number;
+  
+  // Rates & Amounts
+  rate: number;
+  amount: number;
+  
+  // Notes
+  notes?: string;
+  
+  // Execution tracking
+  quantityExecuted: number;
+  executionNotes?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -99,8 +138,12 @@ export interface Requisition extends Payment {
   budgetLineName: string;
   budgetLineBalance: number;
   
-  // Line items
+  // Line items (manual entry or BOQ-based)
   items: RequisitionItem[];
+  
+  // BOQ-based items (selected from Control BOQ)
+  boqItems?: RequisitionBOQItem[];
+  sourceType: 'manual' | 'boq' | 'mixed';
   
   // Accountability tracking
   accountabilityStatus: AccountabilityStatus;
@@ -121,10 +164,32 @@ export interface RequisitionFormData {
   projectId: string;
   purpose: string;
   budgetLineId: string;
-  items: Omit<RequisitionItem, 'id'>[];
   advanceType: AdvanceType;
   expectedReturnDate?: Date;
   accountabilityDueDate: Date;
+  
+  // Source type determines which items array to use
+  sourceType: 'manual' | 'boq' | 'mixed';
+  
+  // Manual entry items
+  items: Omit<RequisitionItem, 'id'>[];
+  
+  // BOQ-based items (selected from Control BOQ)
+  boqItems?: Omit<RequisitionBOQItem, 'id' | 'quantityExecuted'>[];
+}
+
+export interface BOQItemSelection {
+  boqItemId: string;
+  boqItemCode: string;
+  description: string;
+  specification?: string;
+  billName?: string;
+  sectionName?: string;
+  unit: string;
+  quantityAvailable: number;
+  quantityRequested: number;
+  rate: number;
+  notes?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────

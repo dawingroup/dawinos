@@ -20,6 +20,7 @@ const Settings = React.lazy(() => import('./pages/Settings'));
 const AdminSeed = React.lazy(() => import('./pages/AdminSeed'));
 const MaterialLibrary = React.lazy(() => import('./pages/MaterialLibrary'));
 const FormulaDatabase = React.lazy(() => import('./pages/FormulaDatabase'));
+const MaterialForecast = React.lazy(() => import('./pages/MaterialForecast'));
 
 // Loading fallback
 const PageLoader = () => (
@@ -73,6 +74,14 @@ export const MatFlowRoutes: React.FC = () => {
             element={
               <React.Suspense fallback={<PageLoader />}>
                 <BOQImport />
+              </React.Suspense>
+            } 
+          />
+          <Route 
+            path=":projectId/forecast" 
+            element={
+              <React.Suspense fallback={<PageLoader />}>
+                <MaterialForecast />
               </React.Suspense>
             } 
           />

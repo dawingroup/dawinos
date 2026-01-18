@@ -174,22 +174,28 @@ export function useSyncLink() {
   return { sync, loading, error };
 }
 
+import { useAuth } from '../../../../hooks/useAuth';
+...
 /**
  * Create project from deal
  */
 export function useCreateProjectFromDeal() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const { user } = useAuth();
 
   const createProject = useCallback(
     async (
       config: ProjectCreationFromDeal,
-      userId: string
     ): Promise<{ projectId: string; linkId: string }> => {
+      if (!user) {
+        throw new Error('User is not authenticated');
+      }
+
       try {
         setLoading(true);
         setError(null);
-        const result = await crossModuleService.createProjectFromDeal(config, userId);
+        const result = await crossModuleService.createProjectFromDeal(user.orgId, config, user.uid);
         return result;
       } catch (err) {
         const e = err instanceof Error ? err : new Error('Failed to create project');
@@ -199,7 +205,7 @@ export function useCreateProjectFromDeal() {
         setLoading(false);
       }
     },
-    []
+    [user]
   );
 
   return { createProject, loading, error };

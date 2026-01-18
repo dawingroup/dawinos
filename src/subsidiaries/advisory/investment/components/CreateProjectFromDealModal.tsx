@@ -88,7 +88,7 @@ export const CreateProjectFromDealModal: React.FC<CreateProjectFromDealModalProp
     };
     
     try {
-      const result = await createProject(config, 'current-user');
+      const result = await createProject(config);
       onSuccess?.(result.projectId);
       onClose();
     } catch (err) {

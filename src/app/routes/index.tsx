@@ -9,7 +9,6 @@ import { AppLayout } from '@/shared/components/layout';
 
 // Lazy load pages for code splitting
 const DawinOSDashboard = lazy(() => import('../pages/DawinOSDashboard'));
-const CutlistProcessorPage = lazy(() => import('../pages/CutlistProcessorPage'));
 const DesignManagerPage = lazy(() => import('../pages/DesignManagerPage'));
 const AssetRegistryPage = lazy(() => import('../pages/AssetRegistryPage'));
 const FeatureLibraryPage = lazy(() => import('../pages/FeatureLibraryPage'));
@@ -48,7 +47,6 @@ export const ROUTES = {
   HOME: '/',
   DASHBOARD: '/',
   CLIPPER: '/clipper',
-  CUTLIST: '/cutlist',
   DESIGN: '/design',
   ASSETS: '/assets',
   FEATURES: '/features',
@@ -76,10 +74,6 @@ export const routeConfig: RouteObject[] = [
       {
         path: 'clipper',
         element: withSuspense(ClipperPage),
-      },
-      {
-        path: 'cutlist/*',
-        element: withSuspense(CutlistProcessorPage),
       },
       {
         path: 'design/*',

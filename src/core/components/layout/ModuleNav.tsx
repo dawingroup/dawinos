@@ -4,7 +4,7 @@
  */
 
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, FileSpreadsheet, Palette, Package, Factory, Wrench, Layers, Rocket } from 'lucide-react';
+import { LayoutDashboard, Palette, Package, Factory, Wrench, Layers, Rocket } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
 export interface NavItem {
@@ -20,11 +20,6 @@ const navItems: NavItem[] = [
     label: 'Dashboard',
     href: '/',
     icon: <LayoutDashboard className="w-5 h-5" />,
-  },
-  {
-    label: 'Cutlist Processor',
-    href: '/cutlist',
-    icon: <FileSpreadsheet className="w-5 h-5" />,
   },
   {
     label: 'Design Manager',

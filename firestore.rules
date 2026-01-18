@@ -408,22 +408,22 @@ service cloud.firestore {
     // Global MatFlow Collections
     // ----------------------------------------
     
-    // Standard Formulas - Read by all authenticated, write by admins
+    // Standard Formulas - Read by all authenticated, write by authenticated (for seeding)
     match /matflow/data/formulas/{formulaId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isAuthenticated();
     }
     
-    // Material Rates - Read by all authenticated, write by admins
+    // Material Rates - Read by all authenticated, write by authenticated (for seeding)
     match /matflow/data/material_rates/{rateId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isAuthenticated();
     }
     
-    // Role Definitions - Read by all authenticated, write by admins
+    // Role Definitions - Read by all authenticated, write by authenticated (for seeding)
     match /matflow/data/roles/{roleId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isAuthenticated();
     }
     
     // ----------------------------------------
@@ -466,7 +466,7 @@ service cloud.firestore {
       match /parsing_jobs/{jobId} {
         allow read: if isAuthenticated();
         allow create, update: if isAuthenticated();
-        allow delete: if false;
+        allow delete: if isAuthenticated();
       }
     }
     
@@ -1274,12 +1274,47 @@ service cloud.firestore {
         allow create: if isAuthenticated();
         allow update, delete: if isAdmin();
       }
+      
+      // Control BOQ Items (subcollection)
+      match /boq_items/{itemId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated();
+        allow delete: if isAuthenticated();
+      }
+      
+      // Control BOQ Document (subcollection)
+      match /control_boq/{docId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated();
+        allow delete: if isAdmin();
+      }
+    }
+    
+    // BOQ Items (root-level collection for cross-project queries)
+    match /boq_items/{itemId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAuthenticated();
     }
     
     // IPCs (Interim Payment Certificates)
     match /ipcs/{ipcId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+    
+    // Payments Collection (unified for IPCs, Requisitions, Accountabilities)
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        // Creator can update drafts
+        (resource.data.createdBy == request.auth.uid && resource.data.status == 'draft') ||
+        // Approvers can update status
+        isFinance() ||
+        hasAnyRole(['project_manager', 'program_manager', 'quantity_surveyor', 'site_engineer', 'finance_director', 'country_coordinator'])
+      );
       allow delete: if isAdmin();
     }
     

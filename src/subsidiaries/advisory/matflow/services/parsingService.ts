@@ -8,6 +8,7 @@ import {
   setDoc,
   getDoc,
   updateDoc,
+  deleteDoc,
   collection,
   query,
   orderBy,
@@ -244,6 +245,18 @@ export async function getParsingJobs(
   })) as ParsingJob[];
 }
 
+/**
+ * Delete a parsing job from history
+ */
+export async function deleteParsingJob(
+  organizationId: string,
+  projectId: string,
+  jobId: string
+): Promise<void> {
+  const jobRef = doc(parsingJobsCollection(organizationId, projectId), jobId);
+  await deleteDoc(jobRef);
+}
+
 // ============================================================================
 // IMPORT PARSED ITEMS
 // ============================================================================
@@ -278,6 +291,8 @@ export async function importParsedItems(
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     console.log(`Importing item ${i + 1}/${items.length}:`, item.description?.substring(0, 50));
+    // Cast to any to access CleanedBOQItem fields
+    const cleanedItem = item as any;
     const boqItemData = {
       projectId,
       itemCode: item.itemCode,
@@ -289,11 +304,31 @@ export async function importParsedItems(
       rate: item.rate || 0,
       amount: item.amount || (item.quantity * (item.rate || 0)),
       stage: item.stage || 'uncategorized',
+      category: item.category || null,
+      // Hierarchy fields from cleanup
+      billNumber: cleanedItem.billNumber || null,
+      billName: cleanedItem.billName || null,
+      elementCode: cleanedItem.elementCode || null,
+      elementName: cleanedItem.elementName || null,
+      sectionCode: cleanedItem.sectionCode || null,
+      sectionName: cleanedItem.sectionName || null,
+      hierarchyPath: cleanedItem.hierarchyPath || null,
+      hierarchyLevel: cleanedItem.hierarchyLevel || null,
+      // Cleanup metadata
+      itemName: cleanedItem.itemName || null,
+      specifications: cleanedItem.specifications || null,
+      governingSpecs: cleanedItem.governingSpecs || null,
+      isSummaryRow: cleanedItem.isSummaryRow || false,
+      // Formula matching
       formulaId: null,
-      formulaCode: item.suggestedFormulaCode || null,
-      materialRequirements: [],
+      formulaCode: item.suggestedFormulaCode || cleanedItem.suggestedFormula?.formulaCode || null,
+      suggestedFormula: cleanedItem.suggestedFormula || null,
+      materialRequirements: cleanedItem.materialRequirements || [],
       aiConfidence: item.confidence || 0.8,
       isVerified: (item.confidence || 0.8) >= 0.8,
+      needsEnhancement: cleanedItem.needsEnhancement || false,
+      enhancementReasons: cleanedItem.enhancementReasons || null,
+      cleanupNotes: cleanedItem.cleanupNotes || [],
       source: { type: 'ai_import' as const },
       version: 1,
       lastModifiedAt: serverTimestamp(),

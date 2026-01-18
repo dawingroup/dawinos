@@ -15,6 +15,12 @@ import { NewProject } from './pages/NewProject';
 import { ApprovalsPage } from './pages/ApprovalsPage';
 import { PaymentsPage } from './pages/PaymentsPage';
 import { SiteVisitsPage } from './pages/SiteVisitsPage';
+import { RequisitionsPage } from './pages/RequisitionsPage';
+import { RequisitionDetailPage } from './pages/RequisitionDetailPage';
+import { AccountabilityFormPage } from './pages/AccountabilityFormPage';
+import { AccountabilityDetailPage } from './pages/AccountabilityDetailPage';
+import { NewBOQRequisitionPage } from './pages/NewBOQRequisitionPage';
+import { RequisitionForm } from './components/forms/RequisitionForm';
 
 export function DeliveryRoutes() {
   return (
@@ -29,6 +35,13 @@ export function DeliveryRoutes() {
         <Route path="projects/:projectId" element={<ProjectDetail />} />
         <Route path="projects/:projectId/payments" element={<PaymentsPage />} />
         <Route path="projects/:projectId/visits" element={<SiteVisitsPage />} />
+        <Route path="projects/:projectId/requisitions" element={<RequisitionsPage />} />
+        <Route path="projects/:projectId/requisitions/new" element={<NewBOQRequisitionPage />} />
+        <Route path="projects/:projectId/requisitions/new/manual" element={<RequisitionForm />} />
+        <Route path="requisitions/:requisitionId" element={<RequisitionDetailPage />} />
+        <Route path="requisitions/:requisitionId/edit" element={<RequisitionForm />} />
+        <Route path="requisitions/:requisitionId/accountability/new" element={<AccountabilityFormPage />} />
+        <Route path="accountabilities/:accountabilityId" element={<AccountabilityDetailPage />} />
         <Route path="approvals" element={<ApprovalsPage />} />
       </Route>
     </Routes>

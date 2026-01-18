@@ -34,6 +34,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      'firebase/firestore': path.resolve(__dirname, './src/firebase/__mocks__/firestore.ts'),
     },
   },
 });

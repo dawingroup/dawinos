@@ -15,6 +15,8 @@ import {
   RefreshCw,
   FolderOpen,
   Settings,
+  Calculator,
+  Package,
 } from 'lucide-react';
 import { cn } from '@/core/lib/utils';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
@@ -35,6 +37,8 @@ export const MatFlowLayout: React.FC = () => {
     { id: 'dashboard', path: '/advisory/matflow', label: 'Overview', icon: LayoutDashboard, exact: true },
     { id: 'projects', path: '/advisory/matflow/projects', label: 'Projects', icon: FolderOpen },
     { id: 'boq', path: '/advisory/matflow/boq', label: 'BOQ', icon: FileText },
+    { id: 'formulas', path: '/advisory/matflow/formulas', label: 'Formulas', icon: Calculator },
+    { id: 'materials', path: '/advisory/matflow/materials', label: 'Materials', icon: Package },
     { id: 'procurement', path: '/advisory/matflow/procurement', label: 'Procurement', icon: ShoppingCart, badge: pendingApprovals.length || undefined },
     { id: 'reports', path: '/advisory/matflow/reports', label: 'Reports', icon: Receipt },
     { id: 'settings', path: '/advisory/matflow/settings', label: 'Settings', icon: Settings },

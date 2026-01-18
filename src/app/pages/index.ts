@@ -4,5 +4,4 @@
  */
 
 export { default as DashboardPage } from './DashboardPage';
-export { default as CutlistProcessorPage } from './CutlistProcessorPage';
 export { default as DesignManagerPage } from './DesignManagerPage';

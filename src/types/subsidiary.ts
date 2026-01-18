@@ -18,7 +18,6 @@ export interface Subsidiary {
 
 export type SubsidiaryModule = 
   | 'design-manager'
-  | 'cutlist'
   | 'clipper'
   | 'asset-registry'
   | 'feature-library'
@@ -44,7 +43,7 @@ export const DEFAULT_SUBSIDIARIES: Subsidiary[] = [
     shortName: 'Finishes',
     color: '#872E5C',
     description: 'Custom millwork and furniture manufacturing',
-    modules: ['design-manager', 'cutlist', 'clipper', 'asset-registry', 'feature-library', 'launch-pipeline'],
+    modules: ['design-manager', 'clipper', 'asset-registry', 'feature-library', 'launch-pipeline'],
     status: 'active',
     createdAt: new Date(),
     updatedAt: new Date(),

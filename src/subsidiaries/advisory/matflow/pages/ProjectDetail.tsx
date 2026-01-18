@@ -24,10 +24,18 @@ import {
   Upload,
   Download,
   Trash2,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  RefreshCw,
+  Calculator,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useMatFlowProject, useProjectBOQItems, useProjectDeliveries, useProjectMutations } from '../hooks/useMatFlow';
 import { formatCurrency, formatDate } from '../utils/formatters';
+import { exportAndDownloadBOQ } from '../services/boqExportService';
+import { toggleItemSelection, bulkToggleSelection } from '../services/materialForecastService';
+import { useAuth } from '@/core/hooks/useAuth';
 
 type Tab = 'overview' | 'boq' | 'deliveries' | 'variance' | 'invoices' | 'reports' | 'settings';
 
@@ -207,7 +215,17 @@ const ProjectDetail: React.FC = () => {
         )}
         
         {activeTab === 'boq' && (
-          <BOQTab projectId={projectId!} items={boqItems || []} loading={boqLoading} />
+          <BOQTab 
+            projectId={projectId!} 
+            items={boqItems || []} 
+            loading={boqLoading} 
+            projectInfo={project ? {
+              name: project.name,
+              clientName: project.customerName,
+              location: project.location?.district || project.location?.address || '',
+              description: project.description,
+            } : undefined}
+          />
         )}
         
         {activeTab === 'deliveries' && (
@@ -301,8 +319,63 @@ function OverviewTab({ project, deliveries }: { project: any; boqItems?: any[]; 
   );
 }
 
-// BOQ Tab
-function BOQTab({ projectId, items, loading }: { projectId: string; items: any[]; loading: boolean }) {
+// BOQ Tab - Hierarchical Display
+interface ProjectInfo {
+  name: string;
+  clientName?: string;
+  location?: string;
+  description?: string;
+}
+
+function BOQTab({ projectId, items, loading, projectInfo }: { projectId: string; items: any[]; loading: boolean; projectInfo?: ProjectInfo }) {
+  const { user } = useAuth();
+  const [collapsedBills, setCollapsedBills] = React.useState<Set<string>>(new Set());
+  const [collapsedElements, setCollapsedElements] = React.useState<Set<string>>(new Set());
+  const [isExporting, setIsExporting] = React.useState(false);
+  const [isTogglingSelection, setIsTogglingSelection] = React.useState<string | null>(null);
+  
+  // Handle item selection toggle
+  const handleToggleSelection = async (itemId: string, currentlySelected: boolean) => {
+    if (!user) return;
+    setIsTogglingSelection(itemId);
+    try {
+      await toggleItemSelection(itemId, user.uid, !currentlySelected, projectId);
+    } catch (err) {
+      console.error('Failed to toggle selection:', err);
+    } finally {
+      setIsTogglingSelection(null);
+    }
+  };
+  
+  // Handle bulk selection
+  const handleSelectAll = async () => {
+    if (!user) return;
+    const unselectedIds = items.filter((i: any) => !i.isSelectedForImplementation).map((i: any) => i.id);
+    if (unselectedIds.length === 0) return;
+    setIsTogglingSelection('bulk');
+    try {
+      await bulkToggleSelection(unselectedIds, user.uid, true, projectId);
+    } catch (err) {
+      console.error('Failed to select all:', err);
+    } finally {
+      setIsTogglingSelection(null);
+    }
+  };
+  
+  const handleClearSelection = async () => {
+    if (!user) return;
+    const selectedIds = items.filter((i: any) => i.isSelectedForImplementation).map((i: any) => i.id);
+    if (selectedIds.length === 0) return;
+    setIsTogglingSelection('bulk');
+    try {
+      await bulkToggleSelection(selectedIds, user.uid, false, projectId);
+    } catch (err) {
+      console.error('Failed to clear selection:', err);
+    } finally {
+      setIsTogglingSelection(null);
+    }
+  };
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center h-48">
@@ -311,11 +384,167 @@ function BOQTab({ projectId, items, loading }: { projectId: string; items: any[]
     );
   }
   
+  // Group items by hierarchy: Bill > Element > Section > Items
+  type HierarchyMeta = { items: any[]; name?: string };
+  type SectionGroup = Record<string, HierarchyMeta>;
+  type ElementGroup = Record<string, { sections: SectionGroup; name?: string }>;
+  type BillGroup = Record<string, { elements: ElementGroup; name?: string }>;
+  
+  const groupedItems: BillGroup = {};
+  
+  for (const item of items) {
+    const bill = item.billNumber || 'Uncategorized';
+    const element = item.elementCode || 'General';
+    const section = item.sectionCode || 'Items';
+    
+    if (!groupedItems[bill]) {
+      groupedItems[bill] = { elements: {}, name: item.billName };
+    }
+    if (item.billName && !groupedItems[bill].name) {
+      groupedItems[bill].name = item.billName;
+    }
+    
+    if (!groupedItems[bill].elements[element]) {
+      groupedItems[bill].elements[element] = { sections: {}, name: item.elementName };
+    }
+    if (item.elementName && !groupedItems[bill].elements[element].name) {
+      groupedItems[bill].elements[element].name = item.elementName;
+    }
+    
+    if (!groupedItems[bill].elements[element].sections[section]) {
+      groupedItems[bill].elements[element].sections[section] = { items: [], name: item.sectionName };
+    }
+    if (item.sectionName && !groupedItems[bill].elements[element].sections[section].name) {
+      groupedItems[bill].elements[element].sections[section].name = item.sectionName;
+    }
+    
+    groupedItems[bill].elements[element].sections[section].items.push(item);
+  }
+  
+  const toggleBill = (billNumber: string) => {
+    const newCollapsed = new Set(collapsedBills);
+    if (newCollapsed.has(billNumber)) {
+      newCollapsed.delete(billNumber);
+    } else {
+      newCollapsed.add(billNumber);
+    }
+    setCollapsedBills(newCollapsed);
+  };
+  
+  const toggleElement = (key: string) => {
+    const newCollapsed = new Set(collapsedElements);
+    if (newCollapsed.has(key)) {
+      newCollapsed.delete(key);
+    } else {
+      newCollapsed.add(key);
+    }
+    setCollapsedElements(newCollapsed);
+  };
+  
+  const [isCleaningUp, setIsCleaningUp] = React.useState(false);
+  const [cleanupProgress, setCleanupProgress] = React.useState<string | null>(null);
+  const navigate = useNavigate();
+  
+  const handleRunCleanup = async () => {
+    // Navigate to import page with cleanup mode for existing items
+    navigate(`/advisory/matflow/projects/${projectId}/import?mode=cleanup`);
+  };
+  
+  // Stats for the summary bar
+  const totalItems = items.length;
+  const totalAmount = items.reduce((sum, item) => sum + (item.amount || 0), 0);
+  const itemsNeedingReview = items.filter((item: any) => item.needsEnhancement).length;
+  const uncategorizedCount = items.filter((item: any) => !item.billNumber || item.billNumber === 'Uncategorized').length;
+  const selectedCount = items.filter((item: any) => item.isSelectedForImplementation).length;
+  
   return (
-    <div className="p-6">
+    <div className="p-4">
+      {/* Summary Stats */}
+      {items.length > 0 && (
+        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+          <div className="flex flex-wrap gap-4 text-sm">
+            <div>
+              <span className="text-gray-500">Total Items:</span>
+              <span className="ml-1 font-medium">{totalItems}</span>
+            </div>
+            <div>
+              <span className="text-gray-500">Total Value:</span>
+              <span className="ml-1 font-medium">{formatCurrency(totalAmount, 'UGX')}</span>
+            </div>
+            {itemsNeedingReview > 0 && (
+              <div className="text-yellow-600">
+                <AlertCircle className="w-4 h-4 inline mr-1" />
+                {itemsNeedingReview} items need review
+              </div>
+            )}
+            {uncategorizedCount > 0 && (
+              <div className="text-amber-600">
+                <span>{uncategorizedCount} uncategorized</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Selection Controls */}
+      {items.length > 0 && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium text-blue-900">
+              Select items for implementation:
+            </span>
+            <button
+              onClick={handleSelectAll}
+              disabled={isTogglingSelection === 'bulk'}
+              className="text-sm text-blue-700 hover:text-blue-900 underline disabled:opacity-50"
+            >
+              Select All ({items.length - selectedCount})
+            </button>
+            <button
+              onClick={handleClearSelection}
+              disabled={isTogglingSelection === 'bulk' || selectedCount === 0}
+              className="text-sm text-blue-700 hover:text-blue-900 underline disabled:opacity-50"
+            >
+              Clear Selection
+            </button>
+          </div>
+          {isTogglingSelection === 'bulk' && (
+            <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
+          )}
+        </div>
+      )}
+      
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-gray-900">Bill of Quantities</h3>
+        <div>
+          <h3 className="font-semibold text-gray-900">Bill of Quantities</h3>
+          {selectedCount > 0 && (
+            <p className="text-sm text-green-600 font-medium">{selectedCount} of {items.length} items selected for implementation</p>
+          )}
+        </div>
         <div className="flex gap-2">
+          {/* Material Forecast Button */}
+          <Link
+            to={`/advisory/matflow/projects/${projectId}/forecast`}
+            className={cn(
+              "flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg",
+              selectedCount > 0 
+                ? "bg-green-600 text-white hover:bg-green-700"
+                : "bg-gray-200 text-gray-500 cursor-not-allowed"
+            )}
+          >
+            <Calculator className="w-4 h-4" />
+            Material Forecast {selectedCount > 0 && `(${selectedCount})`}
+          </Link>
+          {items.length > 0 && (
+            <button 
+              onClick={handleRunCleanup}
+              disabled={isCleaningUp}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+            >
+              <Sparkles className="w-4 h-4" />
+              {isCleaningUp ? 'Cleaning...' : 'AI Cleanup'}
+            </button>
+          )}
           <Link
             to={`/advisory/matflow/projects/${projectId}/import`}
             className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50"
@@ -323,12 +552,36 @@ function BOQTab({ projectId, items, loading }: { projectId: string; items: any[]
             <Upload className="w-4 h-4" />
             Import
           </Link>
-          <button className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50">
+          <button 
+            onClick={async () => {
+              if (!projectInfo) return;
+              setIsExporting(true);
+              try {
+                await exportAndDownloadBOQ(items, projectInfo);
+              } catch (err) {
+                console.error('Export failed:', err);
+              } finally {
+                setIsExporting(false);
+              }
+            }}
+            disabled={isExporting || items.length === 0}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+          >
             <Download className="w-4 h-4" />
-            Export
+            {isExporting ? 'Exporting...' : 'Export BOQ'}
           </button>
         </div>
       </div>
+      
+      {/* Cleanup Progress */}
+      {cleanupProgress && (
+        <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+          <div className="flex items-center gap-2 text-purple-700">
+            <RefreshCw className="w-4 h-4 animate-spin" />
+            <span className="text-sm">{cleanupProgress}</span>
+          </div>
+        </div>
+      )}
       
       {items.length === 0 ? (
         <div className="text-center py-12">
@@ -344,41 +597,200 @@ function BOQTab({ projectId, items, loading }: { projectId: string; items: any[]
           </Link>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Item</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">Unit</th>
-                <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">Qty</th>
-                <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">Unit Price</th>
-                <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">Total</th>
-                <th className="text-right py-3 px-4 text-sm font-medium text-gray-500">Delivered</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item: any) => (
-                <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4">
-                    <p className="font-medium text-gray-900">{item.description}</p>
-                    <p className="text-xs text-gray-500">{item.itemCode}</p>
-                  </td>
-                  <td className="py-3 px-4 text-gray-600">{item.unit}</td>
-                  <td className="py-3 px-4 text-right text-gray-600">{item.quantityContract || item.quantity || 0}</td>
-                  <td className="py-3 px-4 text-right text-gray-600">{formatCurrency(item.rate || item.unitPrice || 0, 'UGX')}</td>
-                  <td className="py-3 px-4 text-right font-medium">{formatCurrency(item.amount || item.totalPrice || 0, 'UGX')}</td>
-                  <td className="py-3 px-4 text-right">
-                    <span className={cn(
-                      'text-sm',
-                      (item.quantityExecuted || 0) >= (item.quantityContract || item.quantity || 0) ? 'text-green-600' : 'text-amber-600'
-                    )}>
-                      {item.quantityExecuted || item.deliveredQuantity || 0} / {item.quantityContract || item.quantity || 0}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-3">
+          {Object.entries(groupedItems).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true })).map(([billNumber, billData]) => {
+            const isBillCollapsed = collapsedBills.has(billNumber);
+            const billItemCount = Object.values(billData.elements).flatMap(el => Object.values(el.sections).flatMap(s => s.items)).length;
+            const billTotal = Object.values(billData.elements).flatMap(el => Object.values(el.sections).flatMap(s => s.items)).reduce((sum, item) => sum + (item.amount || 0), 0);
+            
+            return (
+              <div key={billNumber} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                {/* Bill Header */}
+                <button
+                  onClick={() => toggleBill(billNumber)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-amber-600 hover:bg-amber-700 text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    {isBillCollapsed ? (
+                      <ChevronDown className="w-5 h-5 text-amber-100" />
+                    ) : (
+                      <ChevronUp className="w-5 h-5 text-amber-100" />
+                    )}
+                    <div>
+                      <div className="font-bold text-white">Bill {billNumber}</div>
+                      {billData.name && <div className="text-sm text-amber-100">{billData.name}</div>}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-amber-100">{billItemCount} items</div>
+                    <div className="text-sm font-medium text-white">{formatCurrency(billTotal, 'UGX')}</div>
+                  </div>
+                </button>
+                
+                {/* Bill Content */}
+                {!isBillCollapsed && (
+                  <div>
+                    <div className="divide-y divide-gray-100">
+                    {Object.entries(billData.elements).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true })).map(([elementCode, elementData]) => {
+                      const elementKey = `${billNumber}-${elementCode}`;
+                      const isElementCollapsed = collapsedElements.has(elementKey);
+                      const elementItemCount = Object.values(elementData.sections).flatMap(s => s.items).length;
+                      const elementTotal = Object.values(elementData.sections).flatMap(s => s.items).reduce((sum, item) => sum + (item.amount || 0), 0);
+                      
+                      return (
+                        <div key={elementCode} className="bg-white">
+                          {/* Element Header */}
+                          {elementCode !== 'General' && (
+                            <button
+                              onClick={() => toggleElement(elementKey)}
+                              className="w-full px-4 py-2.5 bg-blue-100 border-b border-blue-200 flex items-center justify-between hover:bg-blue-150"
+                            >
+                              <div className="flex items-center gap-2">
+                                {isElementCollapsed ? (
+                                  <ChevronDown className="w-4 h-4 text-blue-600" />
+                                ) : (
+                                  <ChevronUp className="w-4 h-4 text-blue-600" />
+                                )}
+                                <span className="font-semibold text-blue-800">Element {billNumber}.{elementCode}</span>
+                                {elementData.name && <span className="text-blue-600">- {elementData.name}</span>}
+                              </div>
+                              <div className="text-right">
+                                <span className="text-xs text-blue-500">{elementItemCount} items</span>
+                                <span className="text-sm font-medium text-blue-700 ml-3">{formatCurrency(elementTotal, 'UGX')}</span>
+                              </div>
+                            </button>
+                          )}
+                          
+                          {/* Sections */}
+                          {(elementCode === 'General' || !isElementCollapsed) && Object.entries(elementData.sections).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true })).map(([sectionCode, sectionData]) => (
+                            <div key={sectionCode}>
+                              {/* Section Header */}
+                              {sectionCode !== 'Items' && (
+                                <div className="px-6 py-2 bg-gray-100 border-b border-gray-200 flex items-center justify-between">
+                                  <div>
+                                    <span className="font-medium text-gray-700">Section {billNumber}.{elementCode}.{sectionCode}</span>
+                                    {sectionData.name && <span className="text-gray-500 ml-2">- {sectionData.name}</span>}
+                                  </div>
+                                  <span className="text-xs text-gray-400">{sectionData.items.length} items</span>
+                                </div>
+                              )}
+                              
+                              {/* Work Items */}
+                              <div className="divide-y divide-gray-50">
+                                {sectionData.items.map((item: any) => (
+                                  <div key={item.id} className={cn(
+                                    "px-4 py-2 hover:bg-gray-50 flex items-start gap-3",
+                                    item.isSelectedForImplementation && "bg-green-50 border-l-4 border-green-500"
+                                  )}>
+                                    {/* Selection Checkbox */}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleSelection(item.id, item.isSelectedForImplementation);
+                                      }}
+                                      disabled={isTogglingSelection === item.id}
+                                      className={cn(
+                                        "mt-1 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                                        item.isSelectedForImplementation 
+                                          ? "bg-green-500 border-green-500 text-white" 
+                                          : "border-gray-300 hover:border-green-400",
+                                        isTogglingSelection === item.id && "opacity-50"
+                                      )}
+                                    >
+                                      {item.isSelectedForImplementation && (
+                                        <CheckCircle2 className="w-3 h-3" />
+                                      )}
+                                      {isTogglingSelection === item.id && (
+                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                      )}
+                                    </button>
+                                    
+                                    <div className="flex-1 flex items-start justify-between gap-2">
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-xs font-mono text-gray-400 shrink-0">{item.itemCode || item.hierarchyPath}</span>
+                                          {item.isSelectedForImplementation && (
+                                            <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Selected</span>
+                                          )}
+                                          {item.needsEnhancement && (
+                                            <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">Needs Review</span>
+                                          )}
+                                        </div>
+                                        <p className="text-sm text-gray-900 mt-0.5">{item.itemName || item.description}</p>
+                                        {item.specifications && (
+                                          <p className="text-xs text-gray-500 mt-0.5">{item.specifications}</p>
+                                        )}
+                                      </div>
+                                      <div className="text-right shrink-0">
+                                        <div className="text-sm font-medium">{formatCurrency(item.amount || 0, 'UGX')}</div>
+                                        <div className="text-xs text-gray-500">{item.quantityContract || item.quantity || 0} {item.unit}</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                    </div>
+                    
+                    {/* Bill Summary - Elements Aggregation */}
+                    <div className="px-4 py-3 bg-amber-50 border-t border-amber-200">
+                      <div className="text-sm font-medium text-amber-800 mb-2">Bill {billNumber} Summary</div>
+                      <div className="space-y-1">
+                        {Object.entries(billData.elements).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true })).map(([elCode, elData]) => {
+                          const elTotal = Object.values(elData.sections).flatMap(s => s.items).reduce((sum, item) => sum + (item.amount || 0), 0);
+                          return (
+                            <div key={elCode} className="flex justify-between text-sm">
+                              <span className="text-gray-600">
+                                {elCode !== 'General' ? `Element ${billNumber}.${elCode}` : 'General Items'}
+                                {elData.name && ` - ${elData.name}`}
+                              </span>
+                              <span className="font-medium">{formatCurrency(elTotal, 'UGX')}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="flex justify-between mt-2 pt-2 border-t border-amber-200 font-semibold text-amber-900">
+                        <span>Bill {billNumber} Total</span>
+                        <span>{formatCurrency(billTotal, 'UGX')}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          
+          {/* Grand Total Summary */}
+          <div className="border border-gray-300 rounded-lg overflow-hidden shadow-md bg-white">
+            <div className="px-4 py-3 bg-gray-800 text-white">
+              <div className="text-lg font-bold">Grand Summary</div>
+            </div>
+            <div className="p-4">
+              <div className="space-y-2 mb-4">
+                {Object.entries(groupedItems).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true })).map(([billNum, billD]) => {
+                  const bTotal = Object.values(billD.elements).flatMap(el => Object.values(el.sections).flatMap(s => s.items)).reduce((sum, item) => sum + (item.amount || 0), 0);
+                  const bCount = Object.values(billD.elements).flatMap(el => Object.values(el.sections).flatMap(s => s.items)).length;
+                  return (
+                    <div key={billNum} className="flex justify-between">
+                      <span className="text-gray-700">
+                        Bill {billNum}{billD.name && ` - ${billD.name}`}
+                        <span className="text-gray-400 text-sm ml-2">({bCount} items)</span>
+                      </span>
+                      <span className="font-medium">{formatCurrency(bTotal, 'UGX')}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex justify-between pt-3 border-t-2 border-gray-300 text-lg font-bold">
+                <span>Grand Total</span>
+                <span className="text-amber-600">{formatCurrency(totalAmount, 'UGX')}</span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

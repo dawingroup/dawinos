@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Database, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { seedFormulas, seedRoles } from '../scripts/seedFormulas';
+import { seedFormulas, seedRoles, seedMaterials } from '../scripts/seedFormulas';
 
 const AdminSeed: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -18,13 +18,15 @@ const AdminSeed: React.FC = () => {
     try {
       const formulaResult = await seedFormulas();
       const rolesCount = await seedRoles();
+      const materialsCount = await seedMaterials();
       
-      if (formulaResult.skipped && rolesCount === 0) {
+      if (formulaResult.skipped && rolesCount === 0 && materialsCount === 0) {
         setMessage('Database already seeded. No changes made.');
       } else {
         setMessage(
           `Successfully seeded: ${formulaResult.formulasAdded} formulas, ` +
-          `${formulaResult.ratesAdded} material rates, ${rolesCount} roles` 
+          `${formulaResult.ratesAdded} material rates, ${rolesCount} roles, ` +
+          `${materialsCount} materials`
         );
       }
       setStatus('success');
@@ -52,6 +54,7 @@ const AdminSeed: React.FC = () => {
             <ul className="text-sm text-blue-800 space-y-1">
               <li>• Standard construction formulas (concrete, masonry, steel, etc.)</li>
               <li>• Material rate reference data (UGX prices)</li>
+              <li>• Material library items (cement, sand, rebar, etc.)</li>
               <li>• Role definitions (QS, Site Engineer, PM)</li>
             </ul>
           </div>

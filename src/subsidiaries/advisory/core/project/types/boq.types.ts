@@ -1,14 +1,11 @@
 /**
  * Bill of Quantities (BOQ) Types
- * 
+ * =================================================================
  * Types for managing construction BOQs, items, and AI parsing.
- * Extended types beyond core.ts for full BOQ document management.
+ * This file is now part of the core project module.
  */
 
 import { Timestamp } from 'firebase/firestore';
-
-// Note: core.ts has existing MaterialCategory and BOQStatus enums
-// This file provides extended document-level types
 
 // Local Money type for this module
 export interface BOQMoney {

@@ -285,6 +285,7 @@ export class CrossModuleService {
    * Create project from closed deal
    */
   async createProjectFromDeal(
+    orgId: string,
     config: ProjectCreationFromDeal,
     userId: string
   ): Promise<{ projectId: string; linkId: string }> {
@@ -293,6 +294,31 @@ export class CrossModuleService {
     if (!deal) {
       throw new Error('Deal not found');
     }
+
+    // Get the core project service
+    const projectService = getProjectService(db);
+
+    // 1. Create project via the CORE service
+    const projectData: ProjectFormData = {
+      programId: config.programId,
+      name: config.projectConfig.name,
+      projectType: 'new_construction', // Or derive from deal
+      description: deal.dealName,
+      location: {
+        region: config.projectConfig.region,
+        district: config.projectConfig.district,
+        siteName: config.projectConfig.location,
+      },
+      estimatedStartDate: config.projectConfig.startDate,
+      estimatedEndDate: config.projectConfig.expectedEndDate,
+      budgetAmount: config.projectConfig.budgetFromDeal 
+        ? deal.investmentAmount 
+        : config.projectConfig.budgetOverride || deal.investmentAmount,
+      budgetCurrency: deal.currency || 'USD',
+      customerId: deal.engagementId, // Assuming customer is the engagement
+    };
+    
+    const newProject = await projectService.createProject(orgId, userId, projectData);
     
     // Create project in delivery module
     const projectData = {

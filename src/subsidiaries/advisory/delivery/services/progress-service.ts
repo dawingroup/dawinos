@@ -32,7 +32,7 @@ import {
   SiteVisit,
   SiteVisitFormData,
 } from '../types/site-visit';
-import { Project } from '../types/project';
+import { Project } from '@/subsidiaries/advisory/core/project/types/project.types';
 
 // ─────────────────────────────────────────────────────────────────
 // COLLECTION PATHS

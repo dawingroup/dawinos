@@ -10,13 +10,15 @@ import {
   serverTimestamp,
   getDocs,
   query,
-  limit 
+  limit,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from '@/core/services/firebase';
 import { FORMULA_SEED_DATA, MATERIAL_RATES_SEED } from '../data/formulas-seed';
 
 const FORMULAS_COLLECTION = 'matflow/data/formulas';
 const RATES_COLLECTION = 'matflow/data/material_rates';
+const MATERIALS_COLLECTION = 'advisoryPlatform/matflow/materials';
 
 export async function seedFormulas(): Promise<{ 
   formulasAdded: number; 
@@ -138,4 +140,73 @@ export async function seedRoles(): Promise<number> {
   await batch.commit();
   console.log(`Seeded ${roles.length} roles`);
   return roles.length;
+}
+
+// Seed materials to Material Library collection
+export async function seedMaterials(): Promise<number> {
+  const existingMaterials = await getDocs(
+    query(collection(db, MATERIALS_COLLECTION), limit(1))
+  );
+  
+  if (!existingMaterials.empty) {
+    console.log('Materials already seeded, skipping...');
+    return 0;
+  }
+  
+  const batch = writeBatch(db);
+  
+  // Map material rates to full Material objects
+  const categoryMap: Record<string, 'cement_concrete' | 'steel_reinforcement' | 'masonry' | 'aggregates' | 'roofing' | 'finishes' | 'other'> = {
+    'cement_50kg': 'cement_concrete',
+    'sand_coarse': 'aggregates',
+    'sand_fine': 'aggregates',
+    'aggregate_20mm': 'aggregates',
+    'brick_standard': 'masonry',
+    'block_150': 'masonry',
+    'block_200': 'masonry',
+    'rebar_y10': 'steel_reinforcement',
+    'rebar_y12': 'steel_reinforcement',
+    'rebar_y16': 'steel_reinforcement',
+    'binding_wire': 'steel_reinforcement',
+    'iron_sheet_28g': 'roofing',
+    'tile_ceramic_300': 'finishes',
+    'paint_emulsion_20l': 'finishes',
+    'murram': 'aggregates',
+  };
+  
+  for (const rate of MATERIAL_RATES_SEED) {
+    const docRef = doc(collection(db, MATERIALS_COLLECTION));
+    const material = {
+      id: docRef.id,
+      code: rate.materialId.toUpperCase(),
+      name: rate.name,
+      description: `Standard ${rate.name}`,
+      category: categoryMap[rate.materialId] || 'other',
+      specifications: [],
+      baseUnit: rate.unit,
+      standardRate: {
+        amount: rate.unitPrice,
+        currency: rate.currency,
+      },
+      rateHistory: [{
+        rate: { amount: rate.unitPrice, currency: rate.currency },
+        effectiveFrom: Timestamp.now(),
+        source: 'seed',
+      }],
+      preferredSuppliers: [],
+      isActive: true,
+      audit: {
+        createdAt: Timestamp.now(),
+        createdBy: 'system',
+        updatedAt: Timestamp.now(),
+        updatedBy: 'system',
+        version: 1,
+      },
+    };
+    batch.set(docRef, material);
+  }
+  
+  await batch.commit();
+  console.log(`Seeded ${MATERIAL_RATES_SEED.length} materials`);
+  return MATERIAL_RATES_SEED.length;
 }

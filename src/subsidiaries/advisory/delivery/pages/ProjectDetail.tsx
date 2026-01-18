@@ -7,6 +7,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Loader2, Edit, Trash2, AlertCircle } from 'lucide-react';
 import { ProjectHeader } from '../components/projects/ProjectHeader';
 import { ProjectTabs, ProjectTabId } from '../components/projects/ProjectTabs';
+import { ControlBOQTab } from '../components/projects/ControlBOQTab';
 import { StatCard } from '../components/common/MetricCard';
 import { ProgressBar, DualProgressBar } from '../components/common/ProgressBar';
 import { SCurveChart } from '../components/charts/SCurveChart';
@@ -30,6 +31,10 @@ export function ProjectDetail() {
     }
     if (tabId === 'visits') {
       navigate(`/advisory/delivery/projects/${projectId}/visits`);
+      return;
+    }
+    if (tabId === 'requisitions') {
+      navigate(`/advisory/delivery/projects/${projectId}/requisitions`);
       return;
     }
     setActiveTab(tabId);
@@ -192,6 +197,10 @@ export function ProjectDetail() {
               </div>
             </div>
           </div>
+        )}
+
+        {activeTab === 'boq' && projectId && (
+          <ControlBOQTab projectId={projectId} />
         )}
 
         {activeTab === 'progress' && (
