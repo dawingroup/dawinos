@@ -165,6 +165,12 @@ export interface Project {
   // We can store lightweight references here.
   boqIds: string[];
   activeBoqId?: string;
+  boqSummary?: {
+    totalItems: number;
+    totalValue: number;
+    parsedItems: number;
+    approvedItems: number;
+  };
   
   // Metadata
   tags?: string[];
