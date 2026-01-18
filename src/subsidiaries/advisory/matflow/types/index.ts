@@ -7,27 +7,26 @@ export * from './customer';
 export * from './variance';
 export * from './stageProgress';
 // Extended BOQ document types (separate from core BOQItem)
-// TODO: boq.ts file is missing - these exports are commented out
-// export type {
-//   BOQDocument,
-//   BOQDocumentStatus,
-//   BOQSource,
-//   ParsingStatus,
-//   ParsingResults,
-//   BOQSummary,
-//   BOQApproval,
-//   BOQSection,
-//   BOQCategory,
-//   BOQVariation,
-//   VariationReason,
-//   BOQItemModification,
-//   BOQTemplate,
-//   BOQMoney,
-//   BOQAuditFields,
-//   CreateBOQInput,
-//   CreateSectionInput,
-//   CreateItemInput,
-// } from './boq';
+export type {
+  BOQDocument,
+  BOQDocumentStatus,
+  BOQSource,
+  ParsingStatus,
+  ParsingResults,
+  BOQSummary,
+  BOQApproval,
+  BOQSection,
+  BOQCategory,
+  BOQVariation,
+  VariationReason,
+  BOQItemModification,
+  BOQTemplate,
+  BOQMoney,
+  BOQAuditFields,
+  CreateBOQInput,
+  CreateSectionInput,
+  CreateItemInput,
+} from './boq';
 // Note: BOQItem in boq.ts extends core BOQItem concept
 
 // Extended Material types
@@ -88,9 +87,6 @@ export type {
   MatFlowCapability,
   MatFlowRole,
 } from './core';
-
-// Re-export enums (must use export, not export type)
-export { MaterialCategory, MeasurementUnit } from './core';
 
 export type {
   SharedCustomer,
@@ -206,6 +202,8 @@ export type {
   ReportData,
 } from './export';
 
-// Re-export ConstructionStage from review helpers
-// Note: MeasurementUnit and MaterialCategory are already exported from ./core above
-export { ConstructionStage } from '../utils/reviewHelpers';
+// Re-export commonly used enums from review helpers
+export { MeasurementUnit, ConstructionStage } from '../utils/reviewHelpers';
+
+// Re-export MaterialCategory from core project types
+export { MaterialCategory } from '../../core/project/types/project.types';

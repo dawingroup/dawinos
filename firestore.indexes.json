@@ -753,7 +753,6 @@
       "collectionGroup": "competencies",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "companyId", "order": "ASCENDING" },
         { "fieldPath": "category", "order": "ASCENDING" },
         { "fieldPath": "name", "order": "ASCENDING" }
       ]
@@ -1864,25 +1863,6 @@
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
-    {
-      "collectionGroup": "payments",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "paymentType", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "accountabilityDueDate", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "payments",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "programId", "order": "ASCENDING" },
-        { "fieldPath": "paymentType", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "accountabilityDueDate", "order": "ASCENDING" }
-      ]
-    },
 
     {
       "collectionGroup": "approvalRequests",
@@ -1900,6 +1880,73 @@
         { "fieldPath": "entityType", "order": "ASCENDING" },
         { "fieldPath": "entityId", "order": "ASCENDING" },
         { "fieldPath": "requestedAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "strategy_documents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "strategy_documents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subsidiary", "order": "ASCENDING" },
+        { "fieldPath": "fiscalYear", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "okr_objectives",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "level", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "okr_objectives",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "parentId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "kpi_definitions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "kpi_definitions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "scope", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "kpi_data_points",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "kpiId", "order": "ASCENDING" },
+        { "fieldPath": "recordedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "performance_snapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entityType", "order": "ASCENDING" },
+        { "fieldPath": "entityId", "order": "ASCENDING" },
+        { "fieldPath": "snapshotDate", "order": "DESCENDING" }
       ]
     },
 
@@ -1952,23 +1999,6 @@
       "fields": [
         { "fieldPath": "isDeleted", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "advisory_projects",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "isDeleted", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "advisory_projects",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "isDeleted", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     },
 
@@ -2160,258 +2190,6 @@
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "zeroDiscrepancyAchieved", "order": "ASCENDING" }
-      ]
-    },
-
-    {
-      "collectionGroup": "strategy_documents",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "strategy_documents",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "subsidiary", "order": "ASCENDING" },
-        { "fieldPath": "fiscalYear", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "okr_objectives",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "level", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "okr_objectives",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "parentId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "kpi_definitions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "category", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "kpi_definitions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "scope", "order": "ASCENDING" },
-        { "fieldPath": "isActive", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "kpi_data_points",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "kpiId", "order": "ASCENDING" },
-        { "fieldPath": "recordedAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "performance_snapshots",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "entityType", "order": "ASCENDING" },
-        { "fieldPath": "entityId", "order": "ASCENDING" },
-        { "fieldPath": "snapshotDate", "order": "DESCENDING" }
-      ]
-    },
-
-    {
-      "collectionGroup": "employee_competencies",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "companyId", "order": "ASCENDING" },
-        { "fieldPath": "employeeId", "order": "ASCENDING" },
-        { "fieldPath": "assessmentDate", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "employee_competencies",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "competencyId", "order": "ASCENDING" },
-        { "fieldPath": "assessmentDate", "order": "DESCENDING" }
-      ]
-    },
-
-    {
-      "collectionGroup": "training_courses",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "companyId", "order": "ASCENDING" },
-        { "fieldPath": "title", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "training_courses",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "companyId", "order": "ASCENDING" },
-        { "fieldPath": "type", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "training_courses",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "companyId", "order": "ASCENDING" },
-        { "fieldPath": "provider", "order": "ASCENDING" }
-      ]
-    },
-
-    {
-      "collectionGroup": "employee_training",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "companyId", "order": "ASCENDING" },
-        { "fieldPath": "employeeId", "order": "ASCENDING" },
-        { "fieldPath": "enrolledDate", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "employee_training",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "companyId", "order": "ASCENDING" },
-        { "fieldPath": "employeeId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "employee_training",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "courseId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
-      ]
-    },
-
-    {
-      "collectionGroup": "development_plans",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "companyId", "order": "ASCENDING" },
-        { "fieldPath": "employeeId", "order": "ASCENDING" },
-        { "fieldPath": "planYear", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "development_plans",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "companyId", "order": "ASCENDING" },
-        { "fieldPath": "planYear", "order": "ASCENDING" }
-      ]
-    },
-
-    {
-      "collectionGroup": "performance_metrics",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "companyId", "order": "ASCENDING" },
-        { "fieldPath": "employeeId", "order": "ASCENDING" },
-        { "fieldPath": "periodStart", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "performance_metrics",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "companyId", "order": "ASCENDING" },
-        { "fieldPath": "employeeId", "order": "ASCENDING" },
-        { "fieldPath": "periodStart", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "performance_metrics",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "companyId", "order": "ASCENDING" },
-        { "fieldPath": "employeeId", "order": "ASCENDING" },
-        { "fieldPath": "periodEnd", "order": "ASCENDING" }
-      ]
-    },
-
-    {
-      "collectionGroup": "manual_requisitions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "linkStatus", "order": "ASCENDING" },
-        { "fieldPath": "requisitionDate", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "manual_requisitions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "linkedProjectId", "order": "ASCENDING" },
-        { "fieldPath": "requisitionDate", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "manual_requisitions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "accountabilityStatus", "order": "ASCENDING" },
-        { "fieldPath": "requisitionDate", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "manual_requisitions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "linkedProgramId", "order": "ASCENDING" },
-        { "fieldPath": "requisitionDate", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "manual_requisitions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "linkedProgramId", "order": "ASCENDING" },
-        { "fieldPath": "accountabilityStatus", "order": "ASCENDING" },
-        { "fieldPath": "requisitionDate", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "manual_requisitions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "linkedProgramId", "order": "ASCENDING" },
-        { "fieldPath": "linkStatus", "order": "ASCENDING" },
-        { "fieldPath": "requisitionDate", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "manual_requisitions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "linkStatus", "order": "ASCENDING" },
-        { "fieldPath": "linkedProgramId", "order": "ASCENDING" },
-        { "fieldPath": "requisitionDate", "order": "DESCENDING" }
-      ]
-    },
-
-    {
-      "collectionGroup": "portal_access_tokens",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "programId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     }
   ],

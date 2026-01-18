@@ -3,7 +3,6 @@
  * With nested routing for persistent project navigation
  *
  * Includes integrated MatFlow features (BOQ, Materials, Formulas, etc.)
- * And Manual Requisition Backlog for legacy data migration
  */
 
 import { Route, Routes, Navigate } from 'react-router-dom';
@@ -13,7 +12,6 @@ import { ProjectList } from './pages/ProjectList';
 import { ProgramList } from './pages/ProgramList';
 import { ProgramDetail } from './pages/ProgramDetail';
 import { NewProgram } from './pages/NewProgram';
-import { EditProgram } from './pages/EditProgram';
 import { NewProject } from './pages/NewProject';
 import { ApprovalsPage } from './pages/ApprovalsPage';
 import { NewBOQRequisitionPage } from './pages/NewBOQRequisitionPage';
@@ -35,26 +33,6 @@ import { SiteVisitsPage } from './pages/SiteVisitsPage';
 import { RequisitionsPage } from './pages/RequisitionsPage';
 import { RequisitionDetailPage } from './pages/RequisitionDetailPage';
 import { AccountabilityDetailPage } from './pages/AccountabilityDetailPage';
-import { AccountabilityOverviewPage } from './pages/AccountabilityOverviewPage';
-import { RequisitionTrackerPage } from './pages/RequisitionTrackerPage';
-import { ProjectSettingsPage } from './pages/ProjectSettingsPage';
-
-// Manual Requisition Backlog pages (legacy data migration)
-import { ManualRequisitionListPage } from './pages/ManualRequisitionListPage';
-import { ManualRequisitionFormPage } from './pages/ManualRequisitionFormPage';
-import { ManualRequisitionDetailPage } from './pages/ManualRequisitionDetailPage';
-
-// Country Director Dashboard (ADD-FIN-001 consolidated accountability view)
-import { CountryDirectorDashboard } from './pages/CountryDirectorDashboard';
-
-// Country Director Portal (public, token-based access)
-import { CDPortalPage } from './pages/CDPortalPage';
-
-// Data Migration utility
-import { DataMigrationPage } from './pages/DataMigrationPage';
-
-// Data Recovery utility
-import { DataRecoveryPage } from './pages/DataRecoveryPage';
 
 // MatFlow feature imports (integrated) - all use default exports
 import BOQImport from '../matflow/pages/BOQImport';
@@ -70,9 +48,6 @@ import MatFlowReports from '../matflow/pages/Reports';
 export function DeliveryRoutes() {
   return (
     <Routes>
-      {/* CD Portal - Public route outside DeliveryLayout (token-based access, no auth) */}
-      <Route path="cd-portal" element={<CDPortalPage />} />
-
       <Route element={<DeliveryLayout />}>
         <Route index element={<DeliveryDashboard />} />
 
@@ -80,7 +55,6 @@ export function DeliveryRoutes() {
         <Route path="programs" element={<ProgramList />} />
         <Route path="programs/new" element={<NewProgram />} />
         <Route path="programs/:programId" element={<ProgramDetail />} />
-        <Route path="programs/:programId/edit" element={<EditProgram />} />
 
         {/* Projects List */}
         <Route path="projects" element={<ProjectList />} />
@@ -111,7 +85,6 @@ export function DeliveryRoutes() {
           <Route path="payments" element={<PaymentsPage />} />
           <Route path="visits" element={<SiteVisitsPage />} />
           <Route path="procurement" element={<MatFlowProcurement />} />
-          <Route path="tracker" element={<RequisitionTrackerPage />} />
 
           {/* Requisitions with nested detail routes */}
           <Route path="requisitions">
@@ -125,25 +98,10 @@ export function DeliveryRoutes() {
 
           {/* Accountabilities under project context */}
           <Route path="accountabilities/:accountabilityId" element={<AccountabilityDetailPage />} />
-
-          {/* Project Settings (branding, configuration) */}
-          <Route path="settings" element={<ProjectSettingsPage />} />
         </Route>
 
         {/* Module-Level Routes (not project-specific) */}
         <Route path="approvals" element={<ApprovalsPage />} />
-
-        {/* Accountability Overview (module-level) */}
-        <Route path="accountability" element={<AccountabilityOverviewPage />} />
-
-        {/* Country Director Dashboard (ADD-FIN-001 consolidated accountability view) */}
-        <Route path="cd-dashboard" element={<CountryDirectorDashboard />} />
-
-        {/* Manual Requisition Backlog (legacy data migration) */}
-        <Route path="backlog" element={<ManualRequisitionListPage />} />
-        <Route path="backlog/new" element={<ManualRequisitionFormPage />} />
-        <Route path="backlog/:requisitionId" element={<ManualRequisitionDetailPage />} />
-        <Route path="backlog/:requisitionId/edit" element={<ManualRequisitionFormPage />} />
 
         {/* MatFlow Integration - Material Library */}
         <Route path="materials">
@@ -159,12 +117,6 @@ export function DeliveryRoutes() {
 
         {/* MatFlow Integration - Reports */}
         <Route path="reports" element={<MatFlowReports />} />
-
-        {/* Data Migration utility (admin) */}
-        <Route path="data-migration" element={<DataMigrationPage />} />
-
-        {/* Data Recovery utility (admin) */}
-        <Route path="data-recovery" element={<DataRecoveryPage />} />
       </Route>
     </Routes>
   );

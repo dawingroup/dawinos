@@ -2,7 +2,6 @@
  * Delivery Layout Component
  * Tab-based navigation for Infrastructure Delivery module
  * Hides tabs when in project context for focused work
- * Consolidated with MatFlow features (BOQ, Materials, Procurement)
  */
 
 import { Outlet, useLocation } from 'react-router-dom';
@@ -14,8 +13,6 @@ import {
   FlaskConical,
   Users2,
   FileBarChart,
-  ClipboardCheck,
-  FileStack,
 } from 'lucide-react';
 import { ModuleTabNav, type TabNavItem } from '@/core/components/navigation/ModuleTabNav';
 
@@ -26,8 +23,6 @@ const deliveryTabs: TabNavItem[] = [
   { id: 'materials', path: '/advisory/delivery/materials', label: 'Materials', icon: Package2 },
   { id: 'formulas', path: '/advisory/delivery/formulas', label: 'Formulas', icon: FlaskConical },
   { id: 'suppliers', path: '/advisory/delivery/suppliers', label: 'Suppliers', icon: Users2 },
-  { id: 'accountability', path: '/advisory/delivery/accountability', label: 'Accountability', icon: ClipboardCheck },
-  { id: 'backlog', path: '/advisory/delivery/backlog', label: 'Backlog', icon: FileStack },
   { id: 'reports', path: '/advisory/delivery/reports', label: 'Reports', icon: FileBarChart },
 ];
 

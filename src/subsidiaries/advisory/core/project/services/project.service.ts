@@ -24,14 +24,13 @@ import {
   QueryConstraint,
   Firestore,
 } from 'firebase/firestore';
-import {
-  Project,
-  ProjectFormData,
-  ProjectStatus,
-  ProjectStage,
-  ProjectSettings
+import { 
+  Project, 
+  ProjectFormData, 
+  ProjectStatus, 
+  ProjectStage, 
+  ProjectSettings 
 } from '../types/project.types';
-import { FacilityBranding } from '@/subsidiaries/advisory/delivery/types/funds-acknowledgement';
 
 // =================================================================
 // SERVICE CONFIGURATION
@@ -51,47 +50,6 @@ export class ProjectService {
 
   constructor(db: Firestore) {
     this.db = db;
-  }
-
-  // ─────────────────────────────────────────────────────────────────
-  // HELPER: Enrich projects with programName
-  // ─────────────────────────────────────────────────────────────────
-
-  /**
-   * Fetch all programs and build a map of programId -> programName
-   * This is used to denormalize programName on projects for UI display
-   */
-  private async getProgramNameMap(orgId: string): Promise<Map<string, string>> {
-    const programsRef = collection(this.db, `organizations/${orgId}/advisory_programs`);
-    const snapshot = await getDocs(programsRef);
-    const map = new Map<string, string>();
-    snapshot.docs.forEach(doc => {
-      const data = doc.data();
-      if (data.name) {
-        map.set(doc.id, data.name);
-      }
-    });
-    return map;
-  }
-
-  /**
-   * Enrich a list of projects with programName from their associated programs
-   */
-  private async enrichProjectsWithProgramName(orgId: string, projects: Project[]): Promise<Project[]> {
-    if (projects.length === 0) return projects;
-
-    // Get unique program IDs
-    const programIds = new Set(projects.map(p => p.programId).filter(Boolean));
-    if (programIds.size === 0) return projects;
-
-    // Fetch program names
-    const programNameMap = await this.getProgramNameMap(orgId);
-
-    // Enrich projects
-    return projects.map(project => ({
-      ...project,
-      programName: project.programId ? programNameMap.get(project.programId) : undefined,
-    }));
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -306,17 +264,7 @@ export class ProjectService {
     if (!snapshot.exists() || snapshot.data().isDeleted) {
       return null;
     }
-    const project = { id: snapshot.id, ...snapshot.data() } as Project;
-
-    // Enrich with programName for UI display
-    if (project.programId) {
-      const programDoc = await getDoc(doc(this.db, getProgramDoc(orgId, project.programId)));
-      if (programDoc.exists()) {
-        project.programName = programDoc.data().name;
-      }
-    }
-
-    return project;
+    return { id: snapshot.id, ...snapshot.data() } as Project;
   }
 
   async getAllProjects(
@@ -326,107 +274,41 @@ export class ProjectService {
       orderByField?: 'name' | 'createdAt' | 'status';
       orderDirection?: 'asc' | 'desc';
       limitCount?: number;
-      includeDeleted?: boolean;
     }
   ): Promise<Project[]> {
-    const collectionPath = getProjectsCollection(orgId);
-    console.log('[CoreProjectService.getAllProjects] Querying collection:', collectionPath);
+    const constraints: QueryConstraint[] = [
+      where('isDeleted', '==', false)
+    ];
 
-    try {
-      // Build constraints - only filter by isDeleted if explicitly required
-      const constraints: QueryConstraint[] = [];
-
-      // Only add isDeleted filter if we're not including deleted items
-      // AND we want to be strict about it (some old projects may not have this field)
-      if (!options?.includeDeleted) {
-        constraints.push(where('isDeleted', '==', false));
-      }
-
-      // Add status filter if provided
-      if (options?.status && options.status.length > 0) {
-        if (options.status.length === 1) {
-          constraints.push(where('status', '==', options.status[0]));
-        }
-      }
-
-      // Add ordering
-      const orderField = options?.orderByField || 'createdAt';
-      const orderDir = options?.orderDirection || 'desc';
-      constraints.push(orderBy(orderField, orderDir));
-
-      // Add limit if provided
-      if (options?.limitCount) {
-        constraints.push(limit(options.limitCount));
-      }
-
-      const q = query(collection(this.db, collectionPath), ...constraints);
-      const snapshot = await getDocs(q);
-      console.log('[CoreProjectService.getAllProjects] Found', snapshot.size, 'projects with isDeleted filter');
-
-      let projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Project[];
-
-      // Filter by status in memory if multiple statuses
-      if (options?.status && options.status.length > 1) {
-        projects = projects.filter(p => options.status!.includes(p.status));
-      }
-
-      // Filter out deleted in memory (for projects that might not have isDeleted field)
-      if (!options?.includeDeleted) {
-        projects = projects.filter(p => p.isDeleted !== true);
-      }
-
-      // Enrich with programName for UI display
-      return this.enrichProjectsWithProgramName(orgId, projects);
-    } catch (error) {
-      console.error('[CoreProjectService.getAllProjects] Error querying projects:', error);
-
-      // Fallback: try without the isDeleted filter and use createdAt ordering
-      // (which doesn't require a composite index)
-      console.log('[CoreProjectService.getAllProjects] Attempting fallback query without isDeleted filter...');
-      try {
-        const fallbackConstraints: QueryConstraint[] = [];
-        // Always use createdAt for fallback to avoid index requirements
-        fallbackConstraints.push(orderBy('createdAt', 'desc'));
-
-        if (options?.limitCount) {
-          fallbackConstraints.push(limit(options.limitCount));
-        }
-
-        const fallbackQ = query(collection(this.db, collectionPath), ...fallbackConstraints);
-        const fallbackSnapshot = await getDocs(fallbackQ);
-        console.log('[CoreProjectService.getAllProjects] Fallback found', fallbackSnapshot.size, 'projects');
-
-        let projects = fallbackSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Project[];
-
-        // Filter out deleted in memory
-        if (!options?.includeDeleted) {
-          projects = projects.filter(p => p.isDeleted !== true);
-        }
-
-        // Filter by status in memory
-        if (options?.status && options.status.length > 0) {
-          projects = projects.filter(p => options.status!.includes(p.status));
-        }
-
-        // Sort in memory if a different orderBy was requested
-        const orderField = options?.orderByField || 'createdAt';
-        const orderDir = options?.orderDirection || 'desc';
-        if (orderField !== 'createdAt') {
-          projects.sort((a, b) => {
-            const aVal = (a as any)[orderField] || '';
-            const bVal = (b as any)[orderField] || '';
-            const comparison = String(aVal).localeCompare(String(bVal));
-            return orderDir === 'asc' ? comparison : -comparison;
-          });
-        }
-
-        // Enrich with programName for UI display
-        return this.enrichProjectsWithProgramName(orgId, projects);
-      } catch (fallbackError) {
-        console.error('[CoreProjectService.getAllProjects] Fallback query also failed:', fallbackError);
-        throw error; // Throw the original error
+    // Add status filter if provided
+    if (options?.status && options.status.length > 0) {
+      // Firestore doesn't support IN queries with more than 10 items
+      // For simplicity, we'll fetch all and filter in memory if needed
+      if (options.status.length === 1) {
+        constraints.push(where('status', '==', options.status[0]));
       }
     }
+
+    // Add ordering
+    const orderField = options?.orderByField || 'createdAt';
+    const orderDir = options?.orderDirection || 'desc';
+    constraints.push(orderBy(orderField, orderDir));
+
+    // Add limit if provided
+    if (options?.limitCount) {
+      constraints.push(limit(options.limitCount));
+    }
+
+    const q = query(collection(this.db, getProjectsCollection(orgId)), ...constraints);
+    const snapshot = await getDocs(q);
+    let projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Project[];
+
+    // Filter by status in memory if multiple statuses
+    if (options?.status && options.status.length > 1) {
+      projects = projects.filter(p => options.status!.includes(p.status));
+    }
+
+    return projects;
   }
 
   async getProjectsByProgram(
@@ -451,8 +333,7 @@ export class ProjectService {
       projects = projects.filter(p => options.status!.includes(p.status));
     }
 
-    // Enrich with programName for UI display
-    return this.enrichProjectsWithProgramName(orgId, projects);
+    return projects;
   }
 
   subscribeToProject(orgId: string, projectId: string, callback: (project: Project | null) => void): () => void {
@@ -517,37 +398,6 @@ export class ProjectService {
     });
 
     await batch.commit();
-  }
-
-  // ─────────────────────────────────────────────────────────────────
-  // FACILITY BRANDING
-  // ─────────────────────────────────────────────────────────────────
-
-  /**
-   * Update facility branding for a project
-   * Used for generating branded documents like Funds Acknowledgement Forms
-   */
-  async updateFacilityBranding(
-    orgId: string,
-    projectId: string,
-    branding: FacilityBranding,
-    userId: string
-  ): Promise<void> {
-    const docRef = doc(this.db, getProjectDoc(orgId, projectId));
-    await updateDoc(docRef, {
-      facilityBranding: branding,
-      updatedAt: serverTimestamp(),
-      updatedBy: userId,
-      version: increment(1),
-    });
-  }
-
-  /**
-   * Get facility branding for a project
-   */
-  async getFacilityBranding(orgId: string, projectId: string): Promise<FacilityBranding | null> {
-    const project = await this.getProject(orgId, projectId);
-    return project?.facilityBranding || null;
   }
 
   // ─────────────────────────────────────────────────────────────────
