@@ -3,7 +3,7 @@
 **Version:** 1.0.0  
 **Date:** December 27, 2025  
 **Platform:** Firebase Hosted Web Application  
-**URL:** https://dawin-cutlist-processor.web.app
+**URL:** https://dawinos.web.app
 
 ---
 
@@ -381,7 +381,7 @@ The original cutlist processor functionality resides in `src/App.jsx` and handle
 ```javascript
 // src/firebase/config.ts
 const firebaseConfig = {
-  projectId: 'dawin-cutlist-processor',
+  projectId: 'dawinos',
   // ... other config
 };
 ```
@@ -408,8 +408,8 @@ firebase deploy --only functions
 
 ### URLs
 
-- **Production:** https://dawin-cutlist-processor.web.app
-- **Console:** https://console.firebase.google.com/project/dawin-cutlist-processor
+- **Production:** https://dawinos.web.app
+- **Console:** https://console.firebase.google.com/project/dawinos
 
 ---
 
@@ -629,7 +629,7 @@ The Nesting Studio provides an interactive optimization interface embedded in pr
 ## Support & Maintenance
 
 **Project Owner:** Dawin Group  
-**Repository:** cutlist-processor  
+**Repository:** dawinos  
 **Hosting:** Firebase  
 **Region:** us-central1
 

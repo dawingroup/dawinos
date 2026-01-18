@@ -3,7 +3,7 @@
 **Document Version:** 1.0  
 **Date:** December 18, 2025  
 **Project:** Dawin Cutlist Processor  
-**Live URL:** https://dawin-cutlist-processor.web.app  
+**Live URL:** https://dawinos.web.app  
 
 ---
 
@@ -281,9 +281,9 @@ const folderUrl = selectedProject.driveFolderUrl;
 ```env
 # Firebase Configuration
 VITE_FIREBASE_API_KEY=AIzaSyCVgMvkUsiDHDczPsrWT9YeL4n7i58bsb0
-VITE_FIREBASE_AUTH_DOMAIN=dawin-cutlist-processor.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=dawin-cutlist-processor
-VITE_FIREBASE_STORAGE_BUCKET=dawin-cutlist-processor.firebasestorage.app
+VITE_FIREBASE_AUTH_DOMAIN=dawinos.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=dawinos
+VITE_FIREBASE_STORAGE_BUCKET=dawinos.firebasestorage.app
 VITE_FIREBASE_MESSAGING_SENDER_ID=834402569566
 VITE_FIREBASE_APP_ID=1:834402569566:web:418c09472582d7bea553cf
 
@@ -343,7 +343,7 @@ NOTION_PROJECTS_DATABASE_ID=128a6be27456815993acf071233e4ed3
 ## 7. Project Structure
 
 ```
-cutlist-processor/
+dawinos/
 ├── src/
 │   ├── App.jsx                    # Main application component
 │   ├── firebase/
@@ -379,8 +379,8 @@ firebase deploy      # Deploy hosting + functions
 ### 8.2 Hosting
 
 - **Platform:** Firebase Hosting
-- **URL:** https://dawin-cutlist-processor.web.app
-- **Project ID:** dawin-cutlist-processor
+- **URL:** https://dawinos.web.app
+- **Project ID:** dawinos
 
 ### 8.3 Functions
 

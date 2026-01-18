@@ -11,7 +11,7 @@ For automatic deployment to work, you need to add two secrets to your GitHub rep
 1. Go to [Firebase Console](https://console.firebase.google.com)
 2. Select your project (or create one if you haven't)
 3. Click the **gear icon** → **Project settings**
-4. Copy the **Project ID** (e.g., `dawin-cutlist-processor`)
+4. Copy the **Project ID** (e.g., `dawinos`)
 
 ---
 
@@ -35,7 +35,7 @@ For automatic deployment to work, you need to add two secrets to your GitHub rep
 ### Add First Secret: FIREBASE_PROJECT_ID
 
 - **Name:** `FIREBASE_PROJECT_ID`
-- **Value:** Your project ID (e.g., `dawin-cutlist-processor`)
+- **Value:** Your project ID (e.g., `dawinos`)
 - Click **"Add secret"**
 
 ### Add Second Secret: FIREBASE_SERVICE_ACCOUNT
@@ -53,12 +53,12 @@ In your local repo, edit `.firebaserc` to match your project:
 ```json
 {
   "projects": {
-    "default": "dawin-cutlist-processor"
+    "default": "dawinos"
   }
 }
 ```
 
-Replace `dawin-cutlist-processor` with your actual Firebase Project ID.
+Replace `dawinos` with your actual Firebase Project ID if different.
 
 ---
 

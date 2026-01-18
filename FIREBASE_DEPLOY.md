@@ -43,7 +43,7 @@ firebase login
 
 1. Go to [console.firebase.google.com](https://console.firebase.google.com)
 2. Click **"Create a project"** (or "Add project")
-3. Enter project name: `dawin-cutlist-processor` (or your preference)
+3. Enter project name: `dawinos` (or your preference)
 4. Disable Google Analytics (not needed for this app) or enable if desired
 5. Click **"Create project"**
 6. Wait for project creation, then click **"Continue"**
@@ -51,7 +51,7 @@ firebase login
 ### Option B: Via CLI
 
 ```bash
-firebase projects:create dawin-cutlist-processor --display-name "Dawin Cutlist Processor"
+firebase projects:create dawinos --display-name "DawinOS"
 ```
 
 ---
@@ -82,7 +82,7 @@ Edit `.firebaserc` and replace `YOUR_FIREBASE_PROJECT_ID` with your actual proje
 ```json
 {
   "projects": {
-    "default": "dawin-cutlist-processor"
+    "default": "dawinos"
   }
 }
 ```
@@ -106,7 +106,7 @@ After deployment, you'll see output like:
 ```
 ✔ Deploy complete!
 
-Hosting URL: https://dawin-cutlist-processor.web.app
+Hosting URL: https://dawinos.web.app
 ```
 
 ---
@@ -123,7 +123,7 @@ npm run deploy:preview
 firebase hosting:channel:deploy staging --expires 7d
 ```
 
-This creates a URL like: `https://dawin-cutlist-processor--preview-abc123.web.app`
+This creates a URL like: `https://dawinos--preview-abc123.web.app`
 
 ---
 
@@ -204,7 +204,7 @@ jobs:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           channelId: live
-          projectId: dawin-cutlist-processor
+          projectId: dawinos
       
       - name: Deploy to Firebase (Preview)
         if: github.event_name == 'pull_request'
@@ -212,7 +212,7 @@ jobs:
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-          projectId: dawin-cutlist-processor
+          projectId: dawinos
 ```
 
 ### Generate Service Account Key

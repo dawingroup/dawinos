@@ -3,7 +3,7 @@
 **Version:** 1.0.0  
 **Report Date:** December 26, 2024  
 **Deployment URL:** https://dawin-cutlist-processor.web.app  
-**Repository:** https://github.com/dawingroup/cutlist-processor
+**Repository:** https://github.com/dawingroup/dawinos
 
 ---
 

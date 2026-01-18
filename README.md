@@ -1,4 +1,4 @@
-# Dawin Cutlist Processor
+# DawinOS - Dawin Finishes
 
 A comprehensive cutting list processing and optimization tool for millwork operations. Transforms design software exports (Polyboard, SketchUp) into optimized cutting patterns, BOMs, and supplier-ready formats.
 
@@ -172,14 +172,14 @@ server {
 
 Build and run:
 ```bash
-docker build -t dawin-cutlist .
-docker run -p 8080:80 dawin-cutlist
+docker build -t dawinos .
+docker run -p 8080:80 dawinos
 ```
 
 ## Project Structure
 
 ```
-dawin-cutlist-app/
+dawinos/
 ├── public/
 │   └── favicon.svg
 ├── src/

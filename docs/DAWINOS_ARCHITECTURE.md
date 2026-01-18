@@ -11,8 +11,8 @@ DawinOS is the unified operating system for the Dawin Group, providing each subs
 ```
 DawinOS (Platform Core)
 ├── 🎨 Dawin Finishes (Manufacturing & Millwork)
-│   │   [Current cutlist-processor app]
-│   ├── clipper                 # Design inspiration capture (from dawin-clipper)
+│   │   [Current dawinos app]
+│   ├── clipper                 # Design inspiration capture
 │   ├── design-manager          # Design workflow & approvals
 │   ├── cutlist-processor       # Sheet optimization & nesting
 │   ├── feature-library         # Reusable component library
@@ -128,7 +128,7 @@ src/
 │   └── utils/
 │
 ├── subsidiaries/                 # Subsidiary Modules
-│   ├── finishes/                 # 🎨 Dawin Finishes (current cutlist-processor)
+│   ├── finishes/                 # 🎨 Dawin Finishes (current dawinos)
 │   │   ├── clipper/              # Design inspiration capture
 │   │   ├── design-manager/       # Design workflow & approvals
 │   │   ├── cutlist/              # Sheet optimization & nesting
