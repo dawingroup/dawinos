@@ -130,6 +130,13 @@ const MarketInsightsPage = lazy(() => import('@/modules/intelligence/pages/Insig
 // Intelligence Layer Module Pages
 const IntelligenceLayerDashboard = lazy(() => import('@/modules/intelligence-layer/pages/IntelligenceLayerDashboardPage'));
 
+// Strategy Module Pages
+const ExecutiveDashboard = lazy(() => import('@/modules/strategy/pages/ExecutiveDashboard').then(m => ({ default: m.ExecutiveDashboard })));
+const StrategyOverview = lazy(() => import('@/modules/strategy/pages/StrategyOverview').then(m => ({ default: m.StrategyOverview })));
+const OKRDashboard = lazy(() => import('@/modules/strategy/pages/OKRDashboard').then(m => ({ default: m.OKRDashboard })));
+const KPIDashboard = lazy(() => import('@/modules/strategy/pages/KPIDashboard').then(m => ({ default: m.KPIDashboard })));
+const PerformanceDeepDive = lazy(() => import('@/modules/strategy/pages/PerformanceDeepDive').then(m => ({ default: m.PerformanceDeepDive })));
+
 // Error Pages
 const NotFoundPage = lazy(() => import('@/pages/errors/NotFoundPage'));
 const UnauthorizedPage = lazy(() => import('@/pages/errors/UnauthorizedPage'));
@@ -387,6 +394,35 @@ export const router = createBrowserRouter([
         path: 'ai',
         children: [
           { index: true, element: <PageWrapper><IntelligenceLayerDashboard /></PageWrapper> },
+        ],
+      },
+
+      // ========================================
+      // STRATEGY MODULE ROUTES
+      // ========================================
+      {
+        path: 'strategy',
+        element: (
+          <ModuleGuard module="strategy">
+            <PageWrapper><Outlet /></PageWrapper>
+          </ModuleGuard>
+        ),
+        children: [
+          { index: true, element: <ExecutiveDashboard /> },
+          { path: 'dashboard', element: <ExecutiveDashboard /> },
+          { path: 'plans', element: <StrategyOverview /> },
+          { path: 'plans/:planId', element: <StrategyOverview /> },
+          { path: 'okrs', element: <OKRDashboard /> },
+          { path: 'okrs/new', element: <OKRDashboard /> },
+          { path: 'okrs/:objectiveId', element: <OKRDashboard /> },
+          { path: 'kpis', element: <KPIDashboard /> },
+          { path: 'kpis/new', element: <KPIDashboard /> },
+          { path: 'kpis/:kpiId', element: <KPIDashboard /> },
+          { path: 'analytics', element: <PerformanceDeepDive /> },
+          { path: 'entity/:entityId', element: <PerformanceDeepDive /> },
+          { path: 'reports', element: <PerformanceDeepDive /> },
+          { path: 'reviews', element: <PerformanceDeepDive /> },
+          { path: 'settings', element: <PerformanceDeepDive /> },
         ],
       },
     ],

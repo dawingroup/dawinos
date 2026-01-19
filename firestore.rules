@@ -1592,12 +1592,82 @@ service cloud.firestore {
     // ----------------------------------------
     // Task Dependencies
     // ----------------------------------------
-    
+
     match /taskDependencies/{dependencyId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
       allow update: if isAuthenticated();
       allow delete: if isAuthenticated();
+    }
+
+    // ============================================
+    // STRATEGY MODULE COLLECTIONS
+    // CEO Strategy & Performance Management
+    // ============================================
+
+    // ----------------------------------------
+    // Strategy Documents
+    // ----------------------------------------
+
+    match /strategy_documents/{docId} {
+      allow read: if isAuthenticated();
+      allow create: if isExecutive() || hasAnyRole(['strategy_manager']);
+      allow update: if isExecutive() || hasAnyRole(['strategy_manager']) ||
+                       resource.data.createdBy == request.auth.uid;
+      allow delete: if hasPlatformRole('super_admin');
+    }
+
+    // ----------------------------------------
+    // OKR Objectives
+    // ----------------------------------------
+
+    match /okr_objectives/{objId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated(); // Users can create their own OKRs
+      allow update: if isExecutive() || hasAnyRole(['manager', 'strategy_manager']) ||
+                       resource.data.ownerId == request.auth.uid;
+      allow delete: if isExecutive() || resource.data.ownerId == request.auth.uid;
+
+      // Key Results subcollection
+      match /key_results/{krId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isExecutive() || hasAnyRole(['manager']) ||
+                                 get(/databases/$(database)/documents/okr_objectives/$(objId)).data.ownerId == request.auth.uid;
+        allow delete: if isExecutive() ||
+                         get(/databases/$(database)/documents/okr_objectives/$(objId)).data.ownerId == request.auth.uid;
+      }
+    }
+
+    // ----------------------------------------
+    // KPI Definitions
+    // ----------------------------------------
+
+    match /kpi_definitions/{kpiId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isExecutive() || hasAnyRole(['strategy_manager']);
+      allow delete: if isAdmin() || hasPlatformRole('super_admin');
+    }
+
+    // ----------------------------------------
+    // KPI Data Points
+    // ----------------------------------------
+
+    match /kpi_data_points/{dataId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated(); // Data entry by authorized users
+      allow update: if isExecutive() || hasAnyRole(['strategy_manager']) ||
+                       resource.data.recordedBy == request.auth.uid;
+      allow delete: if isAdmin() || hasPlatformRole('super_admin');
+    }
+
+    // ----------------------------------------
+    // Performance Snapshots
+    // ----------------------------------------
+
+    match /performance_snapshots/{snapId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isExecutive() || hasAnyRole(['strategy_manager', 'system']); // System-generated
+      allow delete: if isAdmin() || hasPlatformRole('super_admin');
     }
   }
 }
