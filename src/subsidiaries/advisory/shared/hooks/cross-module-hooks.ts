@@ -17,6 +17,7 @@ import {
 } from '../types/cross-module-link';
 import { crossModuleService } from '../services/cross-module-service';
 import { dealProjectSyncService } from '../../investment/services/deal-project-sync-service';
+import { useAuth } from '../../../../hooks/useAuth';
 
 /**
  * Get all links for an entity
@@ -173,9 +174,6 @@ export function useSyncLink() {
 
   return { sync, loading, error };
 }
-
-import { useAuth } from '../../../../hooks/useAuth';
-...
 /**
  * Create project from deal
  */

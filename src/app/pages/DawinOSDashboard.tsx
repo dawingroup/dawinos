@@ -24,7 +24,6 @@ import {
 import { useState, useRef, useEffect } from 'react';
 import { useSubsidiary } from '@/contexts/SubsidiaryContext';
 import type { SubsidiaryModule } from '@/types/subsidiary';
-import { ROUTES } from '../routes';
 
 const MODULE_CONFIG: Record<SubsidiaryModule, {
   title: string;
@@ -51,14 +50,14 @@ const MODULE_CONFIG: Record<SubsidiaryModule, {
     title: 'Asset Registry',
     description: 'Manage workshop machines and tools',
     icon: Wrench,
-    href: ROUTES.ASSETS,
+    href: '/assets',
     color: 'bg-amber-500',
   },
   'feature-library': {
     title: 'Feature Library',
     description: 'Manufacturing capabilities linked to assets',
     icon: Layers,
-    href: ROUTES.FEATURES,
+    href: '/features',
     color: 'bg-purple-600',
   },
   'launch-pipeline': {
@@ -72,14 +71,14 @@ const MODULE_CONFIG: Record<SubsidiaryModule, {
     title: 'Procurement',
     description: 'Material procurement and supplier orders',
     icon: Package,
-    href: ROUTES.PROCUREMENT,
+    href: '/procurement',
     color: 'bg-cyan-600',
   },
   'production': {
     title: 'Production',
     description: 'Track production progress and scheduling',
     icon: Factory,
-    href: ROUTES.PRODUCTION,
+    href: '/production',
     color: 'bg-slate-600',
   },
   'matflow': {
