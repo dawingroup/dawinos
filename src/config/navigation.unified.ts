@@ -191,8 +191,15 @@ export const CORPORATE_NAVIGATION: NavItem[] = [
     label: 'HR Central',
     href: '/hr/employees',
     icon: 'Users',
-    description: 'Human resources',
-    keywords: ['employees', 'staff', 'payroll', 'leave'],
+    description: 'Human resources & performance',
+    keywords: ['employees', 'staff', 'payroll', 'leave', 'performance', 'reviews', 'goals'],
+    children: [
+      { id: 'hr-employees', label: 'Employees', href: '/hr/employees', icon: 'Users' },
+      { id: 'hr-performance', label: 'Performance', href: '/hr/performance', icon: 'TrendingUp' },
+      { id: 'hr-leave', label: 'Leave', href: '/hr/leave', icon: 'Calendar' },
+      { id: 'hr-payroll', label: 'Payroll', href: '/hr/payroll', icon: 'DollarSign' },
+      { id: 'hr-organization', label: 'Organization', href: '/hr/organization', icon: 'Sitemap' },
+    ],
   },
   {
     id: 'finance',
@@ -201,14 +208,6 @@ export const CORPORATE_NAVIGATION: NavItem[] = [
     icon: 'DollarSign',
     description: 'Financial management',
     keywords: ['budgets', 'expenses', 'reports'],
-  },
-  {
-    id: 'performance',
-    label: 'Performance',
-    href: '/performance/goals',
-    icon: 'TrendingUp',
-    description: 'Performance tracking',
-    keywords: ['goals', 'reviews', 'okrs'],
   },
   {
     id: 'capital',
