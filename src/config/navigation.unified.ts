@@ -172,6 +172,21 @@ export const ADMIN_NAVIGATION: NavItem[] = [
 
 export const CORPORATE_NAVIGATION: NavItem[] = [
   {
+    id: 'strategy',
+    label: 'CEO Strategy',
+    href: '/strategy',
+    icon: 'Target',
+    description: 'Strategic planning & OKRs',
+    keywords: ['strategy', 'okrs', 'kpis', 'objectives', 'goals', 'performance'],
+    children: [
+      { id: 'strategy-dashboard', label: 'Executive Dashboard', href: '/strategy/dashboard', icon: 'LayoutDashboard' },
+      { id: 'strategy-plans', label: 'Strategy Plans', href: '/strategy/plans', icon: 'FileText' },
+      { id: 'strategy-okrs', label: 'OKRs', href: '/strategy/okrs', icon: 'Target' },
+      { id: 'strategy-kpis', label: 'KPIs', href: '/strategy/kpis', icon: 'BarChart3' },
+      { id: 'strategy-analytics', label: 'Analytics', href: '/strategy/analytics', icon: 'Activity' },
+    ],
+  },
+  {
     id: 'hr',
     label: 'HR Central',
     href: '/hr/employees',
@@ -191,7 +206,7 @@ export const CORPORATE_NAVIGATION: NavItem[] = [
     id: 'performance',
     label: 'Performance',
     href: '/performance/goals',
-    icon: 'Target',
+    icon: 'TrendingUp',
     description: 'Performance tracking',
     keywords: ['goals', 'reviews', 'okrs'],
   },
@@ -199,7 +214,7 @@ export const CORPORATE_NAVIGATION: NavItem[] = [
     id: 'capital',
     label: 'Capital Hub',
     href: '/capital/deals',
-    icon: 'TrendingUp',
+    icon: 'Briefcase',
     description: 'Investment management',
     keywords: ['deals', 'portfolio', 'investors'],
   },
