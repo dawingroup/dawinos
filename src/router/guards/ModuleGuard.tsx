@@ -8,12 +8,13 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/shared/hooks';
 import { auth } from '@/shared/services/firebase';
 
-type ModuleType = 
-  | 'infrastructure_delivery' 
-  | 'infrastructure_investment' 
-  | 'investment_advisory' 
+type ModuleType =
+  | 'infrastructure_delivery'
+  | 'infrastructure_investment'
+  | 'investment_advisory'
   | 'matflow'
-  | 'market_intelligence';
+  | 'market_intelligence'
+  | 'strategy';
 
 interface ModuleGuardProps {
   children: React.ReactNode;
@@ -27,6 +28,7 @@ const OPEN_ACCESS_MODULES: ModuleType[] = [
   'infrastructure_delivery',
   'infrastructure_investment',
   'market_intelligence',
+  'strategy',
 ];
 
 export function ModuleGuard({ children, module }: ModuleGuardProps) {
