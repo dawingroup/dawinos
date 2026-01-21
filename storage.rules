@@ -58,6 +58,16 @@ service firebase.storage {
     function isValidSpreadsheetType() {
       return request.resource.contentType.matches('(application/pdf|text/csv|application/vnd.ms-excel|application/vnd.openxmlformats-officedocument.spreadsheetml.sheet)');
     }
+
+    // Validate CAD file types
+    function isValidCADType() {
+      return request.resource.contentType.matches('(application/acad|application/x-acad|application/autocad_dwg|image/vnd.dwg|application/dwg|application/dxf)');
+    }
+
+    // Validate file size with higher limit for CAD (max 100MB)
+    function isValidLargeFileSize() {
+      return request.resource.size < 100 * 1024 * 1024;
+    }
     
     // ============================================
     // USER PROFILE IMAGES
@@ -182,6 +192,36 @@ service firebase.storage {
     match /clips/{clipId}/{path=**} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && isValidSize();
+    }
+
+    // ============================================
+    // DARWIN FINISHES - CLIENT DOCUMENTS
+    // ============================================
+
+    match /design-projects/{projectId}/client-documents/{category}/{fileName} {
+      // Finishes subsidiary users can read/write
+      allow read: if isAuthenticated() && belongsToSubsidiary('finishes');
+      allow write: if isAuthenticated() && belongsToSubsidiary('finishes') && (
+        // Reference images: 20MB limit, image types only
+        (category == 'reference-images' && request.resource.size < 20 * 1024 * 1024 && isValidImageType()) ||
+        // CAD drawings: 100MB limit, CAD types only
+        (category == 'cad-drawings' && isValidLargeFileSize() && isValidCADType()) ||
+        // PDF plans: 50MB limit, PDF only
+        (category == 'pdf-plans' && isValidSize() && isValidDocType()) ||
+        // Design briefs: 10MB limit, PDF only
+        (category == 'design-briefs' && request.resource.size < 10 * 1024 * 1024 && isValidDocType()) ||
+        // Other: 50MB limit, any type
+        (category == 'other' && isValidSize())
+      );
+    }
+
+    // ============================================
+    // DARWIN FINISHES - DESIGN DELIVERABLES (Existing)
+    // ============================================
+
+    match /design-projects/{projectId}/items/{itemId}/deliverables/{stage}/{type}/{fileName} {
+      allow read: if isAuthenticated() && belongsToSubsidiary('finishes');
+      allow write: if isAuthenticated() && belongsToSubsidiary('finishes') && isValidLargeFileSize();
     }
   }
 }

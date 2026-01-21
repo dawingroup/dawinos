@@ -99,7 +99,7 @@ const DEFAULT_ORG_ID = 'default';
  * Get the BOQ items collection path for a project
  */
 function getBoqCollectionPath(orgId: string, projectId: string): string {
-  return `organizations/${orgId}/matflow_projects/${projectId}/boq_items`;
+  return `organizations/${orgId}/advisory_projects/${projectId}/boq_items`;
 }
 
 /**

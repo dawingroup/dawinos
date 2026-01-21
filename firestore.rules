@@ -433,40 +433,107 @@ service cloud.firestore {
     match /organizations/{orgId}/matflow_projects/{projectId} {
       // Simplified rules for development - allow authenticated users
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && 
+      allow create: if isAuthenticated() &&
         request.resource.data.createdBy == request.auth.uid;
       allow update: if isAuthenticated();
-      allow delete: if isAdmin() || 
+      allow delete: if isAdmin() ||
         resource.data.createdBy == request.auth.uid;
-      
+
       // ----------------------------------------
       // BOQ Items Subcollection
       // ----------------------------------------
-      
+
       match /boq_items/{itemId} {
         allow read: if isAuthenticated();
         allow create, update: if isAuthenticated();
         allow delete: if isAuthenticated();
       }
-      
+
       // ----------------------------------------
       // Procurement Entries Subcollection
       // ----------------------------------------
-      
+
       match /procurement_entries/{entryId} {
         allow read: if isAuthenticated();
         allow create, update: if isAuthenticated();
         allow delete: if isAuthenticated();
       }
-      
+
       // ----------------------------------------
       // Parsing Jobs Subcollection
       // ----------------------------------------
-      
+
       match /parsing_jobs/{jobId} {
         allow read: if isAuthenticated();
         allow create, update: if isAuthenticated();
         allow delete: if isAuthenticated();
+      }
+    }
+
+    // ----------------------------------------
+    // Organization Advisory Programs (Unified)
+    // ----------------------------------------
+
+    match /organizations/{orgId}/advisory_programs/{programId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin() ||
+        resource.data.createdBy == request.auth.uid;
+    }
+
+    // ----------------------------------------
+    // Organization Advisory Projects (Unified)
+    // Replaces matflow_projects for the unified collection
+    // ----------------------------------------
+
+    match /organizations/{orgId}/advisory_projects/{projectId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin() ||
+        resource.data.createdBy == request.auth.uid;
+
+      // ----------------------------------------
+      // BOQ Items Subcollection
+      // ----------------------------------------
+
+      match /boq_items/{itemId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated();
+        allow delete: if isAuthenticated();
+      }
+
+      // ----------------------------------------
+      // Procurement Entries Subcollection
+      // ----------------------------------------
+
+      match /procurement_entries/{entryId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated();
+        allow delete: if isAuthenticated();
+      }
+
+      // ----------------------------------------
+      // Parsing Jobs Subcollection
+      // ----------------------------------------
+
+      match /parsing_jobs/{jobId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated();
+        allow delete: if isAuthenticated();
+      }
+
+      // ----------------------------------------
+      // Activity Log Subcollection
+      // ----------------------------------------
+
+      match /activityLog/{logId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update, delete: if false;
       }
     }
     
@@ -1292,6 +1359,13 @@ service cloud.firestore {
     
     // BOQ Items (root-level collection for cross-project queries)
     match /boq_items/{itemId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+
+    // Control BOQ Items (root-level collection with projectId field)
+    match /control_boq/{itemId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated();
       allow delete: if isAuthenticated();

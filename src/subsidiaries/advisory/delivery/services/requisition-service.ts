@@ -39,7 +39,7 @@ import {
 // ─────────────────────────────────────────────────────────────────
 
 const PAYMENTS_PATH = 'payments';
-const PROJECTS_PATH = 'projects';
+const ORG_ID = 'default'; // TODO: Get from auth context
 
 // ─────────────────────────────────────────────────────────────────
 // REQUISITION SERVICE
@@ -66,10 +66,20 @@ export class RequisitionService {
 
   async createRequisition(
     data: RequisitionFormData,
-    userId: string
+    userId: string,
+    orgId?: string
   ): Promise<string> {
-    // Get project details
-    const projectDoc = await getDoc(doc(this.db, PROJECTS_PATH, data.projectId));
+    // Use provided orgId or fall back to default
+    const organizationId = orgId || ORG_ID;
+    console.log('RequisitionService: Using orgId:', organizationId);
+
+    // Get project details - use path segments instead of concatenated string
+    const projectDocRef = doc(this.db, 'organizations', organizationId, 'advisory_projects', data.projectId);
+    console.log('RequisitionService: Looking for project at:', `organizations/${organizationId}/advisory_projects/${data.projectId}`);
+
+    const projectDoc = await getDoc(projectDocRef);
+    console.log('RequisitionService: Project exists?', projectDoc.exists());
+
     if (!projectDoc.exists()) {
       throw new Error('Project not found');
     }
@@ -109,6 +119,8 @@ export class RequisitionService {
       budgetLineBalance: 0, // Would be fetched from budget
 
       items,
+      boqItems: data.boqItems,
+      sourceType: data.sourceType,
       advanceType: data.advanceType,
       expectedReturnDate: data.expectedReturnDate,
 
@@ -121,6 +133,14 @@ export class RequisitionService {
       accountabilityDueDate: data.accountabilityDueDate,
       linkedAccountabilityIds: [],
       unaccountedAmount: totalAmount,
+
+      // ADD-FIN-001: Quotation management (optional)
+      quotations: data.quotations,
+      selectedSupplier: data.selectedSupplier,
+
+      // ADD-FIN-001: Custom approval chain
+      useCustomApprovalChain: data.useCustomApprovalChain || false,
+      customApprovalChainId: data.customApprovalChainId,
 
       status: 'draft',
       currentApprovalLevel: 0,
@@ -219,6 +239,24 @@ export class RequisitionService {
     );
     const receiptsSummary = calculateReceiptsSummary(expenses);
 
+    // Calculate variance
+    const varianceAmount = (totalExpenses + data.unspentReturned) - requisition.grossAmount;
+    const variancePercentage = Math.abs(varianceAmount / requisition.grossAmount);
+    const isZeroDiscrepancy = Math.abs(varianceAmount) < 0.01;
+
+    let varianceStatus: 'compliant' | 'minor' | 'moderate' | 'severe';
+    if (isZeroDiscrepancy) {
+      varianceStatus = 'compliant';
+    } else if (variancePercentage < 0.02) {
+      varianceStatus = 'minor';
+    } else if (variancePercentage < 0.05) {
+      varianceStatus = 'moderate';
+    } else {
+      varianceStatus = 'severe';
+    }
+
+    const requiresInvestigation = varianceStatus === 'moderate' || varianceStatus === 'severe';
+
     // Build accountability document
     const accountability: Omit<Accountability, 'id'> = {
       projectId: requisition.projectId,
@@ -242,6 +280,29 @@ export class RequisitionService {
       grossAmount: totalExpenses,
       deductions: [],
       netAmount: balanceDue > 0 ? balanceDue : 0,
+
+      // ADD-FIN-001: Variance tracking
+      variance: {
+        varianceAmount,
+        variancePercentage,
+        varianceStatus,
+        isZeroDiscrepancy,
+        totalExpenses,
+        unspentReturned: data.unspentReturned,
+        requisitionAmount: requisition.grossAmount,
+        requiresInvestigation,
+        investigationDeadline: requiresInvestigation
+          ? new Date(Date.now() + 48 * 60 * 60 * 1000) // 48 hours
+          : undefined,
+      },
+      isZeroDiscrepancy,
+
+      // ADD-FIN-001: Reconciliation
+      reconciliationStatus: 'pending',
+      reconciliationDeadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
+
+      // ADD-FIN-001: Investigation
+      requiresInvestigation,
 
       status: 'draft',
       currentApprovalLevel: 0,

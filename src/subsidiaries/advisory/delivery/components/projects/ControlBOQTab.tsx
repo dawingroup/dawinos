@@ -15,13 +15,15 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronRight,
+  Check,
 } from 'lucide-react';
 import { useProjectBOQItems, useControlBOQ } from '../../core/hooks/useControlBOQ';
 import { useBOQParsing } from '../../core/hooks/useBOQParsing';
+import { updateControlBOQStatus } from '../../core/services/control-boq';
 import { db } from '@/core/services/firebase';
 import { useAuth } from '@/shared/hooks';
 import { BOQ_ITEM_STATUS_CONFIG } from '../../core/types/boq';
-import type { ControlBOQItem } from '../../core/types/boq';
+import type { ControlBOQItem, BOQDocumentStatus } from '../../core/types/boq';
 
 interface ControlBOQTabProps {
   projectId: string;
@@ -126,15 +128,16 @@ export function ControlBOQTab({ projectId }: ControlBOQTabProps) {
   });
   
   const [showImportDialog, setShowImportDialog] = useState(false);
-  
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     setShowImportDialog(true);
     await parseFile(file);
   };
-  
+
   const handleImport = async () => {
     const fileName = fileInputRef.current?.files?.[0]?.name;
     await importItems(db, fileName);
@@ -146,10 +149,35 @@ export function ControlBOQTab({ projectId }: ControlBOQTabProps) {
       fileInputRef.current.value = '';
     }
   };
+
+  const handleStatusChange = async (newStatus: BOQDocumentStatus) => {
+    if (!user?.uid) return;
+
+    setIsUpdatingStatus(true);
+    try {
+      await updateControlBOQStatus(db, projectId, newStatus, user.uid);
+      await refreshBOQ();
+    } catch (error) {
+      console.error('Failed to update BOQ status:', error);
+      alert('Failed to update BOQ status. Please try again.');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
   
   const isLoading = boqLoading || itemsLoading;
   const isProcessing = isParsing || isCleaning || isImporting;
-  
+
+  // Debug logging
+  console.log('ControlBOQTab Debug:', {
+    projectId,
+    controlBOQ: controlBOQ ? { id: controlBOQ.id, status: controlBOQ.status, name: controlBOQ.name } : null,
+    itemsCount: items.length,
+    isLoading,
+    boqLoading,
+    itemsLoading
+  });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -158,7 +186,7 @@ export function ControlBOQTab({ projectId }: ControlBOQTabProps) {
       </div>
     );
   }
-  
+
   // No Control BOQ yet - show import prompt
   if (!controlBOQ && items.length === 0) {
     return (
@@ -221,14 +249,48 @@ export function ControlBOQTab({ projectId }: ControlBOQTabProps) {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Control BOQ</h2>
-          <p className="text-sm text-gray-500">
-            {summary.totalItems} items • {formatCurrency(summary.totalContractValue)} contract value
-          </p>
+        <div className="flex items-center gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-gray-900">Control BOQ</h2>
+              {controlBOQ && (
+                <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                  controlBOQ.status === 'approved' ? 'bg-green-100 text-green-700' :
+                  controlBOQ.status === 'pending_review' ? 'bg-yellow-100 text-yellow-700' :
+                  controlBOQ.status === 'draft' ? 'bg-gray-100 text-gray-600' :
+                  controlBOQ.status === 'superseded' ? 'bg-orange-100 text-orange-700' :
+                  'bg-gray-100 text-gray-600'
+                }`}>
+                  {controlBOQ.status === 'draft' && 'Draft'}
+                  {controlBOQ.status === 'pending_review' && 'Pending Review'}
+                  {controlBOQ.status === 'approved' && 'Approved'}
+                  {controlBOQ.status === 'superseded' && 'Superseded'}
+                  {controlBOQ.status === 'archived' && 'Archived'}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-gray-500">
+              {summary.totalItems} items • {formatCurrency(summary.totalContractValue)} contract value
+            </p>
+          </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
+          {controlBOQ && controlBOQ.status === 'draft' && (
+            <button
+              onClick={() => handleStatusChange('approved')}
+              disabled={isUpdatingStatus}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            >
+              {isUpdatingStatus ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4" />
+              )}
+              Approve & Publish
+            </button>
+          )}
+
           <button
             onClick={() => {
               refreshBOQ();
@@ -239,7 +301,7 @@ export function ControlBOQTab({ projectId }: ControlBOQTabProps) {
           >
             <RefreshCw className="w-4 h-4" />
           </button>
-          
+
           <input
             ref={fileInputRef}
             type="file"
@@ -247,7 +309,7 @@ export function ControlBOQTab({ projectId }: ControlBOQTabProps) {
             onChange={handleFileSelect}
             className="hidden"
           />
-          
+
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessing}

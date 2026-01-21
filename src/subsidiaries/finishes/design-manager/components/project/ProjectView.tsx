@@ -3,11 +3,11 @@
  * Project detail page with design items, cutlist, and estimates
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { 
-  ArrowLeft, Plus, LayoutGrid, List, FolderOpen, Calendar, User, Clock, 
-  CheckCircle, AlertTriangle, Package, Edit2, Scissors, Sparkles, Calculator, Upload 
+import {
+  ArrowLeft, Plus, LayoutGrid, List, FolderOpen, Calendar, User, Clock,
+  CheckCircle, AlertTriangle, Package, Edit2, Scissors, Sparkles, Calculator, Upload, FileText
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,13 +23,14 @@ import { DesignItemsTable } from './DesignItemsTable';
 import { CutlistTab } from './CutlistTab';
 import { EstimateTab } from './EstimateTab';
 import { ProductionTab } from './ProductionTab';
+import { ProjectDocuments } from './ProjectDocuments';
 import { StrategyCanvas } from '../strategy';
 import type { Project } from '@/shared/types';
 import { BulkImporter } from '../ProjectEstimation/BulkImporter';
 import { runProjectProduction } from '@/shared/services/optimization';
 
 type ViewMode = 'kanban' | 'list';
-type ProjectTab = 'items' | 'cutlist' | 'estimate' | 'production';
+type ProjectTab = 'items' | 'cutlist' | 'estimate' | 'production' | 'documents';
 
 export default function ProjectView() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -48,6 +49,31 @@ export default function ProjectView() {
     stage: stageFilter === 'all' ? undefined : stageFilter,
     category: categoryFilter === 'all' ? undefined : categoryFilter,
   });
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (showStrategy || showBulkImport) {
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+    } else {
+      const scrollY = document.body.style.top;
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+      }
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+    };
+  }, [showStrategy, showBulkImport]);
 
   if (projectLoading) {
     return (
@@ -103,7 +129,7 @@ export default function ProjectView() {
   const statusConfig = STATUS_CONFIG[project.status] || STATUS_CONFIG['active'];
 
   return (
-    <div className="px-6 py-6 space-y-6">
+    <div className="min-h-screen px-6 py-6 space-y-6 pb-20">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-4">
@@ -246,27 +272,42 @@ export default function ProjectView() {
       </div>
 
       {/* Project Tabs */}
-      <div className="border-b border-gray-200">
-        <div className="flex gap-1">
+      <div className="border-b border-gray-200 bg-white">
+        <div className="flex gap-1 overflow-x-auto scrollbar-hide">
           <button
             onClick={() => setActiveTab('items')}
             className={cn(
-              'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap',
               activeTab === 'items'
-                ? 'border-[#0A7C8E] text-[#0A7C8E]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-[#0A7C8E] text-[#0A7C8E] bg-teal-50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             )}
           >
             <Package className="w-4 h-4" />
             Design Items
           </button>
           <button
+            onClick={() => setActiveTab('documents')}
+            className={cn(
+              'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap',
+              activeTab === 'documents'
+                ? 'border-[#0A7C8E] text-[#0A7C8E] bg-teal-50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            )}
+          >
+            <FileText className="w-4 h-4" />
+            Documents
+            <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-bold rounded-full">
+              AI
+            </span>
+          </button>
+          <button
             onClick={() => setActiveTab('cutlist')}
             className={cn(
-              'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap',
               activeTab === 'cutlist'
-                ? 'border-[#0A7C8E] text-[#0A7C8E]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-[#0A7C8E] text-[#0A7C8E] bg-teal-50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             )}
           >
             <Scissors className="w-4 h-4" />
@@ -275,10 +316,10 @@ export default function ProjectView() {
           <button
             onClick={() => setActiveTab('estimate')}
             className={cn(
-              'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap',
               activeTab === 'estimate'
-                ? 'border-[#0A7C8E] text-[#0A7C8E]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-[#0A7C8E] text-[#0A7C8E] bg-teal-50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             )}
           >
             <Calculator className="w-4 h-4" />
@@ -287,10 +328,10 @@ export default function ProjectView() {
           <button
             onClick={() => setActiveTab('production')}
             className={cn(
-              'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap',
               activeTab === 'production'
-                ? 'border-[#0A7C8E] text-[#0A7C8E]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'border-[#0A7C8E] text-[#0A7C8E] bg-teal-50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
             )}
           >
             <Scissors className="w-4 h-4" />
@@ -422,13 +463,26 @@ export default function ProjectView() {
       )}
 
       {activeTab === 'production' && (
-        <ProductionTab 
-          project={project} 
+        <ProductionTab
+          project={project}
           onRefresh={async () => {
             if (projectId && user?.email) {
               await runProjectProduction(projectId, user.email);
             }
-          }} 
+          }}
+        />
+      )}
+
+      {activeTab === 'documents' && (
+        <ProjectDocuments
+          projectId={projectId!}
+          projectCode={project.code}
+          userId={user?.uid || ''}
+          userName={user?.displayName || user?.email || 'Unknown'}
+          onApplyAIToProject={(document) => {
+            // TODO: Convert AI extracted items to design items
+            console.log('Applying AI suggestions to project:', document);
+          }}
         />
       )}
 
@@ -451,7 +505,7 @@ export default function ProjectView() {
 
       {/* Strategy Canvas with AI Report Generation */}
       {showStrategy && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-white overflow-y-auto" style={{ height: '100vh', overflowY: 'auto' }}>
           <StrategyCanvas
             projectId={projectId!}
             projectName={project.name}

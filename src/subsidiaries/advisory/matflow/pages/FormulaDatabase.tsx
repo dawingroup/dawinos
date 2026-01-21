@@ -4,20 +4,24 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { 
-  Search, 
-  Calculator, 
+import {
+  Search,
+  Calculator,
   Filter,
   Copy,
   CheckCircle2,
   Loader2,
   X,
-  Info
+  Plus,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader';
-import { getFormulas, incrementFormulaUsage } from '../services/formulaService';
+import { getFormulas, incrementFormulaUsage, deleteFormula, createFormula, updateFormula } from '../services/formulaService';
 import { MaterialCategory } from '../types';
 import type { StandardFormula } from '../types';
+import { FormulaEditor, type FormulaFormData } from '../components/FormulaEditor';
+import { useAuth } from '@/core/hooks/useAuth';
 
 const CATEGORIES: { value: MaterialCategory | ''; label: string }[] = [
   { value: '', label: 'All Categories' },
@@ -32,12 +36,15 @@ const CATEGORIES: { value: MaterialCategory | ''; label: string }[] = [
 ];
 
 const FormulaDatabase: React.FC = () => {
+  const { user } = useAuth();
   const [formulas, setFormulas] = useState<StandardFormula[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<MaterialCategory | ''>('');
   const [selectedFormula, setSelectedFormula] = useState<StandardFormula | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editingFormula, setEditingFormula] = useState<StandardFormula | null>(null);
 
   // Load formulas
   useEffect(() => {
@@ -84,6 +91,54 @@ const FormulaDatabase: React.FC = () => {
     return CATEGORIES.find(c => c.value === cat)?.label || cat;
   };
 
+  const handleCreateFormula = () => {
+    setEditingFormula(null);
+    setIsEditorOpen(true);
+  };
+
+  const handleEditFormula = (formula: StandardFormula) => {
+    setEditingFormula(formula);
+    setIsEditorOpen(true);
+  };
+
+  const handleDeleteFormula = async (formula: StandardFormula) => {
+    if (!user) return;
+
+    if (!confirm(`Are you sure you want to delete the formula "${formula.name}"?`)) {
+      return;
+    }
+
+    try {
+      await deleteFormula(formula.id, user.uid);
+      await loadFormulas();
+    } catch (error) {
+      console.error('Error deleting formula:', error);
+      alert('Failed to delete formula. Please try again.');
+    }
+  };
+
+  const handleSaveFormula = async (formData: FormulaFormData) => {
+    if (!user) return;
+
+    try {
+      if (editingFormula) {
+        // Update existing formula
+        await updateFormula(editingFormula.id, formData, user.uid);
+      } else {
+        // Create new formula
+        await createFormula(formData, user.uid);
+      }
+
+      // Reload formulas
+      await loadFormulas();
+      setIsEditorOpen(false);
+      setEditingFormula(null);
+    } catch (error) {
+      console.error('Error saving formula:', error);
+      throw error;
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -96,7 +151,7 @@ const FormulaDatabase: React.FC = () => {
       />
 
       <div className="p-6">
-        {/* Filters */}
+        {/* Filters and Actions */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -120,6 +175,13 @@ const FormulaDatabase: React.FC = () => {
               ))}
             </select>
           </div>
+          <button
+            onClick={handleCreateFormula}
+            className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2 whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            New Formula
+          </button>
         </div>
 
         {/* Formulas Grid */}
@@ -142,11 +204,12 @@ const FormulaDatabase: React.FC = () => {
             {filteredFormulas.map((formula) => (
               <div
                 key={formula.id}
-                className="bg-white rounded-lg border border-gray-200 p-4 hover:border-amber-200 hover:shadow-sm transition-all"
+                className="bg-white rounded-lg border border-gray-200 p-4 hover:border-amber-300 hover:shadow-md transition-all cursor-pointer group"
+                onClick={() => setSelectedFormula(formula)}
               >
                 <div className="flex items-start justify-between mb-2">
                   <div>
-                    <h3 className="font-semibold text-gray-900">{formula.name}</h3>
+                    <h3 className="font-semibold text-gray-900 group-hover:text-amber-700 transition-colors">{formula.name}</h3>
                     {formula.code && (
                       <span className="text-xs font-mono text-gray-500">{formula.code}</span>
                     )}
@@ -179,30 +242,50 @@ const FormulaDatabase: React.FC = () => {
                 )}
                 
                 {/* Actions */}
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                  <button
-                    onClick={() => setSelectedFormula(formula)}
-                    className="text-sm text-amber-600 hover:text-amber-700 flex items-center gap-1"
-                  >
-                    <Info className="w-3.5 h-3.5" />
-                    Details
-                  </button>
-                  <button
-                    onClick={() => handleCopyFormula(formula)}
-                    className="text-sm text-gray-600 hover:text-gray-800 flex items-center gap-1"
-                  >
-                    {copiedId === formula.id ? (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                        <span className="text-green-600">Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" />
-                        Copy
-                      </>
-                    )}
-                  </button>
+                <div className="pt-2 border-t border-gray-100 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopyFormula(formula);
+                      }}
+                      className="text-sm text-gray-600 hover:text-gray-800 flex items-center gap-1"
+                    >
+                      {copiedId === formula.id ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                          <span className="text-green-600">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          Copy
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditFormula(formula);
+                      }}
+                      className="flex-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 flex items-center justify-center gap-1.5 text-sm font-medium"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      Edit Formula
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteFormula(formula);
+                      }}
+                      className="flex-1 px-3 py-1.5 bg-red-50 text-red-700 rounded-md hover:bg-red-100 flex items-center justify-center gap-1.5 text-sm font-medium"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete
+                    </button>
+                  </div>
                 </div>
                 
                 {/* Usage Count */}
@@ -252,11 +335,22 @@ const FormulaDatabase: React.FC = () => {
           isCopied={copiedId === selectedFormula.id}
         />
       )}
+
+      {/* Formula Editor Modal */}
+      <FormulaEditor
+        isOpen={isEditorOpen}
+        onClose={() => {
+          setIsEditorOpen(false);
+          setEditingFormula(null);
+        }}
+        formula={editingFormula}
+        onSave={handleSaveFormula}
+      />
     </div>
   );
 };
 
-// Formula Detail Modal
+// Formula Detail Drawer
 interface FormulaDetailModalProps {
   formula: StandardFormula;
   onClose: () => void;
@@ -275,48 +369,84 @@ const FormulaDetailModal: React.FC<FormulaDetailModalProps> = ({
     ? formula.components.map(c => `${c.quantity} ${c.materialName}`).join(' + ')
     : formula.name;
 
+  // Get category label
+  const getCategoryLabel = (cat: string) => {
+    return CATEGORIES.find(c => c.value === cat)?.label || cat;
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-auto">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 sticky top-0 bg-white">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">{formula.name}</h3>
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/50 z-40 transition-opacity"
+        onClick={onClose}
+      />
+
+      {/* Drawer */}
+      <div className="fixed inset-y-0 right-0 w-full max-w-2xl bg-white shadow-2xl z-50 flex flex-col animate-slide-in-right">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white">
+          <div className="flex-1">
+            <h3 className="text-xl font-semibold text-gray-900">{formula.name}</h3>
             {formula.code && (
-              <span className="text-sm font-mono text-gray-500">{formula.code}</span>
+              <span className="text-sm font-mono text-gray-500 mt-1 block">{formula.code}</span>
             )}
           </div>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
+          <button
+            onClick={onClose}
+            className="ml-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {formula.description && (
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-1">Description</h4>
-              <p className="text-gray-600">{formula.description}</p>
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Description</h4>
+              <p className="text-gray-600 leading-relaxed">{formula.description}</p>
             </div>
           )}
 
           <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-1">Formula</h4>
-            <div className="bg-gray-50 rounded-lg p-4 font-mono text-lg">
-              <code className="text-gray-800">{formulaString}</code>
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Formula Expression</h4>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <code className="text-amber-900 font-mono text-base">{formulaString}</code>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Category & Output</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs text-gray-500 mb-1">Category</p>
+                <p className="text-sm font-medium text-gray-900">{getCategoryLabel(formula.category)}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs text-gray-500 mb-1">Output Unit</p>
+                <p className="text-sm font-medium text-gray-900">{formula.outputUnit}</p>
+              </div>
             </div>
           </div>
 
           {formula.components && formula.components.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Components</h4>
-              <div className="space-y-2">
+              <h4 className="text-sm font-medium text-gray-700 mb-3">Material Components</h4>
+              <div className="space-y-3">
                 {formula.components.map((component, i) => (
-                  <div key={i} className="flex items-start gap-3 p-2 bg-gray-50 rounded-lg">
-                    <span className="font-mono font-semibold text-amber-600 w-16">
-                      {component.quantity}
-                    </span>
-                    <div className="flex-1">
+                  <div key={i} className="bg-white border border-gray-200 rounded-lg p-4 hover:border-amber-300 transition-colors">
+                    <div className="flex items-start justify-between mb-2">
                       <p className="font-medium text-gray-900">{component.materialName}</p>
-                      <p className="text-xs text-gray-400">Unit: {component.unit}</p>
+                      <span className="font-mono font-semibold text-amber-600 text-lg">
+                        {component.quantity} {component.unit}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <span>Unit: {component.unit}</span>
+                      {component.wastagePercent > 0 && (
+                        <span>Wastage: {component.wastagePercent}%</span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -324,35 +454,45 @@ const FormulaDetailModal: React.FC<FormulaDetailModalProps> = ({
             </div>
           )}
 
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-1">Output Unit</h4>
-            <p className="text-sm text-gray-600">{formula.outputUnit}</p>
-          </div>
-
           {formula.keywords && formula.keywords.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-1">Keywords</h4>
-              <div className="flex flex-wrap gap-1">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Search Keywords</h4>
+              <div className="flex flex-wrap gap-2">
                 {formula.keywords.map((keyword, i) => (
-                  <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                  <span key={i} className="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-full">
                     {keyword}
                   </span>
                 ))}
               </div>
             </div>
           )}
+
+          {formula.usageCount > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-2">
+                <Calculator className="w-5 h-5 text-blue-600" />
+                <div>
+                  <p className="text-sm font-medium text-blue-900">Usage Statistics</p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    This formula has been used {formula.usageCount} time{formula.usageCount !== 1 ? 's' : ''} in BOQ calculations
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="flex justify-end gap-3 p-4 border-t border-gray-200 sticky bottom-0 bg-white">
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"
           >
             Close
           </button>
           <button
             onClick={onCopy}
-            className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2"
+            className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2 font-medium shadow-sm"
           >
             {isCopied ? (
               <>
@@ -368,7 +508,7 @@ const FormulaDetailModal: React.FC<FormulaDetailModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

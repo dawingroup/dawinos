@@ -25,7 +25,6 @@ import {
 } from 'firebase/storage';
 import { db, storage } from '@/core/services/firebase';
 import type { BOQParsingResult, ParsedBOQItem } from '../ai/schemas/boqSchema';
-import { BOQStatus } from '../types';
 
 // Parsing job status
 export type ParsingJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
@@ -51,10 +50,10 @@ export interface ParsingJob {
 
 // Collection reference helper
 const parsingJobsCollection = (orgId: string, projectId: string) =>
-  collection(db, 'organizations', orgId, 'matflow_projects', projectId, 'parsing_jobs');
+  collection(db, 'organizations', orgId, 'advisory_projects', projectId, 'parsing_jobs');
 
 const parsingJobDoc = (orgId: string, projectId: string, jobId: string) =>
-  doc(db, 'organizations', orgId, 'matflow_projects', projectId, 'parsing_jobs', jobId);
+  doc(db, 'organizations', orgId, 'advisory_projects', projectId, 'parsing_jobs', jobId);
 
 // ============================================================================
 // FILE UPLOAD
@@ -281,7 +280,7 @@ export async function importParsedItems(
     db,
     'organizations',
     organizationId,
-    'matflow_projects',
+    'advisory_projects',
     projectId,
     'boq_items'
   );
@@ -348,7 +347,7 @@ export async function importParsedItems(
     db,
     'organizations',
     organizationId,
-    'matflow_projects',
+    'advisory_projects',
     projectId
   );
   
@@ -361,7 +360,7 @@ export async function importParsedItems(
     await updateDoc(projectRef, {
       totalBOQItems: currentTotal + items.length,
       totalPlannedCost: currentCost + importedCost,
-      boqStatus: BOQStatus.DRAFT,
+      boqStatus: 'draft',
       updatedAt: serverTimestamp(),
     });
   }

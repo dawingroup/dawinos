@@ -14,6 +14,7 @@ const ItemDetailRouter = lazy(() => import('./components/design-item/ItemDetailR
 const MaterialsPage = lazy(() => import('./pages/MaterialsPage'));
 const FeatureLibraryPage = lazy(() => import('./components/feature-library/FeatureLibraryPage'));
 const StrategyCanvasPage = lazy(() => import('./pages/StrategyCanvasPage'));
+const AIToolsPage = lazy(() => import('./pages/AIToolsPage'));
 
 /**
  * Loading fallback
@@ -36,6 +37,7 @@ export default function DesignManagerModule() {
         <Route index element={<DesignManagerPageNew />} />
         <Route path="materials" element={<MaterialsPage />} />
         <Route path="features" element={<FeatureLibraryPage />} />
+        <Route path="ai-tools" element={<AIToolsPage />} />
         <Route path="roadmap" element={<Navigate to="/design" replace />} />
         <Route path="shopify" element={<Navigate to="/design" replace />} />
         <Route path="project/:projectId" element={<ProjectView />} />

@@ -140,33 +140,35 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
+    <div className="w-full h-full bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 flex-shrink-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Project Strategy</h1>
+      <div className="bg-white border-b border-gray-200 z-40 sticky top-0">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-3 sm:py-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">Project Strategy</h1>
               {projectName && (
-                <p className="text-sm text-gray-500 mt-1">{projectName}</p>
+                <p className="text-xs sm:text-sm text-gray-600 mt-1 sm:mt-1.5 font-medium truncate">{projectName}</p>
               )}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-shrink-0">
               {/* Generate AI Report Button */}
               <button
                 onClick={handleGenerateReport}
                 disabled={isGeneratingReport}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all disabled:opacity-50"
+                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all disabled:opacity-50 text-xs sm:text-sm"
               >
                 {isGeneratingReport ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                    Generating...
+                    <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-2 border-white border-t-transparent" />
+                    <span className="hidden sm:inline">Generating...</span>
+                    <span className="sm:hidden">Gen...</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" />
-                    Generate AI Report
+                    <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">Generate AI Report</span>
+                    <span className="sm:hidden">AI Report</span>
                   </>
                 )}
               </button>
@@ -175,19 +177,20 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
               {generatedReport && !showReportPanel && (
                 <button
                   onClick={() => setShowReportPanel(true)}
-                  className="flex items-center gap-2 px-4 py-2 border border-indigo-300 text-indigo-600 rounded-lg hover:bg-indigo-50"
+                  className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 border border-indigo-300 text-indigo-600 rounded-lg hover:bg-indigo-50 text-xs sm:text-sm"
                 >
-                  <FileText className="w-4 h-4" />
-                  View Report
+                  <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">View Report</span>
+                  <span className="sm:hidden">View</span>
                 </button>
               )}
 
               {onClose && (
                 <button
                   onClick={onClose}
-                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                  className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               )}
             </div>
@@ -208,19 +211,25 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
       )}
 
       {/* Main Content - Scrollable */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="bg-gray-50 pb-8 sm:pb-12">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 lg:py-10">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-10">
           {/* Left Column - Strategy Inputs */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6 lg:space-y-10">
             {/* Project Scoping AI - FIRST */}
-            <div className="bg-white rounded-xl border-2 border-purple-200 p-6 bg-gradient-to-br from-purple-50 to-white">
-              <div className="flex items-center gap-2 mb-4">
-                <Package className="w-5 h-5 text-purple-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Project Scoping AI</h2>
-                <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded">START HERE</span>
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg sm:shadow-xl border-2 border-purple-400 p-4 sm:p-6 lg:p-10 bg-gradient-to-br from-purple-50 via-white to-purple-50 hover:shadow-2xl transition-shadow">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg">
+                  <Package className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">Project Scoping AI</h2>
+                  <span className="inline-block mt-2 px-4 py-1.5 text-xs font-bold bg-purple-500 text-white rounded-full shadow-md">
+                    ⚡ START HERE
+                  </span>
+                </div>
               </div>
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-gray-700 mb-8 leading-relaxed">
                 Enter your design brief to automatically extract deliverables. The output will be used to generate your strategy report.
               </p>
               <Suspense fallback={
@@ -240,10 +249,12 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
             </div>
 
             {/* Challenges Section */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Target className="w-5 h-5 text-red-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Challenges & Goals</h2>
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border-2 border-gray-200 p-4 sm:p-6 lg:p-9 hover:shadow-xl transition-shadow">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-md">
+                  <Target className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-white" />
+                </div>
+                <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">Challenges & Goals</h2>
               </div>
               <ChallengesSection
                 challenges={strategy?.challenges || { painPoints: [], goals: [], constraints: [] }}
@@ -252,10 +263,12 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
             </div>
 
             {/* Space Parameters */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Ruler className="w-5 h-5 text-blue-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Space Parameters</h2>
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border-2 border-gray-200 p-4 sm:p-6 lg:p-9 hover:shadow-xl transition-shadow">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
+                  <Ruler className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-white" />
+                </div>
+                <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">Space Parameters</h2>
               </div>
               <SpaceParametersSection
                 params={strategy?.spaceParameters || {
@@ -269,10 +282,12 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
             </div>
 
             {/* Budget Framework */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <DollarSign className="w-5 h-5 text-green-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Budget Framework</h2>
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border-2 border-gray-200 p-4 sm:p-6 lg:p-9 hover:shadow-xl transition-shadow">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-md">
+                  <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-white" />
+                </div>
+                <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">Budget Framework</h2>
               </div>
               <BudgetFrameworkSection
                 budget={strategy?.budgetFramework || { tier: 'standard', priorities: [] }}
@@ -281,11 +296,15 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
             </div>
 
             {/* Research Findings */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Lightbulb className="w-5 h-5 text-amber-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Research Findings</h2>
-                <span className="ml-auto text-sm text-gray-500">
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border-2 border-gray-200 p-4 sm:p-6 lg:p-9 hover:shadow-xl transition-shadow">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-md">
+                    <Lightbulb className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-white" />
+                  </div>
+                  <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">Research Findings</h2>
+                </div>
+                <span className="px-4 py-1.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-800 text-sm font-bold rounded-full shadow-sm">
                   {strategy?.researchFindings?.length || 0} saved
                 </span>
               </div>
@@ -298,13 +317,16 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
           </div>
 
           {/* Right Column - Research Assistant & Customer Intelligence */}
-          <div className="lg:col-span-1 space-y-6">
-            <div className="sticky top-24 space-y-6">
+          <div className="lg:col-span-1 space-y-4 sm:space-y-6 lg:space-y-10">
+            <div className="lg:sticky lg:top-28 space-y-4 sm:space-y-6 lg:space-y-10">
               {/* Customer Intelligence */}
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border-2 border-gray-200 p-4 sm:p-6 lg:p-8 hover:shadow-xl transition-shadow">
                 <Suspense fallback={
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-teal-600 border-t-transparent"></div>
+                  <div className="flex items-center justify-center py-16">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-10 w-10 border-3 border-teal-600 border-t-transparent mx-auto mb-4"></div>
+                      <p className="text-sm text-gray-600 font-medium">Loading Customer Intelligence...</p>
+                    </div>
                   </div>
                 }>
                   <CustomerIntelligenceAI
@@ -316,10 +338,12 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
               </div>
 
               {/* Research Assistant */}
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="flex items-center gap-2 p-4 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-indigo-600">
-                  <Search className="w-5 h-5 text-white" />
-                  <h2 className="font-semibold text-white">Research Assistant</h2>
+              <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 overflow-hidden hover:shadow-xl transition-shadow">
+                <div className="flex items-center gap-4 p-6 border-b-2 border-gray-100 bg-gradient-to-r from-blue-600 to-indigo-600">
+                  <div className="w-10 h-10 rounded-xl bg-white bg-opacity-20 flex items-center justify-center shadow-md">
+                    <Search className="w-6 h-6 text-white" />
+                  </div>
+                  <h2 className="text-xl font-bold text-white">Research Assistant</h2>
                 </div>
                 <ResearchAssistant
                   messages={messages}

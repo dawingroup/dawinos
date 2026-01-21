@@ -31,6 +31,30 @@ const { dailyCatalogAudit, weeklyCatalogAudit } = require('./src/scheduled/catal
 exports.dailyCatalogAudit = dailyCatalogAudit;
 exports.weeklyCatalogAudit = weeklyCatalogAudit;
 
+// ADD-FIN-001: Deadline Monitoring Functions
+const {
+  hourlyDeadlineCheck,
+  dailyDeadlineSummary,
+  triggerDeadlineCheck,
+  getProjectDeadlineSummary
+} = require('./src/scheduled/deadline-monitoring');
+exports.hourlyDeadlineCheck = hourlyDeadlineCheck;
+exports.dailyDeadlineSummary = dailyDeadlineSummary;
+exports.triggerDeadlineCheck = triggerDeadlineCheck;
+exports.getProjectDeadlineSummary = getProjectDeadlineSummary;
+
+// ADD-FIN-001: Document Export Functions
+const {
+  dailyDocumentExport,
+  triggerDocumentExport,
+  retryFailedExports,
+  getExportJobStatus
+} = require('./src/scheduled/document-export');
+exports.dailyDocumentExport = dailyDocumentExport;
+exports.triggerDocumentExport = triggerDocumentExport;
+exports.retryFailedExports = retryFailedExports;
+exports.getExportJobStatus = getExportJobStatus;
+
 // Shopify Webhook Handlers
 const { shopifyProductUpdate, shopifyProductDelete } = require('./src/webhooks/shopifyProductUpdate');
 exports.shopifyProductUpdate = shopifyProductUpdate;

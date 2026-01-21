@@ -83,7 +83,8 @@ export interface ProjectBudget {
   currency: 'UGX' | 'USD';
   totalBudget: number;
   spent: number;
-  remaining: number;
+  committed: number; // Amount committed in approved requisitions/accountability
+  remaining: number; // Computed: totalBudget - spent - committed
   variance: number;
   varianceStatus: 'on_track' | 'over' | 'under';
   contingencyPercent: number;
@@ -93,6 +94,7 @@ export interface ProjectProgress {
   physicalProgress: number; // Percentage
   financialProgress: number; // Percentage
   completionPercent: number; // from MatFlow stages
+  progressStatus: 'ahead' | 'on_track' | 'behind' | 'critical'; // Computed from variance
 }
 
 export interface ProjectTimeline {
@@ -104,6 +106,9 @@ export interface ProjectTimeline {
   actualEndDate?: Date;
   isDelayed: boolean;
   daysRemaining: number;
+  currentDuration: number; // Computed: days between currentStartDate and currentEndDate
+  percentTimeElapsed: number; // Computed: percentage of time passed
+  delayDays: number; // Computed: number of days delayed (0 if not delayed)
 }
 
 export interface ProjectMember {
@@ -165,6 +170,12 @@ export interface Project {
   // We can store lightweight references here.
   boqIds: string[];
   activeBoqId?: string;
+  boqSummary?: {
+    totalItems: number;
+    totalValue: number;
+    parsedItems: number;
+    approvedItems: number;
+  };
   
   // Metadata
   tags?: string[];

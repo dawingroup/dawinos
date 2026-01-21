@@ -1,8 +1,8 @@
 /**
  * Control BOQ Service
- * 
+ *
  * Service for managing Control BOQ items within projects.
- * Collection path: projects/{projectId}/boq_items
+ * Collection path: control_boq (root collection with projectId field)
  */
 
 import {
@@ -13,13 +13,14 @@ import {
   updateDoc,
   deleteDoc,
   query,
+  where,
   orderBy,
   serverTimestamp,
   writeBatch,
   Firestore,
   Timestamp,
 } from 'firebase/firestore';
-import type { ControlBOQItem, ControlBOQ, BOQCategory } from '../types/boq';
+import type { ControlBOQItem, ControlBOQ, BOQCategory, BOQDocumentStatus } from '../types/boq';
 import type { CleanedBOQItem } from '../types/parsing';
 
 // ─────────────────────────────────────────────────────────────────
@@ -27,12 +28,10 @@ import type { CleanedBOQItem } from '../types/parsing';
 // ─────────────────────────────────────────────────────────────────
 
 const PROJECTS_PATH = 'projects';
-const BOQ_ITEMS_SUBCOLLECTION = 'boq_items';
 const CONTROL_BOQ_SUBCOLLECTION = 'control_boq';
 
-function getBoqItemsPath(projectId: string): string {
-  return `${PROJECTS_PATH}/${projectId}/${BOQ_ITEMS_SUBCOLLECTION}`;
-}
+// BOQ items are stored in root 'control_boq' collection with projectId field
+// Control BOQ metadata is stored in projects/{projectId}/control_boq/main
 
 function getControlBoqPath(projectId: string): string {
   return `${PROJECTS_PATH}/${projectId}/${CONTROL_BOQ_SUBCOLLECTION}`;
@@ -55,14 +54,14 @@ export async function importBOQItems(
   input: ImportBOQItemsInput
 ): Promise<string[]> {
   const { projectId, items, userId, sourceFileName, parsingJobId } = input;
-  
+
   if (!items || items.length === 0) {
     return [];
   }
-  
+
   const batch = writeBatch(db);
   const importedIds: string[] = [];
-  const collectionRef = collection(db, getBoqItemsPath(projectId));
+  const collectionRef = collection(db, 'control_boq');
   
   for (const item of items) {
     if (item.isSummaryRow) continue; // Skip summary rows
@@ -130,6 +129,7 @@ export async function importBOQItems(
   
   // Create or update Control BOQ document
   const controlBoqRef = doc(db, getControlBoqPath(projectId), 'main');
+  const now = Timestamp.now();
   const controlBoqData: Partial<ControlBOQ> = {
     projectId,
     name: sourceFileName || 'Control BOQ',
@@ -140,9 +140,11 @@ export async function importBOQItems(
     totalItems: importedIds.length,
     totalContractValue: items.reduce((sum, i) => sum + (i.amount || 0), 0),
     currency: 'UGX',
-    updatedAt: Timestamp.now(),
+    createdAt: now,
+    createdBy: userId,
+    updatedAt: now,
   };
-  
+
   batch.set(controlBoqRef, controlBoqData, { merge: true });
   
   await batch.commit();
@@ -159,12 +161,13 @@ export async function getProjectBOQItems(
   projectId: string
 ): Promise<ControlBOQItem[]> {
   try {
-    // Try with ordering first
+    // Query root control_boq collection with projectId filter
     const q = query(
-      collection(db, getBoqItemsPath(projectId)),
+      collection(db, 'control_boq'),
+      where('projectId', '==', projectId),
       orderBy('hierarchyPath', 'asc')
     );
-    
+
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({
       id: doc.id,
@@ -173,13 +176,16 @@ export async function getProjectBOQItems(
   } catch (err) {
     // Fallback: query without ordering if index doesn't exist
     console.warn('BOQ query with ordering failed, falling back to unordered:', err);
-    const collRef = collection(db, getBoqItemsPath(projectId));
-    const snapshot = await getDocs(collRef);
+    const q = query(
+      collection(db, 'control_boq'),
+      where('projectId', '==', projectId)
+    );
+    const snapshot = await getDocs(q);
     const items = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
     })) as ControlBOQItem[];
-    
+
     // Sort in memory
     return items.sort((a, b) => (a.hierarchyPath || '').localeCompare(b.hierarchyPath || ''));
   }
@@ -190,12 +196,16 @@ export async function getBOQItem(
   projectId: string,
   itemId: string
 ): Promise<ControlBOQItem | null> {
-  const docRef = doc(db, getBoqItemsPath(projectId), itemId);
+  const docRef = doc(db, 'control_boq', itemId);
   const docSnap = await getDoc(docRef);
-  
+
   if (!docSnap.exists()) return null;
-  
-  return { id: docSnap.id, ...docSnap.data() } as ControlBOQItem;
+
+  // Verify it belongs to the project
+  const data = docSnap.data();
+  if (data.projectId !== projectId) return null;
+
+  return { ...data, id: docSnap.id } as ControlBOQItem;
 }
 
 export async function getAvailableBOQItems(
@@ -203,10 +213,28 @@ export async function getAvailableBOQItems(
   projectId: string
 ): Promise<ControlBOQItem[]> {
   const items = await getProjectBOQItems(db, projectId);
-  return items.filter(item => {
+  console.log('getAvailableBOQItems: Total items from DB:', items.length);
+
+  const availableItems = items.filter(item => {
     const processed = Math.max(item.quantityRequisitioned, item.quantityCertified);
-    return item.quantityContract > processed;
+    const isAvailable = item.quantityContract > processed;
+
+    if (!isAvailable && items.indexOf(item) < 3) {
+      console.log('Item filtered out:', {
+        description: item.description,
+        quantityContract: item.quantityContract,
+        quantityRequisitioned: item.quantityRequisitioned,
+        quantityCertified: item.quantityCertified,
+        processed,
+        isAvailable
+      });
+    }
+
+    return isAvailable;
   });
+
+  console.log('getAvailableBOQItems: Available items:', availableItems.length);
+  return availableItems;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -224,14 +252,19 @@ export async function updateBOQItemQuantities(
     linkedPaymentId?: string;
   }
 ): Promise<void> {
-  const docRef = doc(db, getBoqItemsPath(projectId), itemId);
+  const docRef = doc(db, 'control_boq', itemId);
   const docSnap = await getDoc(docRef);
-  
+
   if (!docSnap.exists()) {
     throw new Error('BOQ item not found');
   }
-  
+
   const current = docSnap.data() as ControlBOQItem;
+
+  // Verify it belongs to the project
+  if (current.projectId !== projectId) {
+    throw new Error('BOQ item does not belong to this project');
+  }
   const updateData: Record<string, unknown> = {
     updatedAt: serverTimestamp(),
   };
@@ -286,20 +319,35 @@ export async function getControlBOQ(
   return { id: docSnap.id, ...docSnap.data() } as ControlBOQ;
 }
 
+export async function updateControlBOQStatus(
+  db: Firestore,
+  projectId: string,
+  status: BOQDocumentStatus,
+  userId: string
+): Promise<void> {
+  const docRef = doc(db, getControlBoqPath(projectId), 'main');
+
+  const updates: any = {
+    status,
+    updatedAt: serverTimestamp(),
+  };
+
+  // If approving, add approval fields
+  if (status === 'approved') {
+    updates.approvalStatus = 'approved';
+    updates.approvedBy = userId;
+    updates.approvedAt = serverTimestamp();
+  }
+
+  await updateDoc(docRef, updates);
+}
+
 export async function approveControlBOQ(
   db: Firestore,
   projectId: string,
   userId: string
 ): Promise<void> {
-  const docRef = doc(db, getControlBoqPath(projectId), 'main');
-  
-  await updateDoc(docRef, {
-    status: 'approved',
-    approvalStatus: 'approved',
-    approvedBy: userId,
-    approvedAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
+  await updateControlBOQStatus(db, projectId, 'approved', userId);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -311,7 +359,13 @@ export async function deleteBOQItem(
   projectId: string,
   itemId: string
 ): Promise<void> {
-  const docRef = doc(db, getBoqItemsPath(projectId), itemId);
+  // Verify item belongs to project before deleting
+  const item = await getBOQItem(db, projectId, itemId);
+  if (!item) {
+    throw new Error('BOQ item not found or does not belong to this project');
+  }
+
+  const docRef = doc(db, 'control_boq', itemId);
   await deleteDoc(docRef);
 }
 
@@ -321,15 +375,15 @@ export async function clearProjectBOQ(
 ): Promise<void> {
   const items = await getProjectBOQItems(db, projectId);
   const batch = writeBatch(db);
-  
+
   for (const item of items) {
-    const docRef = doc(db, getBoqItemsPath(projectId), item.id);
+    const docRef = doc(db, 'control_boq', item.id);
     batch.delete(docRef);
   }
-  
-  // Also delete the control BOQ document
+
+  // Also delete the control BOQ document (if using subcollection structure)
   const controlBoqRef = doc(db, getControlBoqPath(projectId), 'main');
   batch.delete(controlBoqRef);
-  
+
   await batch.commit();
 }

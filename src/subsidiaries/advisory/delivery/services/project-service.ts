@@ -70,12 +70,25 @@ export class ProjectService {
     return this.coreProjectService.getProject(ORG_ID, projectId);
   }
 
-  async getProjectsByProgram(programId: string): Promise<Project[]> {
-    return this.coreProjectService.getProjectsByProgram(ORG_ID, programId);
+  async getAllProjects(options?: {
+    status?: ProjectStatus[];
+    orderByField?: 'name' | 'createdAt' | 'status';
+    orderDirection?: 'asc' | 'desc';
+    limitCount?: number;
+  }): Promise<Project[]> {
+    return this.coreProjectService.getAllProjects(ORG_ID, options);
+  }
+
+  async getProjectsByProgram(programId: string, options?: { status?: ProjectStatus[] }): Promise<Project[]> {
+    return this.coreProjectService.getProjectsByProgram(ORG_ID, programId, options);
   }
 
   subscribeToProject(projectId: string, callback: (project: Project | null) => void): () => void {
     return this.coreProjectService.subscribeToProject(ORG_ID, projectId, callback);
+  }
+
+  subscribeToProjectsByProgram(programId: string, callback: (projects: Project[]) => void): () => void {
+    return this.coreProjectService.subscribeToProjectsByProgram(ORG_ID, programId, callback);
   }
 
   async updateProject(projectId: string, updates: Partial<Project>, userId: string): Promise<void> {

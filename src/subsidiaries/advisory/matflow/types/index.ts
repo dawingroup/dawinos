@@ -201,3 +201,9 @@ export type {
   ScheduledReport,
   ReportData,
 } from './export';
+
+// Re-export commonly used enums from review helpers
+export { MeasurementUnit, ConstructionStage } from '../utils/reviewHelpers';
+
+// Re-export MaterialCategory from core project types
+export { MaterialCategory } from '../../core/project/types/project.types';

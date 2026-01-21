@@ -9,6 +9,230 @@ import { Payment } from './payment';
 import { ExpenseCategory } from './requisition';
 
 // ─────────────────────────────────────────────────────────────────
+// PROOF OF SPEND (ADD-FIN-001 Zero-Discrepancy Policy)
+// ─────────────────────────────────────────────────────────────────
+
+export type DocumentType =
+  | 'invoice'
+  | 'receipt'
+  | 'delivery_note'
+  | 'photo_evidence'
+  | 'attendance_register'
+  | 'payment_receipt'
+  | 'rental_agreement'
+  | 'waybill'
+  | 'fuel_receipt'
+  | 'other';
+
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  invoice: 'Invoice',
+  receipt: 'Receipt',
+  delivery_note: 'Delivery Note',
+  photo_evidence: 'Photo Evidence',
+  attendance_register: 'Attendance Register',
+  payment_receipt: 'Payment Receipt',
+  rental_agreement: 'Rental Agreement',
+  waybill: 'Waybill',
+  fuel_receipt: 'Fuel Receipt',
+  other: 'Other',
+};
+
+export interface ProofOfSpendDocument {
+  id: string;
+  type: DocumentType;
+  documentUrl: string;
+  documentName: string;
+  uploadedAt: Timestamp;
+  uploadedBy: string;
+  fileSize: number;
+  mimeType: string;
+
+  // Quality validation
+  dpi?: number;
+  isQualityValid: boolean;
+  qualityValidationNotes?: string;
+
+  // Metadata
+  issuer?: string;
+  issueDate?: Date;
+  amount?: number;
+  notes?: string;
+}
+
+export interface ProofOfSpendEvidence {
+  expenseId: string;
+  category: ExpenseCategory;
+  requiredDocuments: DocumentType[];
+  providedDocuments: ProofOfSpendDocument[];
+  isComplete: boolean;
+  completionNotes?: string;
+}
+
+/**
+ * ADD-FIN-001 Proof of Spend Requirements by Category
+ */
+export const PROOF_OF_SPEND_REQUIREMENTS: Record<
+  ExpenseCategory,
+  {
+    requiredDocuments: DocumentType[];
+    minimumDocumentQuality: number; // DPI
+    requiresPhotographicEvidence: boolean;
+    description: string;
+  }
+> = {
+  construction_materials: {
+    requiredDocuments: ['invoice', 'receipt', 'delivery_note', 'photo_evidence'],
+    minimumDocumentQuality: 300,
+    requiresPhotographicEvidence: true,
+    description: 'Materials require invoice, receipt, delivery note, and photo evidence',
+  },
+  labor_wages: {
+    requiredDocuments: ['attendance_register', 'payment_receipt'],
+    minimumDocumentQuality: 300,
+    requiresPhotographicEvidence: false,
+    description: 'Labor requires attendance register and payment receipt',
+  },
+  equipment_rental: {
+    requiredDocuments: ['rental_agreement', 'receipt'],
+    minimumDocumentQuality: 300,
+    requiresPhotographicEvidence: false,
+    description: 'Equipment rental requires agreement and receipt',
+  },
+  transport_logistics: {
+    requiredDocuments: ['waybill', 'fuel_receipt'],
+    minimumDocumentQuality: 300,
+    requiresPhotographicEvidence: false,
+    description: 'Transport requires waybill and fuel receipts',
+  },
+  utilities: {
+    requiredDocuments: ['invoice', 'receipt'],
+    minimumDocumentQuality: 300,
+    requiresPhotographicEvidence: false,
+    description: 'Utilities require invoice and receipt',
+  },
+  permits_fees: {
+    requiredDocuments: ['receipt', 'invoice'],
+    minimumDocumentQuality: 300,
+    requiresPhotographicEvidence: false,
+    description: 'Permits and fees require receipt and invoice',
+  },
+  professional_services: {
+    requiredDocuments: ['invoice', 'receipt'],
+    minimumDocumentQuality: 300,
+    requiresPhotographicEvidence: false,
+    description: 'Professional services require invoice and receipt',
+  },
+  contingency: {
+    requiredDocuments: ['receipt'],
+    minimumDocumentQuality: 300,
+    requiresPhotographicEvidence: false,
+    description: 'Contingency expenses require receipt',
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────
+// VARIANCE TRACKING (ADD-FIN-001 Zero-Discrepancy Policy)
+// ─────────────────────────────────────────────────────────────────
+
+export type VarianceStatus =
+  | 'compliant' // Zero variance (< 0.01)
+  | 'minor' // < 2% variance
+  | 'moderate' // 2-5% variance - requires investigation
+  | 'severe'; // > 5% variance - personal liability
+
+export const VARIANCE_STATUS_CONFIG: Record<
+  VarianceStatus,
+  { label: string; color: string; threshold: number }
+> = {
+  compliant: { label: 'Compliant', color: 'green', threshold: 0.01 },
+  minor: { label: 'Minor Variance', color: 'blue', threshold: 0.02 },
+  moderate: { label: 'Moderate Variance', color: 'yellow', threshold: 0.05 },
+  severe: { label: 'Severe Variance', color: 'red', threshold: Infinity },
+};
+
+export interface AccountabilityVariance {
+  varianceAmount: number;
+  variancePercentage: number;
+  varianceStatus: VarianceStatus;
+  isZeroDiscrepancy: boolean;
+
+  // Breakdown
+  totalExpenses: number;
+  unspentReturned: number;
+  requisitionAmount: number;
+
+  // Investigation
+  requiresInvestigation: boolean;
+  investigationDeadline?: Date;
+  investigationStatus?: 'pending' | 'in_progress' | 'completed' | 'escalated';
+  investigationNotes?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// VARIANCE INVESTIGATION
+// ─────────────────────────────────────────────────────────────────
+
+export type InvestigationStatus = 'pending' | 'in_progress' | 'completed' | 'escalated';
+
+export interface VarianceInvestigation {
+  id: string;
+  accountabilityId: string;
+  varianceAmount: number;
+  variancePercentage: number;
+
+  // Assignment
+  assignedTo: string;
+  assignedAt: Timestamp;
+  deadline: Date; // 48 hours from detection
+
+  // Status
+  status: InvestigationStatus;
+  startedAt?: Timestamp;
+  completedAt?: Timestamp;
+
+  // Findings
+  findings?: string;
+  rootCause?: string;
+  correctiveActions?: string;
+  personalLiabilityAmount?: number;
+  personalLiabilityAssignedTo?: string;
+
+  // Escalation
+  escalatedAt?: Timestamp;
+  escalatedTo?: string;
+  escalationReason?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// RECONCILIATION
+// ─────────────────────────────────────────────────────────────────
+
+export type ReconciliationStatus = 'pending' | 'in_progress' | 'completed' | 'disputed';
+
+export interface ReconciliationRecord {
+  id: string;
+  accountabilityId: string;
+  reconciledBy: string;
+  reconciledAt: Timestamp;
+  status: ReconciliationStatus;
+
+  // Reconciliation details
+  requisitionAmount: number;
+  totalExpenses: number;
+  unspentReturned: number;
+  variance: number;
+
+  // Verification
+  allReceiptsVerified: boolean;
+  proofOfSpendComplete: boolean;
+  zeroDiscrepancyAchieved: boolean;
+
+  // Notes
+  notes?: string;
+  disputeReason?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────
 // EXPENSE STATUS
 // ─────────────────────────────────────────────────────────────────
 
@@ -38,6 +262,17 @@ export interface AccountabilityExpense {
   receiptDocId?: string;
   status: ExpenseStatus;
   rejectionReason?: string;
+
+  // ADD-FIN-001: Proof of spend evidence
+  proofOfSpend?: ProofOfSpendEvidence;
+  isZeroDiscrepancy: boolean;
+  variance?: number;
+  varianceJustification?: string;
+
+  // ADD-FIN-001: BOQ linkage (if applicable)
+  boqItemId?: string;
+  boqItemCode?: string;
+  quantityExecuted?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -58,25 +293,44 @@ export interface ReceiptsSummary {
 
 export interface Accountability extends Payment {
   paymentType: 'accountability';
-  
+
   // Reference to requisition
   requisitionId: string;
   requisitionNumber: string;
   requisitionAmount: number;
-  
+
   // Expense details
   expenses: AccountabilityExpense[];
-  
+
   // Summary
   totalExpenses: number;
   unspentReturned: number;
   balanceDue: number;
-  
+
   // Verification
   receiptsSummary: ReceiptsSummary;
   verifiedBy?: string;
   verifiedAt?: Timestamp;
   verificationNotes?: string;
+
+  // ADD-FIN-001: Variance tracking
+  variance: AccountabilityVariance;
+  isZeroDiscrepancy: boolean;
+
+  // ADD-FIN-001: Reconciliation
+  reconciliationStatus: ReconciliationStatus;
+  reconciliationDeadline: Date;
+  reconciliationRecord?: ReconciliationRecord;
+
+  // ADD-FIN-001: Investigation (if variance exceeds threshold)
+  investigationId?: string;
+  requiresInvestigation: boolean;
+
+  // ADD-FIN-001: Notion integration
+  notionPageId?: string;
+  notionSyncStatus?: 'pending' | 'synced' | 'error';
+  notionSyncError?: string;
+  lastNotionSyncAt?: Timestamp;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -195,6 +449,7 @@ export function createEmptyExpense(): Omit<AccountabilityExpense, 'id' | 'status
     description: '',
     category: 'construction_materials',
     amount: 0,
+    isZeroDiscrepancy: false,
   };
 }
 
@@ -210,4 +465,153 @@ export function areAllExpensesVerified(expenses: AccountabilityExpense[]): boole
  */
 export function getPendingExpensesCount(expenses: AccountabilityExpense[]): number {
   return expenses.filter(e => e.status === 'pending').length;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ADD-FIN-001: VARIANCE & PROOF OF SPEND HELPERS
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Calculate accountability variance (ADD-FIN-001)
+ */
+export function calculateAccountabilityVariance(
+  totalExpenses: number,
+  unspentReturned: number,
+  requisitionAmount: number
+): AccountabilityVariance {
+  const accountedFor = totalExpenses + unspentReturned;
+  const varianceAmount = accountedFor - requisitionAmount;
+  const variancePercentage = requisitionAmount > 0
+    ? Math.abs(varianceAmount / requisitionAmount) * 100
+    : 0;
+
+  // Determine variance status based on ADD-FIN-001 thresholds
+  let varianceStatus: VarianceStatus;
+  if (Math.abs(varianceAmount) < 0.01) {
+    varianceStatus = 'compliant';
+  } else if (variancePercentage < 2) {
+    varianceStatus = 'minor';
+  } else if (variancePercentage < 5) {
+    varianceStatus = 'moderate';
+  } else {
+    varianceStatus = 'severe';
+  }
+
+  const isZeroDiscrepancy = Math.abs(varianceAmount) < 0.01;
+  const requiresInvestigation = varianceStatus === 'moderate' || varianceStatus === 'severe';
+
+  return {
+    varianceAmount,
+    variancePercentage,
+    varianceStatus,
+    isZeroDiscrepancy,
+    totalExpenses,
+    unspentReturned,
+    requisitionAmount,
+    requiresInvestigation,
+    investigationDeadline: requiresInvestigation
+      ? new Date(Date.now() + 48 * 60 * 60 * 1000) // 48 hours
+      : undefined,
+    investigationStatus: requiresInvestigation ? 'pending' : undefined,
+  };
+}
+
+/**
+ * Validate proof of spend completeness for an expense
+ */
+export function validateProofOfSpend(
+  category: ExpenseCategory,
+  providedDocuments: ProofOfSpendDocument[]
+): { isComplete: boolean; missingDocuments: DocumentType[]; completionNotes?: string } {
+  const requirements = PROOF_OF_SPEND_REQUIREMENTS[category];
+  const providedTypes = new Set(providedDocuments.map(d => d.type));
+
+  const missingDocuments = requirements.requiredDocuments.filter(
+    required => !providedTypes.has(required)
+  );
+
+  const isComplete = missingDocuments.length === 0;
+
+  // Check document quality
+  const lowQualityDocs = providedDocuments.filter(
+    d => d.dpi && d.dpi < requirements.minimumDocumentQuality
+  );
+
+  let completionNotes: string | undefined;
+  if (lowQualityDocs.length > 0) {
+    completionNotes = `Warning: ${lowQualityDocs.length} document(s) below ${requirements.minimumDocumentQuality} DPI quality standard`;
+  }
+
+  return {
+    isComplete,
+    missingDocuments,
+    completionNotes,
+  };
+}
+
+/**
+ * Check if all expenses have complete proof of spend
+ */
+export function areAllProofOfSpendComplete(expenses: AccountabilityExpense[]): boolean {
+  return expenses.every(expense => {
+    if (!expense.proofOfSpend) return false;
+    return expense.proofOfSpend.isComplete;
+  });
+}
+
+/**
+ * Get variance status color for UI
+ */
+export function getVarianceStatusColor(status: VarianceStatus): string {
+  const colorMap: Record<string, string> = {
+    green: 'text-green-600 bg-green-100',
+    blue: 'text-blue-600 bg-blue-100',
+    yellow: 'text-yellow-600 bg-yellow-100',
+    red: 'text-red-600 bg-red-100',
+  };
+  return colorMap[VARIANCE_STATUS_CONFIG[status].color] || colorMap.green;
+}
+
+/**
+ * Create proof of spend evidence for an expense
+ */
+export function createProofOfSpendEvidence(
+  expenseId: string,
+  category: ExpenseCategory,
+  providedDocuments: ProofOfSpendDocument[]
+): ProofOfSpendEvidence {
+  const requirements = PROOF_OF_SPEND_REQUIREMENTS[category];
+  const validation = validateProofOfSpend(category, providedDocuments);
+
+  return {
+    expenseId,
+    category,
+    requiredDocuments: requirements.requiredDocuments,
+    providedDocuments,
+    isComplete: validation.isComplete,
+    completionNotes: validation.completionNotes,
+  };
+}
+
+/**
+ * Calculate investigation deadline (48 hours from now)
+ */
+export function calculateInvestigationDeadline(): Date {
+  return new Date(Date.now() + 48 * 60 * 60 * 1000);
+}
+
+/**
+ * Calculate reconciliation deadline (14 days from requisition disbursement)
+ */
+export function calculateReconciliationDeadline(disbursementDate: Date): Date {
+  const deadline = new Date(disbursementDate);
+  deadline.setDate(deadline.getDate() + 14);
+  return deadline;
+}
+
+/**
+ * Check if reconciliation is overdue
+ */
+export function isReconciliationOverdue(deadline: Date): boolean {
+  return new Date() > deadline;
 }
