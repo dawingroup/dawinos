@@ -407,7 +407,21 @@ service cloud.firestore {
     // ----------------------------------------
     // Global MatFlow Collections
     // ----------------------------------------
-    
+
+    // Legacy MatFlow Projects (root-level collection for migration)
+    match /matflow_projects/{projectId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+
+      // Subcollections
+      match /{subcollection}/{docId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated();
+      }
+    }
+
     // Standard Formulas - Read by all authenticated, write by authenticated (for seeding)
     match /matflow/data/formulas/{formulaId} {
       allow read: if isAuthenticated();
@@ -1269,10 +1283,20 @@ service cloud.firestore {
     // Competencies
     match /competencies/{competencyId} {
       allow read: if isAuthenticated();
-      allow create, update: if isHR() || isAdmin();
+      allow create, update: if isAuthenticated(); // Allow all authenticated users (for seeding and development)
       allow delete: if isAdmin();
     }
-    
+
+    // Employee Competencies (assessments/skill levels)
+    match /employee_competencies/{recordId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() || isHR() ||
+        resource.data.employeeId == request.auth.uid
+      );
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin() || isHR();
+    }
+
     // Competency Assessments
     match /competency_assessments/{assessmentId} {
       allow read: if isAuthenticated() && (
@@ -1284,7 +1308,28 @@ service cloud.firestore {
       allow update: if isHR() || resource.data.assessorId == request.auth.uid;
       allow delete: if isAdmin();
     }
-    
+
+    // Training Courses
+    match /training_courses/{courseId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated(); // Allow all authenticated users (for catalog management)
+      allow delete: if isAdmin() || isHR();
+    }
+
+    // Employee Training (enrollments and progress)
+    match /employee_training/{enrollmentId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() || isHR() ||
+        resource.data.employeeId == request.auth.uid
+      );
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        isHR() ||
+        resource.data.employeeId == request.auth.uid
+      );
+      allow delete: if isAdmin() || isHR();
+    }
+
     // Development Plans
     match /development_plans/{planId} {
       allow read: if isAuthenticated() && (
@@ -1293,15 +1338,26 @@ service cloud.firestore {
         resource.data.managerId == request.auth.uid
       );
       allow create: if isAuthenticated();
-      allow update: if isHR() || 
+      allow update: if isHR() ||
         resource.data.employeeId == request.auth.uid ||
         resource.data.managerId == request.auth.uid;
       allow delete: if isAdmin();
     }
-    
+
     // Development Activities
     match /development_activities/{activityId} {
       allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin() || isHR();
+    }
+
+    // Performance Metrics
+    match /performance_metrics/{metricId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() || isHR() ||
+        resource.data.employeeId == request.auth.uid ||
+        resource.data.managerId == request.auth.uid
+      );
       allow create, update: if isAuthenticated();
       allow delete: if isAdmin() || isHR();
     }
@@ -1470,6 +1526,29 @@ service cloud.firestore {
         allow read: if isAdmin();
         allow create: if isAuthenticated();
         allow update, delete: if false;
+      }
+
+      // Advisory Projects (Core Project Service)
+      match /advisory_projects/{projectId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated();
+        allow delete: if isAdmin();
+
+        // Activity log for advisory projects
+        match /activityLog/{logId} {
+          allow read: if isAuthenticated();
+          allow create: if isAuthenticated();
+          allow update, delete: if false;
+        }
+      }
+
+      // Advisory Programs
+      match /advisory_programs/{programId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated();
+        allow delete: if isAdmin();
       }
     }
     

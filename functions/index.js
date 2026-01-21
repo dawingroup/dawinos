@@ -110,6 +110,33 @@ exports.syncAllCustomers = syncAllCustomersCallable;
 exports.scheduledCustomerSync = scheduledCustomerSync;
 exports.importFromQuickBooks = importFromQuickBooksCallable;
 
+// Katana Integration
+const {
+  onCustomerCreated,
+  onCustomerUpdated,
+  syncCustomerToKatana,
+} = require('./src/integrations/katana/syncCustomer');
+exports.onCustomerCreated = onCustomerCreated;
+exports.onCustomerUpdated = onCustomerUpdated;
+exports.syncCustomerToKatana = syncCustomerToKatana;
+
+// QuickBooks Integration
+const {
+  getAuthUrl,
+  handleCallback,
+  checkConnection,
+} = require('./src/integrations/quickbooks/auth');
+const {
+  onCustomerCreatedQBO,
+  syncCustomerToQuickBooks,
+} = require('./src/integrations/quickbooks/customerSync');
+
+exports.qbGetAuthUrl = getAuthUrl;
+exports.qbCallback = handleCallback;
+exports.qbCheckConnection = checkConnection;
+exports.onCustomerCreatedQBO = onCustomerCreatedQBO;
+exports.syncCustomerToQuickBooks = syncCustomerToQuickBooks;
+
 // AI Utilities (new modular structure)
 const { 
   getModel, 
@@ -184,12 +211,16 @@ exports.onProcurementStatusChange = onProcurementStatusChange;
 exports.checkCriticalItems = checkCriticalItems;
 
 // EFRIS Tax Invoice Validation - Disabled until EFRIS API key is configured
-// const { 
-//   validateEFRISInvoice, 
+// const {
+//   validateEFRISInvoice,
 //   verifySupplierTIN,
 // } = require('./src/advisory/matflow/validateEFRISInvoice');
 // exports.validateEFRISInvoice = validateEFRISInvoice;
 // exports.verifySupplierTIN = verifySupplierTIN;
+
+// Data Migration Functions
+const { migrateMatflowProjects } = require('./src/migrations/migrateMatflowProjects');
+exports.migrateMatflowProjects = migrateMatflowProjects;
 
 // API Keys configuration
 const NOTION_API_KEY = defineString('NOTION_API_KEY');
@@ -1783,111 +1814,6 @@ async function getKatanaCustomers(req, res) {
 /**
  * Sync a customer to Katana
  */
-async function syncCustomerToKatana(req, res) {
-  try {
-    const { customerId, customer } = req.body;
-    
-    if (!customerId || !customer) {
-      return res.status(400).json({ error: 'customerId and customer data are required' });
-    }
-
-    console.log('Syncing customer to Katana:', customerId, customer.name);
-
-    // Build Katana customer data
-    const katanaCustomerData = {
-      name: customer.name,
-      code: customer.code,
-      email: customer.email || undefined,
-      phone: customer.phone || undefined,
-      default_currency: 'UGX',
-    };
-
-    // Add address if available
-    if (customer.billingAddress) {
-      katanaCustomerData.addresses = [{
-        name: 'Billing',
-        address_1: customer.billingAddress.street1,
-        address_2: customer.billingAddress.street2 || undefined,
-        city: customer.billingAddress.city,
-        state: customer.billingAddress.state || undefined,
-        zip: customer.billingAddress.postalCode || undefined,
-        country: customer.billingAddress.country || 'Kenya',
-        is_default_billing: true,
-        is_default_shipping: false,
-      }];
-    }
-
-    let katanaId = customer.externalIds?.katanaId;
-    let isNew = !katanaId;
-
-    // Check if customer already exists in Katana by code
-    if (!katanaId && customer.code) {
-      const searchResponse = await katanaRequest(`/customers?search=${encodeURIComponent(customer.code)}`);
-      if (!searchResponse.error && searchResponse.data) {
-        const existing = searchResponse.data.find(c => c.code === customer.code);
-        if (existing) {
-          katanaId = existing.id.toString();
-          isNew = false;
-          console.log('Found existing Katana customer:', katanaId);
-        }
-      }
-    }
-
-    let katanaResponse;
-    
-    if (katanaId) {
-      // Update existing customer
-      katanaResponse = await katanaRequest(`/customers/${katanaId}`, 'PATCH', {
-        name: katanaCustomerData.name,
-        email: katanaCustomerData.email,
-        phone: katanaCustomerData.phone,
-      });
-    } else {
-      // Create new customer
-      katanaResponse = await katanaRequest('/customers', 'POST', katanaCustomerData);
-    }
-
-    let resultKatanaId;
-    let isSimulated = false;
-
-    if (katanaResponse.simulated || katanaResponse.error) {
-      // Fallback to simulated
-      resultKatanaId = katanaId || `KAT-CUST-SIM-${Date.now()}`;
-      isSimulated = true;
-      console.log('Using simulated Katana customer sync:', resultKatanaId);
-    } else {
-      resultKatanaId = katanaResponse.id?.toString() || katanaResponse.data?.id?.toString() || katanaId;
-      console.log('Katana customer synced:', resultKatanaId);
-    }
-
-    // Update Firestore customer with Katana ID
-    try {
-      await db.collection('customers').doc(customerId).update({
-        'externalIds.katanaId': resultKatanaId,
-        'syncStatus.katana': isSimulated ? 'simulated' : 'synced',
-        'syncStatus.katanaLastSync': admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      console.log('Updated customer with Katana ID:', resultKatanaId);
-    } catch (dbError) {
-      console.error('Failed to update customer in Firestore:', dbError);
-    }
-
-    res.json({ 
-      success: true, 
-      katanaId: resultKatanaId,
-      isNew,
-      simulated: isSimulated,
-      message: isSimulated 
-        ? 'Customer synced to Katana (simulated)' 
-        : `Customer ${isNew ? 'created in' : 'updated in'} Katana`,
-    });
-
-  } catch (error) {
-    console.error('Error syncing customer to Katana:', error);
-    res.status(500).json({ error: error.message });
-  }
-}
 
 // ============================================
 // Katana BOM Export Functions
@@ -2698,81 +2624,6 @@ async function qboRequest(endpoint, options = {}) {
 /**
  * Sync customer to QuickBooks
  */
-async function syncCustomerToQuickBooks(req, res) {
-  try {
-    const { customerId } = req.body;
-    if (!customerId) {
-      return res.status(400).json({ error: 'customerId is required' });
-    }
-
-    const customerDoc = await db.collection('customers').doc(customerId).get();
-    if (!customerDoc.exists) {
-      return res.status(404).json({ error: 'Customer not found' });
-    }
-
-    const customer = customerDoc.data();
-
-    // Build QuickBooks customer data
-    const qboCustomer = {
-      DisplayName: `${customer.name} (${customer.code})`,
-      CompanyName: customer.name,
-    };
-
-    if (customer.email) {
-      qboCustomer.PrimaryEmailAddr = { Address: customer.email };
-    }
-
-    if (customer.phone) {
-      qboCustomer.PrimaryPhone = { FreeFormNumber: customer.phone };
-    }
-
-    let qboId = customer.externalIds?.quickbooksId;
-
-    if (qboId) {
-      // Update existing customer
-      const existing = await qboRequest(`/customer/${qboId}`);
-      const updateData = {
-        ...qboCustomer,
-        Id: qboId,
-        SyncToken: existing.Customer.SyncToken,
-        sparse: true,
-      };
-      await qboRequest('/customer', {
-        method: 'POST',
-        body: JSON.stringify(updateData),
-      });
-    } else {
-      // Search for existing or create new
-      const query = encodeURIComponent(`SELECT * FROM Customer WHERE DisplayName = '${qboCustomer.DisplayName.replace(/'/g, "\\'")}'`);
-      const searchResult = await qboRequest(`/query?query=${query}`);
-      const existing = searchResult.QueryResponse?.Customer?.[0];
-
-      if (existing) {
-        qboId = existing.Id;
-      } else {
-        const created = await qboRequest('/customer', {
-          method: 'POST',
-          body: JSON.stringify(qboCustomer),
-        });
-        qboId = created.Customer.Id;
-      }
-
-      await db.collection('customers').doc(customerId).update({
-        'externalIds.quickbooksId': qboId,
-      });
-    }
-
-    await db.collection('customers').doc(customerId).update({
-      'syncStatus.quickbooks': 'synced',
-      'syncStatus.quickbooksLastSync': admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    res.json({ success: true, quickbooksId: qboId });
-  } catch (error) {
-    console.error('Error syncing to QuickBooks:', error);
-    res.status(500).json({ error: error.message });
-  }
-}
 
 /**
  * Import customers FROM QuickBooks into this tool
