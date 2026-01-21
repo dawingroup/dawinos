@@ -1,24 +1,26 @@
 /**
  * Delivery Dashboard - Portfolio overview for program managers
+ * Styled to match Finishes Design Manager patterns
  */
 
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  Building2, 
-  DollarSign, 
-  TrendingUp, 
-  AlertTriangle, 
-  CheckCircle, 
+import {
+  Building2,
+  DollarSign,
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle,
   Clock,
   ChevronRight,
   Loader2
 } from 'lucide-react';
-import { MetricCard } from '../components/common/MetricCard';
 import { useAllPrograms } from '../hooks/program-hooks';
 import { useAllProjects } from '../hooks/project-hooks';
 import { usePendingApprovals } from '../hooks/payment-hooks';
 import { db } from '@/core/services/firebase';
+import { ColoredStatsCard } from '@/shared/components/data-display';
+import { BaseCard, InteractiveCard } from '@/shared/components/cards';
 
 export function DeliveryDashboard() {
   const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null);
@@ -116,67 +118,72 @@ export function DeliveryDashboard() {
         </select>
       </div>
 
-      {/* Portfolio Summary Cards */}
+      {/* Portfolio Summary Cards - Using ColoredStatsCard */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <MetricCard
+        <ColoredStatsCard
           icon={Building2}
           label="Total Projects"
           value={stats.totalProjects}
-          iconColor="text-blue-500"
+          subtitle="All projects"
+          color="blue"
         />
-        
-        <MetricCard
+
+        <ColoredStatsCard
           icon={Clock}
           label="Active"
           value={stats.activeProjects}
-          iconColor="text-amber-500"
+          subtitle="In progress"
+          color="amber"
         />
-        
-        <MetricCard
+
+        <ColoredStatsCard
           icon={CheckCircle}
           label="Completed"
           value={stats.completedProjects}
-          iconColor="text-green-500"
+          subtitle="Finished"
+          color="green"
         />
-        
-        <MetricCard
+
+        <ColoredStatsCard
           icon={DollarSign}
           label="Total Budget"
           value={formatCurrency(stats.totalBudget)}
-          iconColor="text-primary"
+          subtitle="Allocated"
+          color="primary"
         />
-        
-        <MetricCard
+
+        <ColoredStatsCard
           icon={TrendingUp}
           label="Avg. Progress"
           value={`${stats.avgProgress}%`}
-          iconColor="text-indigo-500"
+          subtitle="Completion"
+          color="indigo"
         />
-        
-        <MetricCard
+
+        <ColoredStatsCard
           icon={AlertTriangle}
           label="Delayed"
           value={stats.delayedProjects}
-          iconColor="text-red-500"
-          highlight={stats.delayedProjects > 0 ? 'warning' : undefined}
+          subtitle="Need attention"
+          color="red"
         />
       </div>
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Projects Overview */}
-        <div className="lg:col-span-2 bg-white rounded-lg border p-6">
+        <BaseCard padding="lg" className="lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-medium">Projects Overview</h2>
-            <Link 
-              to="/advisory/delivery/projects" 
+            <Link
+              to="/advisory/delivery/projects"
               className="text-primary text-sm hover:underline flex items-center"
             >
               View all <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
-          
-          <div className="space-y-4">
+
+          <div className="space-y-3">
             {topProjects.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Building2 className="w-12 h-12 mx-auto mb-2 text-gray-300" />
@@ -184,10 +191,12 @@ export function DeliveryDashboard() {
               </div>
             ) : (
               topProjects.map(project => (
-                <Link 
-                  key={project.id} 
+                <InteractiveCard
+                  key={project.id}
                   to={`/advisory/delivery/projects/${project.id}`}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  padding="sm"
+                  hoverBorderColor="hover:border-blue-200"
+                  className="flex items-center justify-between"
                 >
                   <div>
                     <div className="font-medium text-gray-900">{project.name}</div>
@@ -198,7 +207,7 @@ export function DeliveryDashboard() {
                   <div className="text-right">
                     <div className="text-sm font-medium">{project.progress?.physicalProgress || 0}%</div>
                     <div className="w-24 h-2 bg-gray-200 rounded-full mt-1">
-                      <div 
+                      <div
                         className={`h-full rounded-full ${
                           project.progress?.progressStatus === 'on_track' || project.progress?.progressStatus === 'ahead'
                             ? 'bg-green-500'
@@ -210,16 +219,16 @@ export function DeliveryDashboard() {
                       />
                     </div>
                   </div>
-                </Link>
+                </InteractiveCard>
               ))
             )}
           </div>
-        </div>
+        </BaseCard>
 
         {/* Budget Chart */}
-        <div className="bg-white rounded-lg border p-6">
+        <BaseCard padding="lg">
           <h2 className="text-lg font-medium mb-4">Budget Overview</h2>
-          
+
           <div className="space-y-6">
             <div className="text-center">
               <div className="text-3xl font-bold text-gray-900">
@@ -227,22 +236,22 @@ export function DeliveryDashboard() {
               </div>
               <div className="text-sm text-gray-500">Total Budget</div>
             </div>
-            
+
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-600">Utilized</span>
                 <span className="font-medium">
-                  {((stats.totalSpent / stats.totalBudget) * 100).toFixed(1)}%
+                  {stats.totalBudget > 0 ? ((stats.totalSpent / stats.totalBudget) * 100).toFixed(1) : 0}%
                 </span>
               </div>
               <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-blue-500 rounded-full"
-                  style={{ width: `${(stats.totalSpent / stats.totalBudget) * 100}%` }}
+                  style={{ width: `${stats.totalBudget > 0 ? (stats.totalSpent / stats.totalBudget) * 100 : 0}%` }}
                 />
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4 pt-4 border-t">
               <div className="text-center">
                 <div className="text-lg font-semibold text-blue-600">
@@ -258,50 +267,38 @@ export function DeliveryDashboard() {
               </div>
             </div>
           </div>
-        </div>
+        </BaseCard>
       </div>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Link 
-          to="/advisory/delivery/projects"
-          className="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow"
-        >
+        <InteractiveCard to="/advisory/delivery/projects" hoverBorderColor="hover:border-blue-200">
           <Building2 className="w-8 h-8 text-blue-500 mb-2" />
           <div className="font-medium">All Projects</div>
           <div className="text-sm text-gray-500">View and manage projects</div>
-        </Link>
-        
-        <Link 
-          to="/advisory/delivery/approvals"
-          className="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow"
-        >
+        </InteractiveCard>
+
+        <InteractiveCard to="/advisory/delivery/approvals" hoverBorderColor="hover:border-green-200">
           <CheckCircle className="w-8 h-8 text-green-500 mb-2" />
           <div className="font-medium">Approvals</div>
           <div className="text-sm text-gray-500">
-            {stats.pendingApprovals > 0 
+            {stats.pendingApprovals > 0
               ? `${stats.pendingApprovals} pending approval${stats.pendingApprovals !== 1 ? 's' : ''}`
               : 'No pending approvals'}
           </div>
-        </Link>
-        
-        <Link 
-          to="/advisory/delivery/programs"
-          className="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow"
-        >
+        </InteractiveCard>
+
+        <InteractiveCard to="/advisory/delivery/programs" hoverBorderColor="hover:border-indigo-200">
           <TrendingUp className="w-8 h-8 text-indigo-500 mb-2" />
           <div className="font-medium">Programs</div>
           <div className="text-sm text-gray-500">Program management</div>
-        </Link>
-        
-        <Link 
-          to="/advisory/delivery/reports"
-          className="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow"
-        >
+        </InteractiveCard>
+
+        <InteractiveCard to="/advisory/delivery/reports" hoverBorderColor="hover:border-primary/30">
           <DollarSign className="w-8 h-8 text-primary mb-2" />
           <div className="font-medium">Reports</div>
           <div className="text-sm text-gray-500">Generate reports</div>
-        </Link>
+        </InteractiveCard>
       </div>
     </div>
   );

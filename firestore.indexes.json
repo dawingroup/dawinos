@@ -753,6 +753,7 @@
       "collectionGroup": "competencies",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
         { "fieldPath": "category", "order": "ASCENDING" },
         { "fieldPath": "name", "order": "ASCENDING" }
       ]
@@ -1863,6 +1864,25 @@
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "paymentType", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "accountabilityDueDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "programId", "order": "ASCENDING" },
+        { "fieldPath": "paymentType", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "accountabilityDueDate", "order": "ASCENDING" }
+      ]
+    },
 
     {
       "collectionGroup": "approvalRequests",
@@ -2190,6 +2210,147 @@
         { "fieldPath": "entityType", "order": "ASCENDING" },
         { "fieldPath": "entityId", "order": "ASCENDING" },
         { "fieldPath": "snapshotDate", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "employee_competencies",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "employeeId", "order": "ASCENDING" },
+        { "fieldPath": "assessmentDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "employee_competencies",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "competencyId", "order": "ASCENDING" },
+        { "fieldPath": "assessmentDate", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "training_courses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "title", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "training_courses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "type", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "training_courses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "provider", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "employee_training",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "employeeId", "order": "ASCENDING" },
+        { "fieldPath": "enrolledDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "employee_training",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "employeeId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "employee_training",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "development_plans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "employeeId", "order": "ASCENDING" },
+        { "fieldPath": "planYear", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "development_plans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "planYear", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "performance_metrics",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "employeeId", "order": "ASCENDING" },
+        { "fieldPath": "periodStart", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "performance_metrics",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "employeeId", "order": "ASCENDING" },
+        { "fieldPath": "periodStart", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "performance_metrics",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "employeeId", "order": "ASCENDING" },
+        { "fieldPath": "periodEnd", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "manual_requisitions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "linkStatus", "order": "ASCENDING" },
+        { "fieldPath": "requisitionDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "manual_requisitions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "linkedProjectId", "order": "ASCENDING" },
+        { "fieldPath": "requisitionDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "manual_requisitions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "accountabilityStatus", "order": "ASCENDING" },
+        { "fieldPath": "requisitionDate", "order": "DESCENDING" }
       ]
     }
   ],

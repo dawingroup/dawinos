@@ -10,6 +10,7 @@ import { ConfigProvider } from './contexts/ConfigContext.jsx'
 import { OffcutProvider } from './contexts/OffcutContext.jsx'
 import { WorkInstanceProvider } from './contexts/WorkInstanceContext.jsx'
 import { SubsidiaryProvider } from './contexts/SubsidiaryContext'
+import { GlobalProvider } from './integration/store'
 import { AlertTriangle } from 'lucide-react'
 import { AppRouter } from './router'
 import './index.css'
@@ -78,15 +79,17 @@ function MainApp() {
   return (
     <HelmetProvider>
       <AuthProvider>
-        <SubsidiaryProvider>
-          <ConfigProvider>
-            <OffcutProvider>
-              <WorkInstanceProvider>
-                <AppRouter />
-              </WorkInstanceProvider>
-            </OffcutProvider>
-          </ConfigProvider>
-        </SubsidiaryProvider>
+        <GlobalProvider>
+          <SubsidiaryProvider>
+            <ConfigProvider>
+              <OffcutProvider>
+                <WorkInstanceProvider>
+                  <AppRouter />
+                </WorkInstanceProvider>
+              </OffcutProvider>
+            </ConfigProvider>
+          </SubsidiaryProvider>
+        </GlobalProvider>
       </AuthProvider>
     </HelmetProvider>
   )

@@ -44,8 +44,8 @@ const AIAssistantPage = lazy(() => import('@/pages/ai/AIAssistantPage'));
 
 // Module Layouts with Tab Navigation
 const HRLayout = lazy(() => import('@/modules/hr/components/HRLayout'));
+const PerformanceLayout = lazy(() => import('@/modules/hr-central/performance/components/PerformanceLayout'));
 const FinanceLayout = lazy(() => import('@/modules/finance/components/FinanceLayout'));
-const PerformanceLayout = lazy(() => import('@/modules/performance/components/PerformanceLayout'));
 const CapitalLayout = lazy(() => import('@/modules/capital/components/CapitalLayout'));
 const MarketIntelLayout = lazy(() => import('@/modules/intelligence/components/MarketIntelLayout'));
 
@@ -110,6 +110,12 @@ const GoalListPage = lazy(() => import('@/pages/performance/GoalListPage'));
 const ReviewListPage = lazy(() => import('@/pages/performance/ReviewListPage'));
 const CompetencyListPage = lazy(() => import('@/pages/performance/CompetencyListPage'));
 const DevelopmentPlanListPage = lazy(() => import('@/pages/performance/DevelopmentPlanListPage'));
+const TrainingCatalogPage = lazy(() => import('@/pages/performance/TrainingCatalogPage'));
+const TrainingCourseFormPage = lazy(() => import('@/pages/performance/TrainingCourseFormPage'));
+const TrainingCourseDetailPage = lazy(() => import('@/pages/performance/TrainingCourseDetailPage'));
+const CompetencyFormPage = lazy(() => import('@/pages/performance/CompetencyFormPage'));
+const CompetencyDetailPage = lazy(() => import('@/pages/performance/CompetencyDetailPage'));
+const DevelopmentPlanFormPage = lazy(() => import('@/pages/performance/DevelopmentPlanFormPage'));
 
 // Capital Hub Pages (dashboard removed - direct to content)
 const CapitalDealListPage = lazy(() => import('@/modules/capital/pages/DealListPage'));
@@ -321,6 +327,29 @@ export const router = createBrowserRouter([
           { path: 'leave', element: <LeaveManagementPage /> },
           { path: 'payroll', element: <PayrollPage /> },
           { path: 'org-structure', element: <OrgStructurePage /> },
+          // Performance sub-module with its own layout
+          {
+            path: 'performance',
+            element: <PageWrapper><PerformanceLayout /></PageWrapper>,
+            children: [
+              { index: true, element: <Navigate to="/hr/performance/reviews" replace /> },
+              { path: 'reviews', element: <ReviewListPage /> },
+              { path: 'reviews/:reviewId', element: <ReviewListPage /> },
+              { path: 'goals', element: <GoalListPage /> },
+              { path: 'goals/:goalId', element: <GoalListPage /> },
+              { path: 'competencies', element: <CompetencyListPage /> },
+              { path: 'competencies/new', element: <CompetencyFormPage /> },
+              { path: 'competencies/:competencyId/edit', element: <CompetencyFormPage /> },
+              { path: 'competencies/:competencyId', element: <CompetencyDetailPage /> },
+              { path: 'development', element: <DevelopmentPlanListPage /> },
+              { path: 'development/new', element: <DevelopmentPlanFormPage /> },
+              { path: 'development/:planId/edit', element: <DevelopmentPlanFormPage /> },
+              { path: 'training', element: <TrainingCatalogPage /> },
+              { path: 'training/new', element: <TrainingCourseFormPage /> },
+              { path: 'training/:courseId', element: <TrainingCourseDetailPage /> },
+              { path: 'training/:courseId/edit', element: <TrainingCourseFormPage /> },
+            ],
+          },
         ],
       },
 
@@ -339,17 +368,19 @@ export const router = createBrowserRouter([
       },
 
       // ========================================
-      // PERFORMANCE ROUTES - with Tab Navigation
+      // PERFORMANCE ROUTES - DEPRECATED (Redirects to HR)
+      // Performance is now part of HR Central
       // ========================================
       {
         path: 'performance',
-        element: <PageWrapper><PerformanceLayout /></PageWrapper>,
         children: [
-          { index: true, element: <Navigate to="/performance/goals" replace /> },
-          { path: 'goals', element: <GoalListPage /> },
-          { path: 'reviews', element: <ReviewListPage /> },
-          { path: 'competencies', element: <CompetencyListPage /> },
-          { path: 'development', element: <DevelopmentPlanListPage /> },
+          { index: true, element: <Navigate to="/hr/performance/reviews" replace /> },
+          { path: 'goals', element: <Navigate to="/hr/performance/goals" replace /> },
+          { path: 'goals/:goalId', element: <Navigate to="/hr/performance/goals" replace /> },
+          { path: 'reviews', element: <Navigate to="/hr/performance/reviews" replace /> },
+          { path: 'reviews/:reviewId', element: <Navigate to="/hr/performance/reviews" replace /> },
+          { path: 'competencies', element: <Navigate to="/hr/performance/competencies" replace /> },
+          { path: 'development', element: <Navigate to="/hr/performance/development" replace /> },
         ],
       },
 

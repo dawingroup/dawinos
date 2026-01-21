@@ -51,6 +51,7 @@ export const MAIN_NAVIGATION: NavItem[] = [
     module: 'hr_central',
     children: [
       { id: 'employees', label: 'Employees', path: '/hr/employees' },
+      { id: 'performance', label: 'Performance', path: '/hr/performance/reviews' },
       { id: 'contracts', label: 'Contracts', path: '/hr/contracts' },
       { id: 'payroll', label: 'Payroll', path: '/hr/payroll' },
       { id: 'leave', label: 'Leave Management', path: '/hr/leave' },
@@ -85,20 +86,6 @@ export const MAIN_NAVIGATION: NavItem[] = [
       { id: 'cashflow', label: 'Cash Flow', path: '/finance/cashflow' },
     ],
     permissions: ['view:finance'],
-  },
-  {
-    id: 'performance',
-    label: 'Performance',
-    icon: 'Award',
-    module: 'staff_performance',
-    children: [
-      { id: 'reviews', label: 'Reviews', path: '/performance/reviews' },
-      { id: 'goals', label: 'Goals', path: '/performance/goals' },
-      { id: 'compensation', label: 'Compensation', path: '/performance/compensation' },
-      { id: 'succession', label: 'Succession Planning', path: '/performance/succession' },
-    ],
-    permissions: ['view:performance'],
-    dividerAfter: true,
   },
   {
     id: 'capital',

@@ -15,6 +15,12 @@ const HR_TABS: TabNavItem[] = [
     icon: 'Users',
   },
   {
+    id: 'performance',
+    label: 'Performance',
+    path: '/hr/performance/reviews',
+    icon: 'TrendingUp',
+  },
+  {
     id: 'org-structure',
     label: 'Org Structure',
     path: '/hr/org-structure',

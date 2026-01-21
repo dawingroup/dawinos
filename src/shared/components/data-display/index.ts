@@ -4,5 +4,6 @@
  */
 
 export { StatsCard } from './StatsCard';
+export { ColoredStatsCard, type StatsCardColor } from './ColoredStatsCard';
 export { StatusBadge } from './StatusBadge';
 export { ProgressBar } from './ProgressBar';

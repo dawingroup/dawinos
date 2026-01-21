@@ -45,6 +45,10 @@ import {
 import { Skeleton } from '@/core/components/ui/skeleton';
 import { cn } from '@/shared/lib/utils';
 
+import { usePerformance } from '@/modules/hr-central/performance/hooks/usePerformance';
+import { useGlobalState } from '@/integration/store';
+import type { PerformanceGoal } from '@/modules/hr-central/performance/types/performance.types';
+
 const PERFORMANCE_COLOR = '#FF5722';
 
 // Status options
@@ -73,15 +77,19 @@ const GOAL_TYPES = [
   { value: 'company', label: 'Company' },
 ];
 
-// Mock goal data
-const mockGoals = [
-  { id: '1', title: 'Complete Q1 Sales Targets', description: 'Achieve 120% of quarterly sales quota through new client acquisition', status: 'on_track', category: 'performance', type: 'individual', progress: 75, dueDate: new Date(2026, 2, 31), ownerName: 'Sarah Nakamya', ownerId: 'user1' },
-  { id: '2', title: 'Implement New CRM System', description: 'Deploy and configure the new CRM system across all departments', status: 'at_risk', category: 'project', type: 'team', progress: 45, dueDate: new Date(2026, 1, 28), ownerName: 'John Okiror', ownerId: 'user2' },
-  { id: '3', title: 'Staff Training Program', description: 'Complete mandatory training for all team members', status: 'behind', category: 'development', type: 'department', progress: 30, dueDate: new Date(2026, 0, 31), ownerName: 'Grace Auma', ownerId: 'user3' },
-  { id: '4', title: 'Customer Satisfaction Survey', description: 'Conduct annual customer satisfaction survey and analysis', status: 'completed', category: 'project', type: 'team', progress: 100, dueDate: new Date(2026, 0, 15), ownerName: 'Peter Mwesigwa', ownerId: 'user4' },
-  { id: '5', title: 'Budget Review Process', description: 'Review and optimize departmental budget allocations', status: 'not_started', category: 'performance', type: 'department', progress: 0, dueDate: new Date(2026, 3, 15), ownerName: 'Mary Kirabo', ownerId: 'user1' },
-  { id: '6', title: 'Professional Certification', description: 'Obtain PMP certification by end of quarter', status: 'on_track', category: 'personal', type: 'individual', progress: 60, dueDate: new Date(2026, 2, 15), ownerName: 'David Ssempala', ownerId: 'user5' },
-];
+// Map Firebase goal status to display status
+function mapGoalStatus(status: string): string {
+  const statusMap: Record<string, string> = {
+    'not_started': 'not_started',
+    'in_progress': 'on_track',
+    'on_track': 'on_track',
+    'at_risk': 'at_risk',
+    'behind': 'behind',
+    'completed': 'completed',
+    'exceeded': 'completed',
+  };
+  return statusMap[status] || 'not_started';
+}
 
 function getStatusColor(status: string): string {
   return GOAL_STATUSES.find(s => s.value === status)?.color || 'bg-gray-100 text-gray-800';
@@ -102,6 +110,8 @@ function getDaysText(dueDate: Date, status: string): string {
 export function GoalListPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { state } = useGlobalState();
+  const { user } = state.auth;
 
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all');
@@ -109,22 +119,33 @@ export function GoalListPage() {
   const [typeFilter, setTypeFilter] = useState(searchParams.get('type') || 'all');
   const [activeTab, setActiveTab] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [loading] = useState(false);
+
+  // Use real Firebase data via usePerformance hook
+  const {
+    goals: firebaseGoals,
+    isLoading: loading,
+    deleteGoal,
+  } = usePerformance({
+    companyId: state.currentOrganizationId || '',
+    autoLoad: true,
+  });
 
   // Filter goals
   const filteredGoals = useMemo(() => {
-    return mockGoals.filter(goal => {
+    return firebaseGoals.filter((goal: PerformanceGoal) => {
+      const mappedStatus = mapGoalStatus(goal.status);
+
       // Tab filter
-      if (activeTab === 'my' && goal.ownerId !== 'user1') return false;
-      if (activeTab === 'attention' && !['at_risk', 'behind'].includes(goal.status)) return false;
-      if (activeTab === 'completed' && goal.status !== 'completed') return false;
+      if (activeTab === 'my' && goal.employeeId !== user?.userId) return false;
+      if (activeTab === 'attention' && !['at_risk', 'behind'].includes(mappedStatus)) return false;
+      if (activeTab === 'completed' && mappedStatus !== 'completed') return false;
 
       // Search filter
       if (search && !goal.title.toLowerCase().includes(search.toLowerCase()) &&
-          !goal.description.toLowerCase().includes(search.toLowerCase())) return false;
+          !goal.description?.toLowerCase().includes(search.toLowerCase())) return false;
 
       // Status filter
-      if (statusFilter !== 'all' && goal.status !== statusFilter) return false;
+      if (statusFilter !== 'all' && mappedStatus !== statusFilter) return false;
 
       // Category filter
       if (categoryFilter !== 'all' && goal.category !== categoryFilter) return false;
@@ -134,16 +155,23 @@ export function GoalListPage() {
 
       return true;
     });
-  }, [search, statusFilter, categoryFilter, typeFilter, activeTab]);
+  }, [firebaseGoals, search, statusFilter, categoryFilter, typeFilter, activeTab, user]);
 
   // Stats
-  const stats = {
-    total: mockGoals.length,
-    completed: mockGoals.filter(g => g.status === 'completed').length,
-    onTrack: mockGoals.filter(g => g.status === 'on_track').length,
-    atRisk: mockGoals.filter(g => g.status === 'at_risk').length,
-    behind: mockGoals.filter(g => g.status === 'behind').length,
-  };
+  const stats = useMemo(() => {
+    const mappedGoals = firebaseGoals.map((g: PerformanceGoal) => ({
+      ...g,
+      mappedStatus: mapGoalStatus(g.status),
+    }));
+
+    return {
+      total: firebaseGoals.length,
+      completed: mappedGoals.filter(g => g.mappedStatus === 'completed').length,
+      onTrack: mappedGoals.filter(g => g.mappedStatus === 'on_track').length,
+      atRisk: mappedGoals.filter(g => g.mappedStatus === 'at_risk').length,
+      behind: mappedGoals.filter(g => g.mappedStatus === 'behind').length,
+    };
+  }, [firebaseGoals]);
 
   const hasActiveFilters = search || statusFilter !== 'all' || categoryFilter !== 'all' || typeFilter !== 'all';
 
@@ -184,7 +212,7 @@ export function GoalListPage() {
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button onClick={() => navigate('/performance/goals/new')} style={{ backgroundColor: PERFORMANCE_COLOR }}>
+          <Button onClick={() => navigate('/hr/performance/goals/new')} style={{ backgroundColor: PERFORMANCE_COLOR }}>
             <Plus className="h-4 w-4 mr-2" />
             New Goal
           </Button>
@@ -304,7 +332,7 @@ export function GoalListPage() {
             {hasActiveFilters ? 'Try adjusting your filters' : 'Create your first goal to get started'}
           </p>
           {!hasActiveFilters && (
-            <Button onClick={() => navigate('/performance/goals/new')} style={{ backgroundColor: PERFORMANCE_COLOR }}>
+            <Button onClick={() => navigate('/hr/performance/goals/new')} style={{ backgroundColor: PERFORMANCE_COLOR }}>
               <Plus className="h-4 w-4 mr-2" />
               Create Goal
             </Button>
@@ -315,92 +343,105 @@ export function GoalListPage() {
           "grid gap-4",
           viewMode === 'grid' ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
         )}>
-          {filteredGoals.map(goal => (
-            <Card
-              key={goal.id}
-              className="hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => navigate(`/performance/goals/${goal.id}`)}
-            >
-              <CardContent className="p-4">
-                {/* Header */}
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{goal.title}</p>
-                    <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{goal.description}</p>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/performance/goals/${goal.id}/edit`); }}>
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                      {goal.status !== 'completed' && (
-                        <DropdownMenuItem>
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Mark Complete
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem>
-                        <Archive className="h-4 w-4 mr-2" />
-                        Archive
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive">
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+          {filteredGoals.map((goal: PerformanceGoal) => {
+            const mappedStatus = mapGoalStatus(goal.status);
+            const dueDate = goal.dueDate instanceof Date ? goal.dueDate : new Date(goal.dueDate);
 
-                {/* Tags */}
-                <div className="flex gap-1 mt-2">
-                  <Badge className={cn("text-xs", getStatusColor(goal.status))}>
-                    {getStatusLabel(goal.status)}
-                  </Badge>
-                  <Badge variant="outline" className="text-xs capitalize">{goal.category}</Badge>
-                </div>
-
-                {/* Progress */}
-                <div className="mt-3">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-muted-foreground">Progress</span>
-                    <span className="font-medium">{goal.progress}%</span>
-                  </div>
-                  <Progress 
-                    value={goal.progress} 
-                    className={cn(
-                      "h-1.5",
-                      goal.status === 'completed' ? "[&>div]:bg-green-500" :
-                      goal.status === 'behind' ? "[&>div]:bg-red-500" :
-                      goal.status === 'at_risk' ? "[&>div]:bg-amber-500" : ""
-                    )}
-                  />
-                </div>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between mt-3">
-                  <div className="flex items-center gap-2">
-                    <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-medium">
-                      {goal.ownerName[0]}
+            return (
+              <Card
+                key={goal.id}
+                className="hover:shadow-md transition-shadow cursor-pointer"
+                onClick={() => navigate(`/hr/performance/goals/${goal.id}`)}
+              >
+                <CardContent className="p-4">
+                  {/* Header */}
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate">{goal.title}</p>
+                      <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">{goal.description}</p>
                     </div>
-                    <span className="text-xs text-muted-foreground">{goal.ownerName}</span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/hr/performance/goals/${goal.id}/edit`); }}>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
+                        {mappedStatus !== 'completed' && (
+                          <DropdownMenuItem>
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Mark Complete
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem>
+                          <Archive className="h-4 w-4 mr-2" />
+                          Archive
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (confirm('Are you sure you want to delete this goal?')) {
+                              await deleteGoal(goal.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                  <span className={cn(
-                    "text-xs",
-                    isPast(goal.dueDate) && goal.status !== 'completed' ? "text-red-600 font-medium" : "text-muted-foreground"
-                  )}>
-                    {getDaysText(goal.dueDate, goal.status)}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+
+                  {/* Tags */}
+                  <div className="flex gap-1 mt-2">
+                    <Badge className={cn("text-xs", getStatusColor(mappedStatus))}>
+                      {getStatusLabel(mappedStatus)}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs capitalize">{goal.category}</Badge>
+                  </div>
+
+                  {/* Progress */}
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-muted-foreground">Progress</span>
+                      <span className="font-medium">{goal.progress}%</span>
+                    </div>
+                    <Progress
+                      value={goal.progress}
+                      className={cn(
+                        "h-1.5",
+                        mappedStatus === 'completed' ? "[&>div]:bg-green-500" :
+                        mappedStatus === 'behind' ? "[&>div]:bg-red-500" :
+                        mappedStatus === 'at_risk' ? "[&>div]:bg-amber-500" : ""
+                      )}
+                    />
+                  </div>
+
+                  {/* Footer */}
+                  <div className="flex items-center justify-between mt-3">
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-medium">
+                        E
+                      </div>
+                      <span className="text-xs text-muted-foreground">Employee</span>
+                    </div>
+                    <span className={cn(
+                      "text-xs",
+                      isPast(dueDate) && mappedStatus !== 'completed' ? "text-red-600 font-medium" : "text-muted-foreground"
+                    )}>
+                      {getDaysText(dueDate, mappedStatus)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

@@ -1,7 +1,6 @@
 /**
  * Performance Layout
- * Tab-based navigation for Performance module sub-pages
- * Coordinates with main header for sticky positioning
+ * Sub-navigation for Performance Management module
  */
 
 import { Outlet } from 'react-router-dom';
@@ -9,28 +8,34 @@ import { ModuleTabNav, TabNavItem } from '@/core/components/navigation/ModuleTab
 
 const PERFORMANCE_TABS: TabNavItem[] = [
   {
-    id: 'goals',
-    label: 'Goals',
-    path: '/performance/goals',
-    icon: 'Target',
-  },
-  {
     id: 'reviews',
     label: 'Reviews',
-    path: '/performance/reviews',
+    path: '/hr/performance/reviews',
     icon: 'ClipboardCheck',
   },
   {
-    id: 'competencies',
-    label: 'Competencies',
-    path: '/performance/competencies',
-    icon: 'Award',
+    id: 'goals',
+    label: 'Goals',
+    path: '/hr/performance/goals',
+    icon: 'Target',
   },
   {
     id: 'development',
     label: 'Development Plans',
-    path: '/performance/development',
-    icon: 'TrendingUp',
+    path: '/hr/performance/development',
+    icon: 'GraduationCap',
+  },
+  {
+    id: 'competencies',
+    label: 'Competencies',
+    path: '/hr/performance/competencies',
+    icon: 'Award',
+  },
+  {
+    id: 'training',
+    label: 'Training Catalog',
+    path: '/hr/performance/training',
+    icon: 'BookOpen',
   },
 ];
 
@@ -38,8 +43,8 @@ export function PerformanceLayout() {
   return (
     <div className="flex flex-col min-h-full">
       <ModuleTabNav
-        title="Performance"
-        subtitle="Goals, Reviews & Development"
+        title="Performance Management"
+        subtitle="Reviews, Goals & Development"
         tabs={PERFORMANCE_TABS}
         accentColor="purple"
         className="lg:top-12"

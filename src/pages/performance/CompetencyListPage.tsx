@@ -2,6 +2,7 @@
  * CompetencyListPage.tsx
  * Competency framework management with category organization
  * DawinOS v2.0 - Phase 8.9
+ * Updated to use Firebase via useDevelopment hook
  */
 
 import { useState, useMemo } from 'react';
@@ -13,6 +14,7 @@ import {
   Brain,
   ChevronDown,
   ChevronRight,
+  CheckCircle,
 } from 'lucide-react';
 
 import { Card, CardContent } from '@/core/components/ui/card';
@@ -27,63 +29,76 @@ import {
   SelectValue,
 } from '@/core/components/ui/select';
 import { Skeleton } from '@/core/components/ui/skeleton';
+import { useDevelopment } from '@/modules/hr-central/performance/hooks/useDevelopment';
+import { useGlobalState } from '@/integration/store';
+import { useAuth } from '@/core/hooks/useAuth';
+import type { CompetencyCategory } from '@/modules/hr-central/performance/types/development.types';
+import { fixCompetenciesWithEmptyCompanyId, getOrganizationIdFromEmail } from '@/modules/hr-central/performance/utils/fixCompetencyData';
 
 const PERFORMANCE_COLOR = '#FF5722';
 
 // Proficiency levels
 const PROFICIENCY_LEVELS = [
-  { level: 1, label: 'Beginner', color: '#e0e0e0' },
-  { level: 2, label: 'Developing', color: '#90caf9' },
-  { level: 3, label: 'Proficient', color: '#66bb6a' },
-  { level: 4, label: 'Advanced', color: '#ffa726' },
-  { level: 5, label: 'Expert', color: '#ab47bc' },
+  { level: 'novice', label: 'Novice', color: '#e0e0e0', numeric: 1 },
+  { level: 'beginner', label: 'Beginner', color: '#90caf9', numeric: 2 },
+  { level: 'intermediate', label: 'Intermediate', color: '#66bb6a', numeric: 3 },
+  { level: 'advanced', label: 'Advanced', color: '#ffa726', numeric: 4 },
+  { level: 'expert', label: 'Expert', color: '#ab47bc', numeric: 5 },
 ];
 
 // Competency categories
-const COMPETENCY_CATEGORIES = [
+const COMPETENCY_CATEGORIES: Array<{ value: CompetencyCategory; label: string }> = [
   { value: 'technical', label: 'Technical Skills' },
   { value: 'leadership', label: 'Leadership' },
-  { value: 'communication', label: 'Communication' },
-  { value: 'analytical', label: 'Analytical' },
-  { value: 'interpersonal', label: 'Interpersonal' },
-  { value: 'organizational', label: 'Organizational' },
-];
-
-// Mock competency data
-const mockCompetencies = [
-  { id: '1', name: 'Project Management', description: 'Ability to plan, execute, and close projects effectively', category: 'organizational', employeeCount: 45, averageLevel: 2.8 },
-  { id: '2', name: 'Data Analysis', description: 'Ability to collect, process, and derive insights from data', category: 'analytical', employeeCount: 32, averageLevel: 2.4 },
-  { id: '3', name: 'Leadership', description: 'Ability to guide and inspire teams toward goals', category: 'leadership', employeeCount: 28, averageLevel: 3.1 },
-  { id: '4', name: 'Technical Writing', description: 'Ability to create clear technical documentation', category: 'communication', employeeCount: 38, averageLevel: 2.2 },
-  { id: '5', name: 'Client Relations', description: 'Ability to build and maintain client relationships', category: 'interpersonal', employeeCount: 25, averageLevel: 3.5 },
-  { id: '6', name: 'Software Development', description: 'Ability to design and build software solutions', category: 'technical', employeeCount: 22, averageLevel: 3.2 },
-  { id: '7', name: 'Strategic Thinking', description: 'Ability to analyze situations and plan for the future', category: 'analytical', employeeCount: 18, averageLevel: 2.6 },
-  { id: '8', name: 'Presentation Skills', description: 'Ability to effectively communicate to groups', category: 'communication', employeeCount: 42, averageLevel: 2.9 },
+  { value: 'client', label: 'Client Management' },
+  { value: 'behavioral', label: 'Behavioral' },
+  { value: 'core', label: 'Core Competencies' },
 ];
 
 function getLevelColor(level: number): string {
-  return PROFICIENCY_LEVELS.find(l => l.level === level)?.color || '#e0e0e0';
+  return PROFICIENCY_LEVELS.find(l => l.numeric === level)?.color || '#e0e0e0';
 }
 
 export function CompetencyListPage() {
   const navigate = useNavigate();
+  const { state } = useGlobalState();
+  const { user } = useAuth();
+
+  // Get organization ID from user email as fallback
+  const organizationId = state.currentOrganizationId ||
+    (user?.email ? getOrganizationIdFromEmail(user.email) : '');
+
+  console.log('[CompetencyListPage] Using organizationId:', organizationId);
+
+  const {
+    competencies,
+    isLoading,
+    error,
+    seedCompetencies,
+    loadCompetencies,
+  } = useDevelopment({
+    companyId: organizationId,
+    autoLoad: true,
+  });
 
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState<CompetencyCategory | 'all'>('all');
   const [expandedCategories, setExpandedCategories] = useState<string[]>(
     COMPETENCY_CATEGORIES.map(c => c.value)
   );
-  const [loading] = useState(false);
+  const [isSeedingCompetencies, setIsSeedingCompetencies] = useState(false);
+  const [isFixingData, setIsFixingData] = useState(false);
 
   // Filter competencies
   const filteredCompetencies = useMemo(() => {
-    return mockCompetencies.filter(comp => {
+    return competencies.filter(comp => {
       if (search && !comp.name.toLowerCase().includes(search.toLowerCase()) &&
           !comp.description.toLowerCase().includes(search.toLowerCase())) return false;
       if (categoryFilter !== 'all' && comp.category !== categoryFilter) return false;
+      if (!comp.isActive) return false; // Only show active competencies
       return true;
     });
-  }, [search, categoryFilter]);
+  }, [competencies, search, categoryFilter]);
 
   // Group by category
   const groupedCompetencies = useMemo(() => {
@@ -101,12 +116,53 @@ export function CompetencyListPage() {
     );
   };
 
-  if (loading) {
+  const handleSeedCompetencies = async () => {
+    setIsSeedingCompetencies(true);
+    const success = await seedCompetencies();
+    setIsSeedingCompetencies(false);
+    if (success) {
+      alert('Standard Dawin competencies have been seeded successfully!');
+    }
+  };
+
+  const handleFixCompetencyData = async () => {
+    if (!organizationId) {
+      alert('No organization ID found. Please ensure you are logged in.');
+      return;
+    }
+
+    if (!confirm(`This will update all competencies with empty companyId to use: ${organizationId}\n\nContinue?`)) {
+      return;
+    }
+
+    setIsFixingData(true);
+    try {
+      const updated = await fixCompetenciesWithEmptyCompanyId(organizationId);
+      alert(`Successfully updated ${updated} competencies!`);
+      // Reload competencies
+      await loadCompetencies();
+    } catch (error) {
+      console.error('Error fixing competency data:', error);
+      alert('Failed to fix competency data. Check console for details.');
+    } finally {
+      setIsFixingData(false);
+    }
+  };
+
+  if (isLoading && competencies.length === 0) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
         {[1, 2, 3].map(i => <Skeleton key={i} className="h-24" />)}
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="p-6">
+        <p className="text-red-600">{error}</p>
+      </Card>
     );
   }
 
@@ -122,11 +178,32 @@ export function CompetencyListPage() {
           <p className="text-muted-foreground">Define and manage organizational competencies</p>
         </div>
         <div className="flex gap-2">
+          {competencies.length === 0 && (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleSeedCompetencies}
+                disabled={isSeedingCompetencies}
+                className="border-green-600 text-green-700 hover:bg-green-50"
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                {isSeedingCompetencies ? 'Seeding...' : 'Seed Standard Competencies'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleFixCompetencyData}
+                disabled={isFixingData}
+                className="border-blue-600 text-blue-700 hover:bg-blue-50"
+              >
+                {isFixingData ? 'Fixing...' : 'Fix Existing Data'}
+              </Button>
+            </>
+          )}
           <Button variant="outline" size="sm">
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button onClick={() => navigate('/performance/competencies/new')} style={{ backgroundColor: PERFORMANCE_COLOR }}>
+          <Button onClick={() => navigate('/hr/performance/competencies/new')} style={{ backgroundColor: PERFORMANCE_COLOR }}>
             <Plus className="h-4 w-4 mr-2" />
             Add Competency
           </Button>
@@ -138,17 +215,17 @@ export function CompetencyListPage() {
         <CardContent className="py-3">
           <p className="text-sm font-medium mb-2">Proficiency Levels</p>
           <div className="flex flex-wrap gap-2">
-            {PROFICIENCY_LEVELS.map(level => (
+            {PROFICIENCY_LEVELS.map(profLevel => (
               <Badge
-                key={level.level}
+                key={profLevel.level}
                 variant="outline"
-                style={{ 
-                  backgroundColor: `${level.color}20`,
-                  borderColor: level.color,
-                  color: level.level >= 4 ? level.color : undefined
+                style={{
+                  backgroundColor: `${profLevel.color}20`,
+                  borderColor: profLevel.color,
+                  color: profLevel.numeric >= 4 ? profLevel.color : undefined
                 }}
               >
-                {level.level}. {level.label}
+                {profLevel.numeric}. {profLevel.label}
               </Badge>
             ))}
           </div>
@@ -166,7 +243,7 @@ export function CompetencyListPage() {
             className="pl-9"
           />
         </div>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+        <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value as CompetencyCategory | 'all')}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
@@ -180,19 +257,37 @@ export function CompetencyListPage() {
       </div>
 
       {/* Competencies by Category */}
-      {filteredCompetencies.length === 0 ? (
+      {competencies.length === 0 ? (
+        <Card className="p-12 text-center">
+          <Brain className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No Competencies Defined</h3>
+          <p className="text-muted-foreground mb-4">
+            Get started by seeding the standard Dawin competency framework or creating your own
+            custom competencies.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Button
+              variant="outline"
+              onClick={handleSeedCompetencies}
+              disabled={isSeedingCompetencies}
+              className="border-green-600 text-green-700 hover:bg-green-50"
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Seed Standard Competencies
+            </Button>
+            <Button onClick={() => navigate('/hr/performance/competencies/new')} style={{ backgroundColor: PERFORMANCE_COLOR }}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Custom Competency
+            </Button>
+          </div>
+        </Card>
+      ) : filteredCompetencies.length === 0 ? (
         <Card className="p-12 text-center">
           <Brain className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2">No Competencies Found</h3>
           <p className="text-muted-foreground mb-4">
-            {search || categoryFilter !== 'all'
-              ? 'Try adjusting your filters'
-              : 'Define competencies to establish your framework'}
+            Try adjusting your filters
           </p>
-          <Button onClick={() => navigate('/performance/competencies/new')} style={{ backgroundColor: PERFORMANCE_COLOR }}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Competency
-          </Button>
         </Card>
       ) : (
         <div className="space-y-3">
@@ -219,7 +314,10 @@ export function CompetencyListPage() {
                       <Card
                         key={competency.id}
                         className="hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => navigate(`/performance/competencies/${competency.id}`)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/hr/performance/competencies/${competency.id}`);
+                        }}
                       >
                         <CardContent className="p-4">
                           <p className="font-semibold">{competency.name}</p>
@@ -227,30 +325,26 @@ export function CompetencyListPage() {
                             {competency.description}
                           </p>
 
-                          {/* Proficiency Level Visualization */}
+                          {/* Proficiency Levels Count */}
                           <div className="mt-3">
                             <div className="flex items-center justify-between text-xs mb-1">
-                              <span className="text-muted-foreground">Average Level</span>
-                              <span className="font-medium">{competency.averageLevel.toFixed(1)} / 5</span>
-                            </div>
-                            <div className="flex gap-0.5">
-                              {[1, 2, 3, 4, 5].map(level => (
-                                <div
-                                  key={level}
-                                  className="flex-1 h-2 rounded"
-                                  style={{
-                                    backgroundColor: level <= Math.round(competency.averageLevel)
-                                      ? getLevelColor(level)
-                                      : '#e5e7eb'
-                                  }}
-                                />
-                              ))}
+                              <span className="text-muted-foreground">Proficiency Levels</span>
+                              <span className="font-medium">{competency.levelDefinitions.length} levels</span>
                             </div>
                           </div>
 
-                          <p className="text-xs text-muted-foreground mt-2">
-                            {competency.employeeCount} employees assessed
-                          </p>
+                          {/* Applicable Roles */}
+                          {competency.applicableRoles && competency.applicableRoles.length > 0 && (
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Applicable to: {competency.applicableRoles.slice(0, 2).join(', ')}
+                              {competency.applicableRoles.length > 2 && ` +${competency.applicableRoles.length - 2} more`}
+                            </p>
+                          )}
+                          {(!competency.applicableRoles || competency.applicableRoles.length === 0) && (
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Applicable to all roles
+                            </p>
+                          )}
                         </CardContent>
                       </Card>
                     ))}

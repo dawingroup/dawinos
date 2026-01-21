@@ -1,11 +1,12 @@
 /**
  * Advisory Layout
  * Tab-based navigation for Advisory module
- * Follows Capital Hub UI patterns
+ * Follows Capital Hub UI patterns with QuickNav for power users
  */
 
 import { Outlet } from 'react-router-dom';
 import { ModuleTabNav, TabNavItem } from '@/core/components/navigation/ModuleTabNav';
+import { AdvisoryQuickNav } from './navigation/AdvisoryQuickNav';
 
 const ADVISORY_TABS: TabNavItem[] = [
   {
@@ -38,6 +39,7 @@ export function AdvisoryLayout() {
         tabs={ADVISORY_TABS}
         accentColor="amber"
         className="lg:top-12"
+        rightContent={<AdvisoryQuickNav />}
       />
       <div className="flex-1 bg-gray-50">
         <Outlet />

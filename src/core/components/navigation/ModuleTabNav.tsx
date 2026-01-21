@@ -29,6 +29,7 @@ export interface ModuleTabNavProps {
   backLabel?: string;
   accentColor?: string;
   className?: string;
+  rightContent?: React.ReactNode;
 }
 
 export function ModuleTabNav({
@@ -39,6 +40,7 @@ export function ModuleTabNav({
   backLabel = 'Back',
   accentColor = 'primary',
   className,
+  rightContent,
 }: ModuleTabNavProps) {
   const location = useLocation();
   const [isScrolled, setIsScrolled] = useState(false);
@@ -96,6 +98,11 @@ export function ModuleTabNav({
               )}
             </div>
           </div>
+          {rightContent && (
+            <div className="flex items-center gap-3">
+              {rightContent}
+            </div>
+          )}
         </div>
       </div>
 

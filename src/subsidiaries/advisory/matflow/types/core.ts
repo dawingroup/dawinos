@@ -226,6 +226,61 @@ export interface BOQItem {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// MATERIAL CATEGORY ENUM (for formulas)
+// ─────────────────────────────────────────────────────────────────
+
+export enum MaterialCategory {
+  CONCRETE = 'concrete',
+  STEEL = 'steel',
+  MASONRY = 'masonry',
+  TIMBER = 'timber',
+  ROOFING = 'roofing',
+  PLUMBING = 'plumbing',
+  ELECTRICAL = 'electrical',
+  FINISHES = 'finishes',
+  DOORS_WINDOWS = 'doors_windows',
+  HARDWARE = 'hardware',
+  AGGREGATES = 'aggregates',
+  EARTHWORKS = 'earthworks',
+  OTHER = 'other',
+}
+
+// ─────────────────────────────────────────────────────────────────
+// MEASUREMENT UNIT ENUM
+// ─────────────────────────────────────────────────────────────────
+
+export enum MeasurementUnit {
+  // Volume
+  CUBIC_METERS = 'm³',
+  LITERS = 'L',
+
+  // Area
+  SQUARE_METERS = 'm²',
+
+  // Length
+  METERS = 'm',
+  LINEAR_METERS = 'lm',
+  MILLIMETERS = 'mm',
+
+  // Weight
+  KILOGRAMS = 'kg',
+  TONNES = 't',
+
+  // Quantity
+  PIECES = 'pcs',
+  BAGS = 'bags',
+  SHEETS = 'sheets',
+  ROLLS = 'rolls',
+  BUNDLES = 'bundles',
+  SETS = 'sets',
+
+  // Other
+  EACH = 'ea',
+  LOT = 'lot',
+  TRIPS = 'trips',
+}
+
+// ─────────────────────────────────────────────────────────────────
 // STANDARD FORMULA
 // ─────────────────────────────────────────────────────────────────
 
