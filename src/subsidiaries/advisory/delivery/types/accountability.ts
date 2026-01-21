@@ -1,6 +1,6 @@
 /**
  * ACCOUNTABILITY TYPES
- * 
+ *
  * Expense reporting for requisition advances.
  */
 
@@ -248,20 +248,122 @@ export const EXPENSE_STATUS_CONFIG: Record<ExpenseStatus, {
 };
 
 // ─────────────────────────────────────────────────────────────────
+// SUPPORTING DOCUMENTS
+// ─────────────────────────────────────────────────────────────────
+
+export type SupportingDocumentType =
+  | 'invoice'
+  | 'receipt'
+  | 'delivery_note'
+  | 'purchase_order'
+  | 'activity_report'
+  | 'contract'
+  | 'quotation'
+  | 'waybill'
+  | 'other';
+
+export const DOCUMENT_TYPE_CONFIG: Record<SupportingDocumentType, {
+  label: string;
+  description: string;
+  required: boolean;
+  order: number;
+}> = {
+  purchase_order: {
+    label: 'Purchase Order',
+    description: 'PO issued to supplier',
+    required: false,
+    order: 1,
+  },
+  contract: {
+    label: 'Contract/Agreement',
+    description: 'Service contract or agreement (if no PO)',
+    required: false,
+    order: 2,
+  },
+  quotation: {
+    label: 'Quotation',
+    description: 'Price quotation from supplier',
+    required: false,
+    order: 3,
+  },
+  invoice: {
+    label: 'Invoice',
+    description: 'Supplier invoice',
+    required: true,
+    order: 4,
+  },
+  delivery_note: {
+    label: 'Delivery Note',
+    description: 'Goods received note / delivery confirmation',
+    required: false,
+    order: 5,
+  },
+  waybill: {
+    label: 'Waybill',
+    description: 'Transport/shipping document',
+    required: false,
+    order: 6,
+  },
+  receipt: {
+    label: 'Payment Receipt',
+    description: 'Proof of payment',
+    required: true,
+    order: 7,
+  },
+  activity_report: {
+    label: 'Activity Report',
+    description: 'Work completion or activity report',
+    required: false,
+    order: 8,
+  },
+  other: {
+    label: 'Other Document',
+    description: 'Additional supporting document',
+    required: false,
+    order: 9,
+  },
+};
+
+export interface SupportingDocument {
+  id: string;
+  type: SupportingDocumentType;
+  fileName: string;
+  fileUrl: string;
+  fileSize?: number;
+  mimeType?: string;
+  documentNumber?: string;  // Invoice number, PO number, etc.
+  documentDate?: Date;
+  uploadedAt: Date;
+  uploadedBy: string;
+  notes?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────
 // ACCOUNTABILITY EXPENSE
 // ─────────────────────────────────────────────────────────────────
 
 export interface AccountabilityExpense {
   id: string;
+  lineNumber: number;  // Sequential line number for display
   date: Date;
   description: string;
   category: ExpenseCategory;
   vendor?: string;
   receiptNumber?: string;
+  invoiceNumber?: string;
   amount: number;
+
+  // Supporting documents
+  documents: SupportingDocument[];
+
+  // Legacy field (for backward compatibility)
   receiptDocId?: string;
+
+  // Verification
   status: ExpenseStatus;
   rejectionReason?: string;
+  verifiedBy?: string;
+  verifiedAt?: Date;
 
   // ADD-FIN-001: Proof of spend evidence
   proofOfSpend?: ProofOfSpendEvidence;
@@ -443,12 +545,14 @@ export function formatAccountabilityNumber(
 /**
  * Create empty expense
  */
-export function createEmptyExpense(): Omit<AccountabilityExpense, 'id' | 'status'> {
+export function createEmptyExpense(lineNumber: number = 1): Omit<AccountabilityExpense, 'id' | 'status'> {
   return {
+    lineNumber,
     date: new Date(),
     description: '',
     category: 'construction_materials',
     amount: 0,
+    documents: [],
     isZeroDiscrepancy: false,
   };
 }

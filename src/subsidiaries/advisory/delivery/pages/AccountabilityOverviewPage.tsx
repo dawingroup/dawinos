@@ -49,7 +49,6 @@ export function AccountabilityOverviewPage() {
     overdueRequisitions,
     dueSoonRequisitions,
     requisitions,
-    manualRequisitions,
     loading,
     error,
     refresh,
@@ -58,30 +57,11 @@ export function AccountabilityOverviewPage() {
   // Fetch aging data
   const { aging, totalPending } = useAccountabilityAging(db, filters.projectId);
 
-  // Combine formal and manual requisitions for the overview filter
-  const allRequisitions = useMemo(() => {
-    const mappedManual = manualRequisitions.map(r => ({
-      ...r,
-      id: r.id,
-      projectId: r.linkedProjectId || '',
-      projectName: r.linkedProjectName || '',
-      grossAmount: r.amount,
-      isManualRequisition: true as const,
-    }));
-
-    const mappedFormal = requisitions.map(r => ({
-      ...r,
-      isManualRequisition: false as const,
-    }));
-
-    return [...mappedFormal, ...mappedManual];
-  }, [requisitions, manualRequisitions]);
-
   // Filter requisitions by status
   const filteredRequisitions = useMemo(() => {
-    if (statusFilter === 'all') return allRequisitions;
-    return allRequisitions.filter(r => r.accountabilityStatus === statusFilter);
-  }, [allRequisitions, statusFilter]);
+    if (statusFilter === 'all') return requisitions;
+    return requisitions.filter(r => r.accountabilityStatus === statusFilter);
+  }, [requisitions, statusFilter]);
 
   const handleProgramChange = (programId: string) => {
     setFilters(prev => ({

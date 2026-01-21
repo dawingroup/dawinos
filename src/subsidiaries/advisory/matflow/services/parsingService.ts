@@ -25,6 +25,8 @@ import {
 } from 'firebase/storage';
 import { db, storage } from '@/core/services/firebase';
 import type { BOQParsingResult, ParsedBOQItem } from '../ai/schemas/boqSchema';
+import type { BOQDocumentStatus } from '../types';
+const BOQStatus = { DRAFT: 'draft' as const };
 
 // Parsing job status
 export type ParsingJobStatus = 'pending' | 'processing' | 'completed' | 'failed';

@@ -3,6 +3,7 @@
  * With nested routing for persistent project navigation
  *
  * Includes integrated MatFlow features (BOQ, Materials, Formulas, etc.)
+ * And Manual Requisition Backlog for legacy data migration
  */
 
 import { Route, Routes, Navigate } from 'react-router-dom';
@@ -33,6 +34,13 @@ import { SiteVisitsPage } from './pages/SiteVisitsPage';
 import { RequisitionsPage } from './pages/RequisitionsPage';
 import { RequisitionDetailPage } from './pages/RequisitionDetailPage';
 import { AccountabilityDetailPage } from './pages/AccountabilityDetailPage';
+import { AccountabilityOverviewPage } from './pages/AccountabilityOverviewPage';
+import { RequisitionTrackerPage } from './pages/RequisitionTrackerPage';
+
+// Manual Requisition Backlog pages (legacy data migration)
+import { ManualRequisitionListPage } from './pages/ManualRequisitionListPage';
+import { ManualRequisitionFormPage } from './pages/ManualRequisitionFormPage';
+import { ManualRequisitionDetailPage } from './pages/ManualRequisitionDetailPage';
 
 // MatFlow feature imports (integrated) - all use default exports
 import BOQImport from '../matflow/pages/BOQImport';
@@ -85,6 +93,7 @@ export function DeliveryRoutes() {
           <Route path="payments" element={<PaymentsPage />} />
           <Route path="visits" element={<SiteVisitsPage />} />
           <Route path="procurement" element={<MatFlowProcurement />} />
+          <Route path="tracker" element={<RequisitionTrackerPage />} />
 
           {/* Requisitions with nested detail routes */}
           <Route path="requisitions">
@@ -102,6 +111,15 @@ export function DeliveryRoutes() {
 
         {/* Module-Level Routes (not project-specific) */}
         <Route path="approvals" element={<ApprovalsPage />} />
+
+        {/* Accountability Overview (module-level) */}
+        <Route path="accountability" element={<AccountabilityOverviewPage />} />
+
+        {/* Manual Requisition Backlog (legacy data migration) */}
+        <Route path="backlog" element={<ManualRequisitionListPage />} />
+        <Route path="backlog/new" element={<ManualRequisitionFormPage />} />
+        <Route path="backlog/:requisitionId" element={<ManualRequisitionDetailPage />} />
+        <Route path="backlog/:requisitionId/edit" element={<ManualRequisitionFormPage />} />
 
         {/* MatFlow Integration - Material Library */}
         <Route path="materials">

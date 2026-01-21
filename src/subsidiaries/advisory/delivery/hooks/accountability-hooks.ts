@@ -15,7 +15,6 @@ import {
 } from 'firebase/firestore';
 import { Requisition, AccountabilityStatus } from '../types/requisition';
 import { Accountability } from '../types/accountability';
-import { ManualRequisition } from '../types/manual-requisition';
 
 // ─────────────────────────────────────────────────────────────────
 // TYPES
@@ -38,11 +37,6 @@ export interface AccountabilitySummary {
   overdueCount: number;
   overdueAmount: number;
   accountabilityRate: number;
-  // Manual requisition additions
-  manualRequisitionCount: number;
-  manualDisbursed: number;
-  manualAccounted: number;
-  manualUnaccounted: number;
 }
 
 export interface ProjectAccountabilitySummary {
@@ -83,7 +77,6 @@ export function useAccountabilityOverview(
   filters: AccountabilityOverviewFilters = {}
 ) {
   const [requisitions, setRequisitions] = useState<Requisition[]>([]);
-  const [manualRequisitions, setManualRequisitions] = useState<ManualRequisition[]>([]);
   const [accountabilities, setAccountabilities] = useState<Accountability[]>([]);
   const [projects, setProjects] = useState<Record<string, { name: string; programName?: string }>>({});
   const [loading, setLoading] = useState(true);
@@ -94,7 +87,7 @@ export function useAccountabilityOverview(
     setError(null);
 
     try {
-      // Build requisition query for formal requisitions
+      // Build requisition query
       const reqConstraints: any[] = [
         where('paymentType', '==', 'requisition'),
         where('status', '==', 'paid'),
@@ -127,28 +120,6 @@ export function useAccountabilityOverview(
 
       setRequisitions(filteredReqs);
 
-      // Fetch manual requisitions that are linked to projects
-      const manualConstraints: any[] = [
-        where('linkStatus', '==', 'linked'),
-        orderBy('requisitionDate', 'desc'),
-      ];
-
-      if (filters.programId) {
-        manualConstraints.unshift(where('linkedProgramId', '==', filters.programId));
-      }
-      if (filters.projectId) {
-        manualConstraints.unshift(where('linkedProjectId', '==', filters.projectId));
-      }
-
-      const manualQuery = query(collection(db, 'manual_requisitions'), ...manualConstraints);
-      const manualSnapshot = await getDocs(manualQuery);
-      const manualData = manualSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as ManualRequisition[];
-
-      setManualRequisitions(manualData);
-
       // Fetch accountabilities for these requisitions
       if (filteredReqs.length > 0) {
         const accQuery = query(
@@ -164,15 +135,12 @@ export function useAccountabilityOverview(
         setAccountabilities(accData);
       }
 
-      // Fetch project names - combine from both formal and manual requisitions
-      const formalProjectIds = filteredReqs.map(r => r.projectId);
-      const manualProjectIds = manualData.map(r => r.linkedProjectId).filter(Boolean) as string[];
-      const allProjectIds = [...new Set([...formalProjectIds, ...manualProjectIds])];
-
-      if (allProjectIds.length > 0) {
+      // Fetch project names
+      const projectIds = [...new Set(filteredReqs.map(r => r.projectId))];
+      if (projectIds.length > 0) {
         const projectsQuery = query(
           collection(db, 'projects'),
-          where('__name__', 'in', allProjectIds.slice(0, 10)) // Firestore limit
+          where('__name__', 'in', projectIds.slice(0, 10)) // Firestore limit
         );
         const projectsSnapshot = await getDocs(projectsQuery);
         const projectsMap: Record<string, { name: string; programName?: string }> = {};
@@ -196,24 +164,12 @@ export function useAccountabilityOverview(
     fetchData();
   }, [fetchData]);
 
-  // Calculate summary (including both formal and manual requisitions)
+  // Calculate summary
   const summary = useMemo<AccountabilitySummary>(() => {
-    // Formal requisitions
-    const formalDisbursed = requisitions.reduce((sum, r) => sum + r.grossAmount, 0);
-    const formalUnaccounted = requisitions.reduce((sum, r) => sum + (r.unaccountedAmount || 0), 0);
-    const formalAccounted = formalDisbursed - formalUnaccounted;
+    const totalDisbursed = requisitions.reduce((sum, r) => sum + r.grossAmount, 0);
+    const totalUnaccounted = requisitions.reduce((sum, r) => sum + (r.unaccountedAmount || 0), 0);
+    const totalAccounted = totalDisbursed - totalUnaccounted;
 
-    // Manual requisitions
-    const manualDisbursed = manualRequisitions.reduce((sum, r) => sum + r.amount, 0);
-    const manualUnaccounted = manualRequisitions.reduce((sum, r) => sum + (r.unaccountedAmount || 0), 0);
-    const manualAccounted = manualDisbursed - manualUnaccounted;
-
-    // Combined totals
-    const totalDisbursed = formalDisbursed + manualDisbursed;
-    const totalUnaccounted = formalUnaccounted + manualUnaccounted;
-    const totalAccounted = formalAccounted + manualAccounted;
-
-    // Status counts (formal requisitions)
     const byStatus = {
       pending: requisitions.filter(r => r.accountabilityStatus === 'pending'),
       partial: requisitions.filter(r => r.accountabilityStatus === 'partial'),
@@ -221,87 +177,40 @@ export function useAccountabilityOverview(
       overdue: requisitions.filter(r => r.accountabilityStatus === 'overdue'),
     };
 
-    // Add manual requisition status counts
-    const manualByStatus = {
-      pending: manualRequisitions.filter(r => r.accountabilityStatus === 'pending'),
-      partial: manualRequisitions.filter(r => r.accountabilityStatus === 'partial'),
-      complete: manualRequisitions.filter(r => r.accountabilityStatus === 'complete'),
-      overdue: manualRequisitions.filter(r => r.accountabilityStatus === 'overdue'),
-    };
-
-    const overdueAmount = byStatus.overdue.reduce((sum, r) => sum + (r.unaccountedAmount || 0), 0)
-      + manualByStatus.overdue.reduce((sum, r) => sum + (r.unaccountedAmount || 0), 0);
+    const overdueAmount = byStatus.overdue.reduce((sum, r) => sum + (r.unaccountedAmount || 0), 0);
 
     return {
-      totalRequisitions: requisitions.length + manualRequisitions.length,
+      totalRequisitions: requisitions.length,
       totalDisbursed,
       totalAccounted,
       totalUnaccounted,
-      pendingCount: byStatus.pending.length + manualByStatus.pending.length,
-      partialCount: byStatus.partial.length + manualByStatus.partial.length,
-      completeCount: byStatus.complete.length + manualByStatus.complete.length,
-      overdueCount: byStatus.overdue.length + manualByStatus.overdue.length,
+      pendingCount: byStatus.pending.length,
+      partialCount: byStatus.partial.length,
+      completeCount: byStatus.complete.length,
+      overdueCount: byStatus.overdue.length,
       overdueAmount,
       accountabilityRate: totalDisbursed > 0 ? (totalAccounted / totalDisbursed) * 100 : 0,
-      // Manual-specific stats
-      manualRequisitionCount: manualRequisitions.length,
-      manualDisbursed,
-      manualAccounted,
-      manualUnaccounted,
     };
-  }, [requisitions, manualRequisitions]);
+  }, [requisitions]);
 
-  // Group by project (combining formal and manual requisitions)
+  // Group by project
   const byProject = useMemo<ProjectAccountabilitySummary[]>(() => {
-    // Build a map with combined data from formal and manual requisitions
-    const projectMap = new Map<string, {
-      formalReqs: Requisition[];
-      manualReqs: ManualRequisition[];
-    }>();
+    const projectMap = new Map<string, Requisition[]>();
 
-    // Add formal requisitions
     requisitions.forEach(req => {
-      const existing = projectMap.get(req.projectId) || { formalReqs: [], manualReqs: [] };
-      existing.formalReqs.push(req);
+      const existing = projectMap.get(req.projectId) || [];
+      existing.push(req);
       projectMap.set(req.projectId, existing);
     });
 
-    // Add manual requisitions
-    manualRequisitions.forEach(req => {
-      if (req.linkedProjectId) {
-        const existing = projectMap.get(req.linkedProjectId) || { formalReqs: [], manualReqs: [] };
-        existing.manualReqs.push(req);
-        projectMap.set(req.linkedProjectId, existing);
-      }
-    });
-
-    return Array.from(projectMap.entries()).map(([projectId, { formalReqs, manualReqs }]) => {
-      // Calculate formal requisition amounts
-      const formalDisbursed = formalReqs.reduce((sum, r) => sum + r.grossAmount, 0);
-      const formalUnaccounted = formalReqs.reduce((sum, r) => sum + (r.unaccountedAmount || 0), 0);
-
-      // Calculate manual requisition amounts
-      const manualDisbursed = manualReqs.reduce((sum, r) => sum + r.amount, 0);
-      const manualUnaccounted = manualReqs.reduce((sum, r) => sum + (r.unaccountedAmount || 0), 0);
-
-      // Combined totals
-      const totalDisbursed = formalDisbursed + manualDisbursed;
-      const unaccountedAmount = formalUnaccounted + manualUnaccounted;
+    return Array.from(projectMap.entries()).map(([projectId, reqs]) => {
+      const totalDisbursed = reqs.reduce((sum, r) => sum + r.grossAmount, 0);
+      const unaccountedAmount = reqs.reduce((sum, r) => sum + (r.unaccountedAmount || 0), 0);
       const totalAccounted = totalDisbursed - unaccountedAmount;
-
-      // Combined status counts
-      const formalOverdue = formalReqs.filter(r => r.accountabilityStatus === 'overdue').length;
-      const manualOverdue = manualReqs.filter(r => r.accountabilityStatus === 'overdue').length;
-      const overdueCount = formalOverdue + manualOverdue;
-
-      const formalPending = formalReqs.filter(r =>
+      const overdueCount = reqs.filter(r => r.accountabilityStatus === 'overdue').length;
+      const pendingCount = reqs.filter(r =>
         r.accountabilityStatus === 'pending' || r.accountabilityStatus === 'partial'
       ).length;
-      const manualPending = manualReqs.filter(r =>
-        r.accountabilityStatus === 'pending' || r.accountabilityStatus === 'partial'
-      ).length;
-      const pendingCount = formalPending + manualPending;
-
       const accountabilityRate = totalDisbursed > 0 ? (totalAccounted / totalDisbursed) * 100 : 0;
 
       let status: 'healthy' | 'warning' | 'critical' = 'healthy';
@@ -312,7 +221,7 @@ export function useAccountabilityOverview(
         projectId,
         projectName: projects[projectId]?.name || 'Unknown Project',
         programName: projects[projectId]?.programName,
-        requisitionCount: formalReqs.length + manualReqs.length,
+        requisitionCount: reqs.length,
         totalDisbursed,
         totalAccounted,
         unaccountedAmount,
@@ -327,60 +236,25 @@ export function useAccountabilityOverview(
       if (b.status === 'critical' && a.status !== 'critical') return 1;
       return b.unaccountedAmount - a.unaccountedAmount;
     });
-  }, [requisitions, manualRequisitions, projects]);
+  }, [requisitions, projects]);
 
-  // Overdue requisitions (both formal and manual)
+  // Overdue requisitions
   const overdueRequisitions = useMemo(() => {
-    // Map manual requisitions to a compatible format for display
-    const overdueManual = manualRequisitions
+    return requisitions
       .filter(r => r.accountabilityStatus === 'overdue')
-      .map(r => ({
-        ...r,
-        // Map manual requisition fields to formal requisition format for compatibility
-        projectId: r.linkedProjectId || '',
-        projectName: r.linkedProjectName || '',
-        grossAmount: r.amount,
-        accountabilityDueDate: r.accountabilityDueDate,
-        isManualRequisition: true,
-      }));
-
-    const overdueFormal = requisitions
-      .filter(r => r.accountabilityStatus === 'overdue')
-      .map(r => ({ ...r, isManualRequisition: false }));
-
-    return [...overdueFormal, ...overdueManual]
       .sort((a, b) => {
         const aDue = new Date(a.accountabilityDueDate).getTime();
         const bDue = new Date(b.accountabilityDueDate).getTime();
         return aDue - bDue;
       });
-  }, [requisitions, manualRequisitions]);
+  }, [requisitions]);
 
-  // Due soon (within 7 days) - both formal and manual
+  // Due soon (within 7 days)
   const dueSoonRequisitions = useMemo(() => {
     const now = new Date();
     const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-    // Manual requisitions due soon
-    const manualDueSoon = manualRequisitions
-      .filter(r => {
-        if (r.accountabilityStatus === 'complete' || r.accountabilityStatus === 'overdue') {
-          return false;
-        }
-        if (!r.accountabilityDueDate) return false;
-        const dueDate = new Date(r.accountabilityDueDate);
-        return dueDate >= now && dueDate <= weekFromNow;
-      })
-      .map(r => ({
-        ...r,
-        projectId: r.linkedProjectId || '',
-        projectName: r.linkedProjectName || '',
-        grossAmount: r.amount,
-        isManualRequisition: true,
-      }));
-
-    // Formal requisitions due soon
-    const formalDueSoon = requisitions
+    return requisitions
       .filter(r => {
         if (r.accountabilityStatus === 'complete' || r.accountabilityStatus === 'overdue') {
           return false;
@@ -388,15 +262,12 @@ export function useAccountabilityOverview(
         const dueDate = new Date(r.accountabilityDueDate);
         return dueDate >= now && dueDate <= weekFromNow;
       })
-      .map(r => ({ ...r, isManualRequisition: false }));
-
-    return [...formalDueSoon, ...manualDueSoon]
       .sort((a, b) => {
         const aDue = new Date(a.accountabilityDueDate).getTime();
         const bDue = new Date(b.accountabilityDueDate).getTime();
         return aDue - bDue;
       });
-  }, [requisitions, manualRequisitions]);
+  }, [requisitions]);
 
   return {
     summary,
@@ -404,7 +275,6 @@ export function useAccountabilityOverview(
     overdueRequisitions,
     dueSoonRequisitions,
     requisitions,
-    manualRequisitions,
     accountabilities,
     loading,
     error,
