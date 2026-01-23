@@ -8,6 +8,7 @@
 
 import { Timestamp } from 'firebase/firestore';
 import { BOQDocument } from './boq.types'; // We will create this file next
+import { FacilityBranding } from '@/subsidiaries/advisory/delivery/types/funds-acknowledgement';
 
 // ─────────────────────────────────────────────────────────────────
 // ENUMS & SHARED TYPES (from MatFlow)
@@ -147,6 +148,7 @@ export interface Project {
   
   // Relationships
   programId: string;
+  programName?: string; // Denormalized for quick access
   engagementId: string;
   customerId?: string;
   customerName?: string;
@@ -176,7 +178,29 @@ export interface Project {
     parsedItems: number;
     approvedItems: number;
   };
-  
+
+  // Requisition & Accountability Tracking
+  // References to linked requisitions for unified accountability view
+  requisitionIds?: string[];           // Formal requisitions (from payments collection)
+  manualRequisitionIds?: string[];     // Manual/backlog requisitions linked to this project
+
+  // Denormalized accountability summary for quick access
+  accountabilitySummary?: {
+    totalDisbursed: number;            // Total amount disbursed across all requisitions
+    totalAccounted: number;            // Total amount with proper accountability
+    unaccountedAmount: number;         // Amount still pending accountability
+    requisitionCount: number;          // Count of formal requisitions
+    manualRequisitionCount: number;    // Count of linked manual requisitions
+    accountabilityRate: number;        // Percentage of funds with accountability
+    overdueCount: number;              // Number of overdue accountabilities
+    status: 'healthy' | 'warning' | 'critical';
+  };
+
+  // Facility Branding (for AMH Uganda Infrastructure Projects)
+  // Used for generating branded documents like Funds Acknowledgement Forms
+  facilityBranding?: FacilityBranding;
+  facilityConfigurationId?: string; // Reference to shared facility configuration
+
   // Metadata
   tags?: string[];
   createdAt: Timestamp;

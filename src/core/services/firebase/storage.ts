@@ -3,17 +3,18 @@
  * File storage operations
  */
 
-import { 
-  getStorage, 
-  ref, 
-  uploadBytes, 
+import {
+  getStorage,
+  ref,
+  uploadBytes,
   uploadString,
   getDownloadURL,
   deleteObject,
   listAll,
   type FirebaseStorage,
   type StorageReference,
-  type UploadResult
+  type UploadResult,
+  type UploadMetadata
 } from 'firebase/storage';
 import { app } from './config';
 
@@ -31,11 +32,13 @@ export function getStorageRef(path: string): StorageReference {
  * Upload a file (Blob/File)
  */
 export async function uploadFile(
-  path: string, 
-  file: Blob | File
+  path: string,
+  file: Blob | File,
+  contentType?: string
 ): Promise<{ url: string; ref: StorageReference }> {
   const storageRef = getStorageRef(path);
-  const result: UploadResult = await uploadBytes(storageRef, file);
+  const metadata: UploadMetadata | undefined = contentType ? { contentType } : undefined;
+  const result: UploadResult = await uploadBytes(storageRef, file, metadata);
   const url = await getDownloadURL(result.ref);
   return { url, ref: result.ref };
 }

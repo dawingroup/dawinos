@@ -169,16 +169,63 @@ service firebase.storage {
     // ============================================
     // ORGANIZATION BRANDING & ASSETS
     // ============================================
-    
+
     match /organizations/{orgId}/{path=**} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && isValidSize();
     }
+
+    // ============================================
+    // PROJECT/FACILITY BRANDING ASSETS (Logos)
+    // ============================================
+
+    match /assets/logos/{projectCode}/{fileName} {
+      // All authenticated users can read logos (needed for document generation)
+      allow read: if isAuthenticated();
+      // Authenticated users can upload logos (images only, max 5MB)
+      allow write: if isAuthenticated() &&
+        request.resource.size < 5 * 1024 * 1024 &&
+        isValidImageType();
+    }
     
+    // ============================================
+    // ACCOUNTABILITY DOCUMENTS
+    // ============================================
+
+    match /accountability-documents/{requisitionId}/{fileName} {
+      // All authenticated users can read and write accountability documents
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() &&
+        request.resource.size < 10 * 1024 * 1024; // Max 10MB as per form validation
+    }
+
+    // ============================================
+    // ACTIVITY REPORTS
+    // ============================================
+
+    match /activity-reports/{requisitionId}/{level}/{fileName} {
+      // All authenticated users can read and write activity reports
+      // level can be 'requisition' or 'accountability'
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() &&
+        request.resource.size < 50 * 1024 * 1024; // Max 50MB for reports with photos
+    }
+
+    // ============================================
+    // FUNDS ACKNOWLEDGEMENT DOCUMENTS
+    // ============================================
+
+    match /funds-acknowledgements/{requisitionId}/{fileName} {
+      // All authenticated users can read and write funds acknowledgement PDFs
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() &&
+        request.resource.size < 10 * 1024 * 1024; // Max 10MB for PDFs
+    }
+
     // ============================================
     // PROJECT & DESIGN ASSETS (Existing)
     // ============================================
-    
+
     match /projects/{projectId}/{path=**} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && isValidSize();

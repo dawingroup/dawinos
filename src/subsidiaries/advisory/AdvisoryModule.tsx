@@ -37,10 +37,20 @@ const PageLoader = () => (
   </div>
 );
 
+// CD Portal Page (standalone, no layout)
+const CDPortalPage = lazy(() => import('./delivery/pages/CDPortalPage').then(m => ({ default: m.CDPortalPage })));
+
 // Main Advisory Routes
 export const AdvisoryRoutes: React.FC = () => {
   return (
     <Routes>
+      {/* CD Portal - Standalone public route (no navigation, token-based access) */}
+      <Route path="delivery/cd-portal" element={
+        <Suspense fallback={<PageLoader />}>
+          <CDPortalPage />
+        </Suspense>
+      } />
+
       <Route element={<AdvisoryLayout />}>
         <Route index element={
           <Suspense fallback={<PageLoader />}>

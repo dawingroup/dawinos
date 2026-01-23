@@ -20,9 +20,12 @@ import {
   MinusCircle,
 } from 'lucide-react';
 import { useProjectRequisitions } from '../hooks/payment-hooks';
+import { useProjectManualRequisitions } from '../hooks/manual-requisition-hooks';
 import { Requisition, AccountabilityStatus } from '../types/requisition';
+import { ManualRequisition } from '../types/manual-requisition';
 import { PaymentStatus } from '../types/payment';
 import { db } from '@/core/services/firebase';
+import { FileText } from 'lucide-react';
 
 type FilterStatus = 'all' | PaymentStatus;
 type AccountabilityFilter = 'all' | AccountabilityStatus;
@@ -53,9 +56,13 @@ function formatCurrency(amount: number, currency: string = 'UGX'): string {
   return `${currency} ${amount.toLocaleString()}`;
 }
 
-function formatDate(date: Date | undefined): string {
+function formatDate(date: Date | { toDate: () => Date } | undefined): string {
   if (!date) return '-';
-  return new Date(date).toLocaleDateString('en-GB', {
+  // Handle Firebase Timestamp objects
+  const dateObj = date && typeof (date as any).toDate === 'function'
+    ? (date as any).toDate()
+    : new Date(date as Date);
+  return dateObj.toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -127,14 +134,86 @@ function RequisitionCard({ requisition }: RequisitionCardProps) {
   );
 }
 
+// Manual Requisition Card - for backlog/historical entries linked to the project
+interface ManualRequisitionCardProps {
+  requisition: ManualRequisition;
+}
+
+function ManualRequisitionCard({ requisition }: ManualRequisitionCardProps) {
+  const accountabilityConfig = ACCOUNTABILITY_STATUS_CONFIG[requisition.accountabilityStatus];
+  const AccountabilityIcon = accountabilityConfig.icon;
+
+  return (
+    <Link
+      to={`/advisory/delivery/backlog/${requisition.id}`}
+      className="block bg-white border border-orange-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+    >
+      <div className="flex items-start gap-4">
+        <div className="p-2 bg-orange-50 rounded-lg">
+          <FileText className="w-5 h-5 text-orange-600" />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-medium text-gray-900">{requisition.referenceNumber}</span>
+            <span className="px-2 py-0.5 text-xs rounded-full bg-orange-100 text-orange-700">
+              Manual Entry
+            </span>
+          </div>
+
+          <p className="text-sm text-gray-600 mb-2 line-clamp-1">{requisition.description}</p>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div>
+              <span className="text-gray-500">Amount:</span>
+              <span className="ml-1 font-medium">{formatCurrency(requisition.amount, requisition.currency)}</span>
+            </div>
+            <div>
+              <span className="text-gray-500">Entries:</span>
+              <span className="ml-1">{requisition.accountabilities?.length || 0}</span>
+            </div>
+            <div>
+              <span className="text-gray-500">Due:</span>
+              <span className="ml-1">{formatDate(requisition.accountabilityDueDate)}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <AccountabilityIcon className={`w-4 h-4 ${accountabilityConfig.color.split(' ')[1]}`} />
+              <span className={`text-xs ${accountabilityConfig.color.split(' ')[1]}`}>
+                {accountabilityConfig.label}
+              </span>
+            </div>
+          </div>
+
+          {(requisition.unaccountedAmount || 0) > 0 && (
+            <div className="mt-2 flex items-center gap-2 text-sm">
+              <Wallet className="w-4 h-4 text-amber-500" />
+              <span className="text-amber-600">
+                {formatCurrency(requisition.unaccountedAmount || 0, requisition.currency)} unaccounted
+              </span>
+            </div>
+          )}
+        </div>
+
+        <ChevronRight className="w-5 h-5 text-gray-400" />
+      </div>
+    </Link>
+  );
+}
+
 export function RequisitionsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [accountabilityFilter, setAccountabilityFilter] = useState<AccountabilityFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showManualRequisitions, setShowManualRequisitions] = useState(true);
 
   const { requisitions, byAccountabilityStatus, loading, error } = useProjectRequisitions(db, projectId || null);
+  const {
+    requisitions: manualRequisitions,
+    summary: manualSummary,
+    loading: manualLoading
+  } = useProjectManualRequisitions(projectId);
 
   const filteredRequisitions = useMemo(() => {
     let result = [...requisitions];
@@ -313,33 +392,81 @@ export function RequisitionsPage() {
         </div>
       </div>
 
-      {/* Requisitions List */}
-      {filteredRequisitions.length === 0 ? (
-        <div className="bg-white border rounded-lg p-12 text-center">
-          <Receipt className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {requisitions.length === 0 ? 'No Requisitions Yet' : 'No Results Found'}
-          </h3>
-          <p className="text-gray-600 mb-4">
-            {requisitions.length === 0
-              ? 'Create your first requisition to request funds for project activities.'
-              : 'Try adjusting your search or filter criteria.'}
-          </p>
-          {requisitions.length === 0 && (
-            <button
-              onClick={() => navigate(`/advisory/delivery/projects/${projectId}/requisitions/new/manual`)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
-            >
-              <Plus className="w-4 h-4" />
-              Create Requisition
-            </button>
+      {/* Formal Requisitions List */}
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900 mb-3">Formal Requisitions</h2>
+        {filteredRequisitions.length === 0 ? (
+          <div className="bg-white border rounded-lg p-8 text-center">
+            <Receipt className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+            <h3 className="text-base font-medium text-gray-900 mb-1">
+              {requisitions.length === 0 ? 'No Formal Requisitions' : 'No Results Found'}
+            </h3>
+            <p className="text-sm text-gray-600">
+              {requisitions.length === 0
+                ? 'No formal requisitions created yet.'
+                : 'Try adjusting your search or filter criteria.'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredRequisitions.map(requisition => (
+              <RequisitionCard key={requisition.id} requisition={requisition} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Manual/Backlog Requisitions Section */}
+      {showManualRequisitions && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-gray-900">Linked Manual Requisitions</h2>
+              {manualRequisitions.length > 0 && (
+                <span className="px-2 py-0.5 text-xs rounded-full bg-orange-100 text-orange-700">
+                  {manualRequisitions.length} linked
+                </span>
+              )}
+            </div>
+            {manualSummary.totalAmount > 0 && (
+              <span className="text-sm text-gray-600">
+                Total: {formatCurrency(manualSummary.totalAmount)}
+                {manualSummary.unaccountedAmount > 0 && (
+                  <span className="text-amber-600 ml-1">
+                    • {formatCurrency(manualSummary.unaccountedAmount)} unaccounted
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
+
+          {manualLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              <span className="ml-2 text-gray-600">Loading manual requisitions...</span>
+            </div>
+          ) : manualRequisitions.length === 0 ? (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-6 text-center">
+              <FileText className="w-10 h-10 text-orange-400 mx-auto mb-3" />
+              <h3 className="text-base font-medium text-gray-900 mb-1">No Linked Manual Requisitions</h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Link historical or backlog requisitions to this project for unified accountability tracking.
+              </p>
+              <button
+                onClick={() => navigate('/advisory/delivery/backlog')}
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200"
+              >
+                <FileText className="w-4 h-4" />
+                View Backlog
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {manualRequisitions.map(requisition => (
+                <ManualRequisitionCard key={requisition.id} requisition={requisition} />
+              ))}
+            </div>
           )}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredRequisitions.map(requisition => (
-            <RequisitionCard key={requisition.id} requisition={requisition} />
-          ))}
         </div>
       )}
     </div>

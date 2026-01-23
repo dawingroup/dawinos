@@ -5,7 +5,7 @@
  * These can later be linked to projects.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -21,7 +21,19 @@ import {
   FileText,
   Link as LinkIcon,
   Info,
+  Edit,
+  Eye,
+  Paperclip,
 } from 'lucide-react';
+import { Button } from '@/core/components/ui/button';
+import { Badge } from '@/core/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/core/components/ui/dialog';
+import { useAuth } from '@/core/hooks/useAuth';
 import { useCreateManualRequisition, useManualRequisition, useUpdateManualRequisition } from '../hooks/manual-requisition-hooks';
 import {
   ManualRequisitionFormData,
@@ -37,8 +49,32 @@ import {
   ExpenseCategory,
   EXPENSE_CATEGORY_LABELS,
 } from '../types/requisition';
+import { AccountabilityEntryForm } from '../components/accountability/AccountabilityEntryForm';
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
+
+/**
+ * Safely convert a date value (Date, Firebase Timestamp, or string) to a Date object
+ */
+function toDate(value: any): Date | null {
+  if (!value) return null;
+  // Already a Date
+  if (value instanceof Date) return value;
+  // Firebase Timestamp (has toDate method)
+  if (value && typeof value.toDate === 'function') return value.toDate();
+  // String or number
+  const parsed = new Date(value);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * Safely convert a date value to an ISO date string (YYYY-MM-DD) for form inputs
+ */
+function toDateInputString(value: any): string {
+  const date = toDate(value);
+  if (!date) return '';
+  return date.toISOString().split('T')[0];
+}
 
 function formatCurrency(amount: number, currency: string = 'UGX'): string {
   return new Intl.NumberFormat('en-UG', {
@@ -49,11 +85,11 @@ function formatCurrency(amount: number, currency: string = 'UGX'): string {
   }).format(amount);
 }
 
-interface AccountabilityEntryProps {
+interface AccountabilityEntryCardProps {
   entry: Omit<ManualAccountabilityEntry, 'id'> & { id?: string };
   index: number;
   currency: string;
-  onUpdate: (index: number, field: string, value: any) => void;
+  onEdit: (index: number) => void;
   onRemove: (index: number) => void;
   canRemove: boolean;
 }
@@ -62,129 +98,97 @@ function AccountabilityEntryCard({
   entry,
   index,
   currency,
-  onUpdate,
+  onEdit,
   onRemove,
   canRemove,
-}: AccountabilityEntryProps) {
+}: AccountabilityEntryCardProps) {
+  const documentCount = entry.documents?.length || 0;
+  const entryDate = toDate(entry.date);
+  const formattedDate = entryDate
+    ? entryDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    : 'No date';
+
   return (
-    <div className="bg-gray-50 rounded-lg border p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-            <CheckCircle className="w-3 h-3 text-green-600" />
+    <div className="bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow">
+      <div className="p-4">
+        {/* Header Row */}
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-sm font-semibold text-green-700">
+              {index + 1}
+            </div>
+            <div>
+              <h4 className="font-medium text-gray-900">{entry.description || 'No description'}</h4>
+              <div className="flex items-center gap-2 mt-0.5">
+                <Badge variant="outline" className="text-xs">
+                  {EXPENSE_CATEGORY_LABELS[entry.category]}
+                </Badge>
+                <span className="text-xs text-gray-500">{formattedDate}</span>
+              </div>
+            </div>
           </div>
-          <span className="text-sm font-medium text-gray-700">
-            Accountability Entry #{index + 1}
-          </span>
-        </div>
-        {canRemove && (
-          <button
-            type="button"
-            onClick={() => onRemove(index)}
-            className="p-1.5 text-red-500 hover:bg-red-50 rounded"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {/* Date */}
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Date</label>
-          <input
-            type="date"
-            value={entry.date instanceof Date ? entry.date.toISOString().split('T')[0] : String(entry.date).split('T')[0]}
-            onChange={e => onUpdate(index, 'date', new Date(e.target.value))}
-            className="w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-          />
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onEdit(index)}
+              className="text-blue-600 hover:text-blue-700"
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+            {canRemove && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onRemove(index)}
+                className="text-red-500 hover:text-red-700"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* Amount */}
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Amount</label>
-          <input
-            type="number"
-            value={entry.amount || ''}
-            onChange={e => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
-            placeholder="0"
-            className="w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-          />
-        </div>
-
-        {/* Category */}
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
-          <select
-            value={entry.category}
-            onChange={e => onUpdate(index, 'category', e.target.value)}
-            className="w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-          >
-            {Object.entries(EXPENSE_CATEGORY_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Description */}
-        <div className="md:col-span-2">
-          <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
-          <input
-            type="text"
-            value={entry.description}
-            onChange={e => onUpdate(index, 'description', e.target.value)}
-            placeholder="What was this expense for?"
-            className="w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-          />
-        </div>
-
-        {/* Vendor */}
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Vendor</label>
-          <input
-            type="text"
-            value={entry.vendor || ''}
-            onChange={e => onUpdate(index, 'vendor', e.target.value)}
-            placeholder="Supplier name"
-            className="w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-          />
-        </div>
-
-        {/* Receipt Number */}
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Receipt #</label>
-          <input
-            type="text"
-            value={entry.receiptNumber || ''}
-            onChange={e => onUpdate(index, 'receiptNumber', e.target.value)}
-            placeholder="REC-XXX"
-            className="w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-          />
-        </div>
-
-        {/* Invoice Number */}
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Invoice #</label>
-          <input
-            type="text"
-            value={entry.invoiceNumber || ''}
-            onChange={e => onUpdate(index, 'invoiceNumber', e.target.value)}
-            placeholder="INV-XXX"
-            className="w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-          />
+        {/* Details Row */}
+        <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center gap-4">
+            {entry.vendor && (
+              <span className="text-gray-600">
+                <span className="text-gray-400">Vendor:</span> {entry.vendor}
+              </span>
+            )}
+            {entry.invoiceNumber && (
+              <span className="text-gray-600">
+                <span className="text-gray-400">Invoice:</span> {entry.invoiceNumber}
+              </span>
+            )}
+            {entry.receiptNumber && (
+              <span className="text-gray-600">
+                <span className="text-gray-400">Receipt:</span> {entry.receiptNumber}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Document Count */}
+            <div className="flex items-center gap-1">
+              <Paperclip className="w-4 h-4 text-gray-400" />
+              <span className={`text-xs ${documentCount > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                {documentCount} doc{documentCount !== 1 ? 's' : ''}
+              </span>
+            </div>
+            {/* Amount */}
+            <span className="font-semibold text-gray-900">
+              {formatCurrency(entry.amount, currency)}
+            </span>
+          </div>
         </div>
 
         {/* Notes */}
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
-          <input
-            type="text"
-            value={entry.notes || ''}
-            onChange={e => onUpdate(index, 'notes', e.target.value)}
-            placeholder="Optional notes"
-            className="w-full px-3 py-1.5 text-sm border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
-          />
-        </div>
+        {entry.notes && (
+          <p className="text-xs text-gray-500 mt-2 italic">
+            {entry.notes}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -192,10 +196,11 @@ function AccountabilityEntryCard({
 
 export function ManualRequisitionFormPage() {
   const navigate = useNavigate();
-  const { id } = useParams<{ id?: string }>();
-  const isEditing = Boolean(id);
+  const { requisitionId } = useParams<{ requisitionId?: string }>();
+  const { user } = useAuth();
+  const isEditing = Boolean(requisitionId);
 
-  const { requisition: existingRequisition, loading: loadingExisting } = useManualRequisition(id || null);
+  const { requisition: existingRequisition, loading: loadingExisting } = useManualRequisition(requisitionId || null);
   const { createRequisition, loading: creating, error: createError } = useCreateManualRequisition();
   const { updateRequisition, loading: updating, error: updateError } = useUpdateManualRequisition();
 
@@ -216,32 +221,25 @@ export function ManualRequisitionFormPage() {
 
   const [accountabilities, setAccountabilities] = useState<(Omit<ManualAccountabilityEntry, 'id'> & { id?: string })[]>([]);
 
+  // Entry form dialog state
+  const [showEntryForm, setShowEntryForm] = useState(false);
+  const [editingEntryIndex, setEditingEntryIndex] = useState<number | null>(null);
+
   // Load existing data when editing
-  useState(() => {
+  useEffect(() => {
     if (existingRequisition) {
       setReferenceNumber(existingRequisition.referenceNumber);
       setDescription(existingRequisition.description);
       setPurpose(existingRequisition.purpose);
       setCurrency(existingRequisition.currency);
       setAmount(existingRequisition.amount);
-      setRequisitionDate(
-        existingRequisition.requisitionDate instanceof Date
-          ? existingRequisition.requisitionDate.toISOString().split('T')[0]
-          : String(existingRequisition.requisitionDate).split('T')[0]
-      );
+      // Use safe date conversion for Firebase Timestamps
+      setRequisitionDate(toDateInputString(existingRequisition.requisitionDate) || new Date().toISOString().split('T')[0]);
       if (existingRequisition.paidDate) {
-        setPaidDate(
-          existingRequisition.paidDate instanceof Date
-            ? existingRequisition.paidDate.toISOString().split('T')[0]
-            : String(existingRequisition.paidDate).split('T')[0]
-        );
+        setPaidDate(toDateInputString(existingRequisition.paidDate));
       }
       if (existingRequisition.accountabilityDueDate) {
-        setAccountabilityDueDate(
-          existingRequisition.accountabilityDueDate instanceof Date
-            ? existingRequisition.accountabilityDueDate.toISOString().split('T')[0]
-            : String(existingRequisition.accountabilityDueDate).split('T')[0]
-        );
+        setAccountabilityDueDate(toDateInputString(existingRequisition.accountabilityDueDate));
       }
       setAdvanceType(existingRequisition.advanceType);
       setAccountabilityStatus(existingRequisition.accountabilityStatus);
@@ -250,7 +248,7 @@ export function ManualRequisitionFormPage() {
       setNotes(existingRequisition.notes || '');
       setAccountabilities(existingRequisition.accountabilities || []);
     }
-  });
+  }, [existingRequisition]);
 
   // Calculations
   const totalAccountedAmount = useMemo(() => {
@@ -266,24 +264,42 @@ export function ManualRequisitionFormPage() {
   }, [amount, totalAccountedAmount]);
 
   // Handlers
-  const addAccountabilityEntry = () => {
-    setAccountabilities(prev => [...prev, {
-      ...createEmptyManualAccountability(),
-      id: generateId(),
-    }]);
+  const handleAddEntry = () => {
+    setEditingEntryIndex(null);
+    setShowEntryForm(true);
+  };
+
+  const handleEditEntry = (index: number) => {
+    setEditingEntryIndex(index);
+    setShowEntryForm(true);
+  };
+
+  const handleSaveEntry = (entry: Omit<ManualAccountabilityEntry, 'id'> & { id?: string }) => {
+    if (editingEntryIndex !== null) {
+      // Update existing entry
+      setAccountabilities(prev =>
+        prev.map((acc, i) => (i === editingEntryIndex ? { ...entry, id: entry.id || acc.id } : acc))
+      );
+    } else {
+      // Add new entry
+      setAccountabilities(prev => [...prev, { ...entry, id: entry.id || generateId() }]);
+    }
+    setShowEntryForm(false);
+    setEditingEntryIndex(null);
+  };
+
+  const handleCancelEntry = () => {
+    setShowEntryForm(false);
+    setEditingEntryIndex(null);
   };
 
   const removeAccountabilityEntry = (index: number) => {
     setAccountabilities(prev => prev.filter((_, i) => i !== index));
   };
 
-  const updateAccountabilityEntry = (index: number, field: string, value: any) => {
-    setAccountabilities(prev =>
-      prev.map((acc, i) => (i === index ? { ...acc, [field]: value } : acc))
-    );
-  };
-
   const handleSubmit = async () => {
+    // Build form data - only include fields that have values
+    // This prevents undefined values from being sent to Firestore
     const formData: ManualRequisitionFormData = {
       referenceNumber,
       description,
@@ -291,29 +307,90 @@ export function ManualRequisitionFormPage() {
       currency,
       amount,
       requisitionDate: new Date(requisitionDate),
-      paidDate: paidDate ? new Date(paidDate) : undefined,
-      accountabilityDueDate: accountabilityDueDate ? new Date(accountabilityDueDate) : undefined,
       advanceType,
       accountabilityStatus,
-      accountabilities: accountabilities.map(acc => ({
-        date: acc.date,
-        description: acc.description,
-        category: acc.category,
-        vendor: acc.vendor,
-        amount: acc.amount,
-        receiptNumber: acc.receiptNumber,
-        invoiceNumber: acc.invoiceNumber,
-        notes: acc.notes,
-        documents: acc.documents || [],
-      })),
-      sourceDocument: sourceDocument || undefined,
-      sourceReference: sourceReference || undefined,
-      notes: notes || undefined,
+      accountabilities: accountabilities.map(acc => {
+        // Build accountability entry without undefined fields
+        // Convert date from potential Firebase Timestamp to Date
+        const entryDate = toDate(acc.date) || new Date();
+
+        // Clean documents array - remove undefined fields from each document
+        const cleanedDocuments = (acc.documents || []).map(doc => {
+          const cleanDoc: Record<string, any> = {
+            id: doc.id,
+            type: doc.type,
+            fileName: doc.fileName,
+            fileUrl: doc.fileUrl,
+            uploadedAt: doc.uploadedAt,
+            uploadedBy: doc.uploadedBy,
+          };
+          // Only add optional fields if they have values
+          if (doc.fileSize !== undefined) cleanDoc.fileSize = doc.fileSize;
+          if (doc.mimeType) cleanDoc.mimeType = doc.mimeType;
+          if (doc.documentNumber) cleanDoc.documentNumber = doc.documentNumber;
+          if (doc.documentDate) cleanDoc.documentDate = doc.documentDate;
+          if (doc.notes) cleanDoc.notes = doc.notes;
+          return cleanDoc;
+        });
+
+        const entry: any = {
+          id: acc.id || generateId(), // Include ID for persistence
+          date: entryDate,
+          description: acc.description,
+          category: acc.category,
+          amount: acc.amount,
+          documents: cleanedDocuments,
+        };
+        // Only add optional fields if they have values
+        if (acc.vendor) entry.vendor = acc.vendor;
+        if (acc.receiptNumber) entry.receiptNumber = acc.receiptNumber;
+        if (acc.invoiceNumber) entry.invoiceNumber = acc.invoiceNumber;
+        if (acc.notes) entry.notes = acc.notes;
+        if (acc.paymentMethod) entry.paymentMethod = acc.paymentMethod;
+        if (acc.contractOrPONumber) entry.contractOrPONumber = acc.contractOrPONumber;
+        if (acc.contractOrPODocument) {
+          // Clean the contract/PO document as well
+          const cleanPODoc: Record<string, any> = {
+            id: acc.contractOrPODocument.id,
+            type: acc.contractOrPODocument.type,
+            fileName: acc.contractOrPODocument.fileName,
+            fileUrl: acc.contractOrPODocument.fileUrl,
+            uploadedAt: acc.contractOrPODocument.uploadedAt,
+            uploadedBy: acc.contractOrPODocument.uploadedBy,
+          };
+          if (acc.contractOrPODocument.fileSize !== undefined) cleanPODoc.fileSize = acc.contractOrPODocument.fileSize;
+          if (acc.contractOrPODocument.mimeType) cleanPODoc.mimeType = acc.contractOrPODocument.mimeType;
+          if (acc.contractOrPODocument.documentNumber) cleanPODoc.documentNumber = acc.contractOrPODocument.documentNumber;
+          if (acc.contractOrPODocument.documentDate) cleanPODoc.documentDate = acc.contractOrPODocument.documentDate;
+          if (acc.contractOrPODocument.notes) cleanPODoc.notes = acc.contractOrPODocument.notes;
+          entry.contractOrPODocument = cleanPODoc;
+        }
+        if (acc.activityReport) entry.activityReport = acc.activityReport;
+        return entry;
+      }),
     };
 
+    // Only add optional date fields if they have values
+    if (paidDate) {
+      formData.paidDate = new Date(paidDate);
+    }
+    if (accountabilityDueDate) {
+      formData.accountabilityDueDate = new Date(accountabilityDueDate);
+    }
+    // Only add optional text fields if they have values
+    if (sourceDocument) {
+      formData.sourceDocument = sourceDocument;
+    }
+    if (sourceReference) {
+      formData.sourceReference = sourceReference;
+    }
+    if (notes) {
+      formData.notes = notes;
+    }
+
     try {
-      if (isEditing && id) {
-        await updateRequisition(id, formData);
+      if (isEditing && requisitionId) {
+        await updateRequisition(requisitionId, formData);
       } else {
         await createRequisition(formData);
       }
@@ -579,22 +656,39 @@ export function ManualRequisitionFormPage() {
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Receipt className="w-5 h-5 text-gray-500" />
               Accountability Entries
+              {accountabilities.length > 0 && (
+                <Badge variant="outline" className="ml-2">
+                  {accountabilities.length} {accountabilities.length === 1 ? 'entry' : 'entries'}
+                </Badge>
+              )}
             </h2>
-            <button
-              type="button"
-              onClick={addAccountabilityEntry}
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100"
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAddEntry}
+              className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 mr-2" />
               Add Entry
-            </button>
+            </Button>
           </div>
 
           {accountabilities.length === 0 ? (
-            <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed">
+            <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed">
               <Receipt className="w-10 h-10 text-gray-300 mx-auto mb-2" />
               <p className="text-gray-500">No accountability entries yet</p>
-              <p className="text-sm text-gray-400">Click "Add Entry" to add expense records</p>
+              <p className="text-sm text-gray-400 mt-1">
+                Click "Add Entry" to add expense records with supporting documents
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleAddEntry}
+                className="mt-4"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add First Entry
+              </Button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -604,7 +698,7 @@ export function ManualRequisitionFormPage() {
                   entry={entry}
                   index={index}
                   currency={currency}
-                  onUpdate={updateAccountabilityEntry}
+                  onEdit={handleEditEntry}
                   onRemove={removeAccountabilityEntry}
                   canRemove={true}
                 />
@@ -612,6 +706,25 @@ export function ManualRequisitionFormPage() {
             </div>
           )}
         </div>
+
+        {/* Accountability Entry Form Dialog */}
+        <Dialog open={showEntryForm} onOpenChange={setShowEntryForm}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                {editingEntryIndex !== null ? 'Edit Accountability Entry' : 'New Accountability Entry'}
+              </DialogTitle>
+            </DialogHeader>
+            <AccountabilityEntryForm
+              requisitionId={requisitionId || 'new'}
+              existingEntry={editingEntryIndex !== null ? accountabilities[editingEntryIndex] as ManualAccountabilityEntry : undefined}
+              currency={currency}
+              onSave={handleSaveEntry}
+              onCancel={handleCancelEntry}
+              userId={user?.uid || 'anonymous'}
+            />
+          </DialogContent>
+        </Dialog>
 
         {/* Source Information */}
         <div>

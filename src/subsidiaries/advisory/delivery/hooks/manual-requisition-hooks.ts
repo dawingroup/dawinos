@@ -15,7 +15,9 @@ import {
   LinkToProjectData,
   LinkToRequisitionData,
   AcknowledgementFormData,
+  ActivityReportFormData,
 } from '../types/manual-requisition';
+import { FundsAcknowledgementDocument } from '../types/funds-acknowledgement';
 import { AccountabilityStatus } from '../types/requisition';
 import { getManualRequisitionService, ManualRequisitionService } from '../services/manual-requisition-service';
 
@@ -408,5 +410,229 @@ export function useManualRequisitionSummary() {
     loading,
     error,
     refresh: fetchSummary,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useSaveActivityReport
+// ─────────────────────────────────────────────────────────────────
+
+export function useSaveActivityReport() {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = getManualRequisitionService(db);
+
+  /**
+   * Save requisition-level activity report
+   */
+  const saveRequisitionActivityReport = useCallback(async (
+    requisitionId: string,
+    reportData: ActivityReportFormData
+  ): Promise<void> => {
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await service.saveRequisitionActivityReport(
+        requisitionId,
+        reportData,
+        user.uid,
+        user.displayName || undefined
+      );
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Failed to save activity report');
+      setError(error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  /**
+   * Save accountability-level activity report
+   */
+  const saveAccountabilityActivityReport = useCallback(async (
+    requisitionId: string,
+    accountabilityId: string,
+    reportData: ActivityReportFormData
+  ): Promise<void> => {
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await service.saveAccountabilityActivityReport(
+        requisitionId,
+        accountabilityId,
+        reportData,
+        user.uid,
+        user.displayName || undefined
+      );
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Failed to save activity report');
+      setError(error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  return {
+    saveRequisitionActivityReport,
+    saveAccountabilityActivityReport,
+    loading,
+    error,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useSaveFundsAcknowledgement
+// ─────────────────────────────────────────────────────────────────
+
+export function useSaveFundsAcknowledgement() {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = getManualRequisitionService(db);
+
+  const saveFundsAcknowledgement = useCallback(async (
+    requisitionId: string,
+    acknowledgement: Omit<FundsAcknowledgementDocument, 'id' | 'generatedAt'>,
+    pdfBlob?: Blob
+  ): Promise<string> => {
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const docId = await service.saveFundsAcknowledgement(
+        requisitionId,
+        acknowledgement,
+        user.uid,
+        user.displayName || undefined,
+        pdfBlob
+      );
+      return docId;
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Failed to save funds acknowledgement');
+      setError(error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  return {
+    saveFundsAcknowledgement,
+    loading,
+    error,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useGetNextReceiptNumber
+// Get the next receipt number for a project/year
+// ─────────────────────────────────────────────────────────────────
+
+export function useGetNextReceiptNumber() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = getManualRequisitionService(db);
+
+  const getNextReceiptNumber = useCallback(async (
+    projectCode: string,
+    prefix: string = 'Receipt',
+    year?: number
+  ): Promise<string> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const receiptNumber = await service.getNextReceiptNumber(projectCode, prefix, year);
+      return receiptNumber;
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Failed to get receipt number');
+      setError(error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return {
+    getNextReceiptNumber,
+    loading,
+    error,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useProjectManualRequisitions
+// Fetch all manual requisitions linked to a specific project
+// ─────────────────────────────────────────────────────────────────
+
+export function useProjectManualRequisitions(projectId: string | undefined) {
+  const [requisitions, setRequisitions] = useState<ManualRequisition[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = getManualRequisitionService(db);
+
+  const fetchRequisitions = useCallback(async () => {
+    if (!projectId) {
+      setRequisitions([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await service.getAllManualRequisitions({
+        linkedProjectId: projectId,
+      });
+      setRequisitions(data);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch project manual requisitions'));
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    fetchRequisitions();
+  }, [fetchRequisitions]);
+
+  // Calculate summary statistics
+  const summary = {
+    totalAmount: requisitions.reduce((sum, r) => sum + r.amount, 0),
+    totalAccounted: requisitions.reduce((sum, r) => sum + (r.totalAccountedAmount || 0), 0),
+    unaccountedAmount: requisitions.reduce((sum, r) => sum + (r.unaccountedAmount || 0), 0),
+    count: requisitions.length,
+    overdueCount: requisitions.filter(r => r.accountabilityStatus === 'overdue').length,
+    completeCount: requisitions.filter(r => r.accountabilityStatus === 'complete').length,
+  };
+
+  return {
+    requisitions,
+    summary,
+    loading,
+    error,
+    refresh: fetchRequisitions,
   };
 }

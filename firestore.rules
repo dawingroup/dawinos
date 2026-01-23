@@ -1455,6 +1455,57 @@ service cloud.firestore {
       allow update: if isAuthenticated();
       allow delete: if isAdmin();
     }
+
+    // Manual Requisitions (for manual entry without BOQ)
+    match /manual_requisitions/{requisitionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------------------
+    // CD Portal Access Tokens
+    // Token-based access for Country Director Portal
+    // ----------------------------------------
+
+    // Portal Access Tokens (authenticated users can manage tokens for programs)
+    match /portal_access_tokens/{tokenId} {
+      // Authenticated users can read tokens for their programs
+      allow read: if isAuthenticated();
+      // Authenticated users can create tokens
+      allow create: if isAuthenticated();
+      // Authenticated users can update tokens (activate/deactivate)
+      allow update: if isAuthenticated();
+      // Only admin can delete tokens
+      allow delete: if isAdmin() || isAuthenticated();
+    }
+
+    // ----------------------------------------
+    // Funds Acknowledgement Collections
+    // ----------------------------------------
+
+    // Receipt Sequences (atomic counters for receipt numbers)
+    match /receipt_sequences/{sequenceId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    // Funds Acknowledgement Documents
+    match /funds_acknowledgements/{docId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    // Facility Configurations (shared branding across projects)
+    match /facility_configurations/{configId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
     
     // Accountability Reports
     match /accountability_reports/{reportId} {

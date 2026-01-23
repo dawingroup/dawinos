@@ -33,12 +33,13 @@ import {
 
 // Delivery-specific type imports
 import { ProgressRecord, calculateProgressStatus } from '../types/project-progress';
+import { FacilityBranding } from '../types/funds-acknowledgement';
 import { TimelineExtension, calculateDaysBetween } from '../types/project-timeline';
 import { ProjectBudget } from '../types/project-budget';
 import { ProjectLocation } from '../types/project-location';
 
-// Assume this is the Org ID, ideally this comes from auth context
-const ORG_ID = 'YOUR_ORGANIZATION_ID'; 
+// Default organization ID - matches the pattern used across the app
+const ORG_ID = 'default'; 
 
 export class ProjectService {
   private static instance: ProjectService;
@@ -207,6 +208,29 @@ export class ProjectService {
     });
     await this.updateProject(projectId, updates, userId);
   }
+
+  // ─────────────────────────────────────────────────────────────────
+  // FACILITY BRANDING
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Update facility branding for a project
+   * Used for generating branded documents like Funds Acknowledgement Forms
+   */
+  async updateFacilityBranding(projectId: string, branding: FacilityBranding, userId: string): Promise<void> {
+    return this.coreProjectService.updateFacilityBranding(ORG_ID, projectId, branding, userId);
+  }
+
+  /**
+   * Get facility branding for a project
+   */
+  async getFacilityBranding(projectId: string): Promise<FacilityBranding | null> {
+    return this.coreProjectService.getFacilityBranding(ORG_ID, projectId);
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // MATFLOW INTEGRATION
+  // ─────────────────────────────────────────────────────────────────
 
   async linkToMatFlow(projectId: string, boqId: string, userId: string): Promise<void> {
     const project = await this.getProject(projectId);

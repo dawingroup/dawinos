@@ -5,7 +5,7 @@
  */
 
 import { Outlet, useParams, useNavigate, Link } from 'react-router-dom';
-import { Loader2, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import { Loader2, AlertCircle, Edit, Trash2, Settings } from 'lucide-react';
 import { useState } from 'react';
 import { ProjectHeader } from './ProjectHeader';
 import { ProjectTabs } from './ProjectTabs';
@@ -86,6 +86,13 @@ export function ProjectLayout() {
         <Breadcrumbs projectName={project.name} />
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate(`/advisory/delivery/projects/${projectId}/settings`)}
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-50"
+            title="Project Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
           <button
             onClick={handleEdit}
             className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-50"

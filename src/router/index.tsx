@@ -73,6 +73,9 @@ const FeatureLibraryPage = lazy(() => import('@/modules/design-manager/component
 // Client Portal (Public)
 const ClientPortalPage = lazy(() => import('@/modules/design-manager/components/client-portal/ClientPortalPage'));
 
+// CD Portal (Public - Country Director Portal for Advisory)
+const CDPortalPage = lazy(() => import('@/subsidiaries/advisory/delivery/pages/CDPortalPage').then(m => ({ default: m.CDPortalPage })));
+
 // Market Intelligence Pages
 const IntelligenceDashboardPage = lazy(() =>
   import('@/modules/market-intelligence/intelligence-dashboard/pages/IntelligenceDashboardPage')
@@ -184,6 +187,13 @@ export const router = createBrowserRouter([
   {
     path: '/client-portal/:token',
     element: <PageWrapper><ClientPortalPage /></PageWrapper>,
+  },
+
+  // CD Portal (Public - Country Director Portal, no auth required)
+  // Uses /cd-portal path to avoid conflict with /advisory/* protected route
+  {
+    path: '/cd-portal',
+    element: <PageWrapper><CDPortalPage /></PageWrapper>,
   },
 
   // Protected routes

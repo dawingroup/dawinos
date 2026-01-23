@@ -43,7 +43,9 @@ import { ProgramTeamMember } from '../types/program-team';
 // COLLECTION PATHS
 // ─────────────────────────────────────────────────────────────────
 
-const PROGRAMS_PATH = 'programs';
+// IMPORTANT: This path must match the one used by ProjectService and other services
+// to ensure proper program-project linking. The canonical path is under organizations.
+const PROGRAMS_PATH = 'organizations/default/advisory_programs';
 const ENGAGEMENTS_PATH = 'engagements';
 const ACTIVITY_LOG_PATH = 'activityLog';
 

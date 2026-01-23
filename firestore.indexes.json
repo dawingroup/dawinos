@@ -1954,6 +1954,23 @@
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
+    {
+      "collectionGroup": "advisory_projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isDeleted", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "advisory_projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isDeleted", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
 
     {
       "collectionGroup": "advisory_programs",
@@ -2351,6 +2368,50 @@
       "fields": [
         { "fieldPath": "accountabilityStatus", "order": "ASCENDING" },
         { "fieldPath": "requisitionDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "manual_requisitions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "linkedProgramId", "order": "ASCENDING" },
+        { "fieldPath": "requisitionDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "manual_requisitions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "linkedProgramId", "order": "ASCENDING" },
+        { "fieldPath": "accountabilityStatus", "order": "ASCENDING" },
+        { "fieldPath": "requisitionDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "manual_requisitions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "linkedProgramId", "order": "ASCENDING" },
+        { "fieldPath": "linkStatus", "order": "ASCENDING" },
+        { "fieldPath": "requisitionDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "manual_requisitions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "linkStatus", "order": "ASCENDING" },
+        { "fieldPath": "linkedProgramId", "order": "ASCENDING" },
+        { "fieldPath": "requisitionDate", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "portal_access_tokens",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "programId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     }
   ],

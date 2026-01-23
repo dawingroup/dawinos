@@ -3,7 +3,7 @@
  */
 
 import { Link } from 'react-router-dom';
-import { Plus, Building2, Calendar, DollarSign, MapPin, ChevronRight, Loader2, AlertCircle, FolderOpen } from 'lucide-react';
+import { Plus, Building2, Calendar, DollarSign, MapPin, ChevronRight, Loader2, AlertCircle, FolderOpen, Database, Wrench } from 'lucide-react';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { useAllPrograms } from '../hooks/program-hooks';
 import { db } from '@/core/services/firebase';
@@ -86,13 +86,29 @@ export function ProgramList() {
           <p className="text-gray-600">{programs.length} program{programs.length !== 1 ? 's' : ''}</p>
         </div>
         
-        <Link
-          to="/advisory/delivery/programs/new"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
-        >
-          <Plus className="w-4 h-4" />
-          New Program
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/advisory/delivery/data-recovery"
+            className="inline-flex items-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm"
+          >
+            <Wrench className="w-4 h-4" />
+            Recovery
+          </Link>
+          <Link
+            to="/advisory/delivery/data-migration"
+            className="inline-flex items-center gap-2 px-3 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 text-sm"
+          >
+            <Database className="w-4 h-4" />
+            Migration
+          </Link>
+          <Link
+            to="/advisory/delivery/programs/new"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
+          >
+            <Plus className="w-4 h-4" />
+            New Program
+          </Link>
+        </div>
       </div>
 
       {/* Program Cards */}
