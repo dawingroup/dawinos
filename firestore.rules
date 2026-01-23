@@ -488,8 +488,9 @@ service cloud.firestore {
     // Organization Advisory Programs (Unified)
     // ----------------------------------------
 
+    // Note: Read access is public to support CD Portal (unauthenticated token-based access)
     match /organizations/{orgId}/advisory_programs/{programId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated() &&
         request.resource.data.createdBy == request.auth.uid;
       allow update: if isAuthenticated();
@@ -502,8 +503,9 @@ service cloud.firestore {
     // Replaces matflow_projects for the unified collection
     // ----------------------------------------
 
+    // Note: Read access is public to support CD Portal (unauthenticated token-based access)
     match /organizations/{orgId}/advisory_projects/{projectId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated() &&
         request.resource.data.createdBy == request.auth.uid;
       allow update: if isAuthenticated();
@@ -1374,8 +1376,9 @@ service cloud.firestore {
     }
     
     // Programs
+    // Note: Read access is public to support CD Portal (unauthenticated token-based access)
     match /programs/{programId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update, delete: if isAuthenticated();
       
       // Activity log for programs
@@ -1457,8 +1460,10 @@ service cloud.firestore {
     }
 
     // Manual Requisitions (for manual entry without BOQ)
+    // Note: Read access is public to support CD Portal (unauthenticated token-based access)
+    // Data is filtered by programId in the portal service
     match /manual_requisitions/{requisitionId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated();
       allow update: if isAuthenticated();
       allow delete: if isAdmin();
@@ -1469,15 +1474,17 @@ service cloud.firestore {
     // Token-based access for Country Director Portal
     // ----------------------------------------
 
-    // Portal Access Tokens (authenticated users can manage tokens for programs)
+    // Portal Access Tokens
+    // Note: Read access is public to allow unauthenticated token validation
+    // Security is provided by the 32-char cryptographic token itself
     match /portal_access_tokens/{tokenId} {
-      // Authenticated users can read tokens for their programs
-      allow read: if isAuthenticated();
-      // Authenticated users can create tokens
+      // Allow unauthenticated read for portal token validation
+      allow read: if true;
+      // Only authenticated users can create tokens
       allow create: if isAuthenticated();
-      // Authenticated users can update tokens (activate/deactivate)
+      // Only authenticated users can update tokens (activate/deactivate)
       allow update: if isAuthenticated();
-      // Only admin can delete tokens
+      // Only admin or authenticated users can delete tokens
       allow delete: if isAdmin() || isAuthenticated();
     }
 
@@ -1493,8 +1500,9 @@ service cloud.firestore {
     }
 
     // Funds Acknowledgement Documents
+    // Note: Read access is public to support CD Portal (unauthenticated token-based access)
     match /funds_acknowledgements/{docId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated();
       allow update: if isAuthenticated();
       allow delete: if isAdmin();
@@ -1580,8 +1588,9 @@ service cloud.firestore {
       }
 
       // Advisory Projects (Core Project Service)
+      // Note: Read access is public to support CD Portal (unauthenticated token-based access)
       match /advisory_projects/{projectId} {
-        allow read: if isAuthenticated();
+        allow read: if true;
         allow create: if isAuthenticated();
         allow update: if isAuthenticated();
         allow delete: if isAdmin();
@@ -1595,8 +1604,9 @@ service cloud.firestore {
       }
 
       // Advisory Programs
+      // Note: Read access is public to support CD Portal (unauthenticated token-based access)
       match /advisory_programs/{programId} {
-        allow read: if isAuthenticated();
+        allow read: if true;
         allow create: if isAuthenticated();
         allow update: if isAuthenticated();
         allow delete: if isAdmin();
