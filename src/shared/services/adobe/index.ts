@@ -40,10 +40,11 @@ export {
 } from './utils';
 
 // =============================================================================
-// Phase 2: PDF Services (uncomment after implementation)
+// Phase 2: PDF Services
 // =============================================================================
-// export { AdobePdfServicesClient, adobePdfServices } from './pdf';
-// export { AdobePdfExtractClient, adobePdfExtract } from './pdf/pdf-extract';
+export { AdobePdfServicesClient, adobePdfServices } from './pdf';
+export { AdobePdfExtractClient, adobePdfExtract } from './pdf/pdf-extract';
+export type { BOQItem, BOQExtractionResult } from './pdf/pdf-extract';
 
 // =============================================================================
 // Phase 3: Document Generation (uncomment after implementation)
@@ -68,9 +69,16 @@ export {
 // export { AdobeCCLibrariesClient, adobeCCLibraries } from './cc-libraries';
 
 // =============================================================================
-// Hooks (uncomment after implementation)
+// PDF Embed API (client-side PDF viewer)
 // =============================================================================
-// export { useAdobePdfServices } from './hooks/useAdobePdfServices';
+export { AdobePdfEmbedClient, getAdobePdfEmbedClient, adobePdfEmbed } from './embed';
+export type { PDFEmbedConfig, PDFEmbedOptions } from './embed';
+
+// =============================================================================
+// Hooks
+// =============================================================================
+export { useAdobePdfServices } from './hooks/useAdobePdfServices';
+export { useAdobePdfEmbed } from './hooks/useAdobePdfEmbed';
 // export { useAdobeDocGen } from './hooks/useAdobeDocGen';
 // export { useAdobeSign } from './hooks/useAdobeSign';
 // export { useAdobePhotoshop } from './hooks/useAdobePhotoshop';

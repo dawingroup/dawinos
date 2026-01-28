@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { db } from '@/core/services/firebase';
 import { getCDPortalService } from '../services/cd-portal.service';
+import { PdfViewerModal } from '@/shared/components/PdfViewerModal';
 import {
   PortalSession,
   PortalRequisitionDetail,
@@ -400,6 +401,17 @@ function RequisitionCard({
   const statusConfig = getStatusConfig(requisition.accountabilityStatus);
   const StatusIcon = statusConfig.icon;
 
+  // PDF Viewer Modal state
+  const [pdfViewerOpen, setPdfViewerOpen] = useState(false);
+  const [pdfViewerUrl, setPdfViewerUrl] = useState('');
+  const [pdfViewerFileName, setPdfViewerFileName] = useState('');
+
+  const openPdfViewer = (url: string, fileName: string) => {
+    setPdfViewerUrl(url);
+    setPdfViewerFileName(fileName);
+    setPdfViewerOpen(true);
+  };
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
       {/* Header - Always visible */}
@@ -526,16 +538,19 @@ function RequisitionCard({
                     <p className="text-sm text-gray-500 mt-0.5">Signed confirmation of funds receipt</p>
                     {requisition.acknowledgementDocumentUrl ? (
                       <div className="flex items-center gap-2 mt-3">
-                        <a
-                          href={requisition.acknowledgementDocumentUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openPdfViewer(
+                              requisition.acknowledgementDocumentUrl!,
+                              `${requisition.referenceNumber}-Funds-Acknowledgement.pdf`
+                            );
+                          }}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors"
-                          onClick={(e) => e.stopPropagation()}
                         >
                           <Eye className="w-4 h-4" />
                           View
-                        </a>
+                        </button>
                         <a
                           href={requisition.acknowledgementDocumentUrl}
                           download
@@ -564,16 +579,19 @@ function RequisitionCard({
                     <p className="text-sm text-gray-500 mt-0.5">Summary of activities and expenditure</p>
                     {requisition.activityReportUrl ? (
                       <div className="flex items-center gap-2 mt-3">
-                        <a
-                          href={requisition.activityReportUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openPdfViewer(
+                              requisition.activityReportUrl!,
+                              `${requisition.referenceNumber}-Activity-Report.pdf`
+                            );
+                          }}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-sm font-medium hover:bg-green-100 transition-colors"
-                          onClick={(e) => e.stopPropagation()}
                         >
                           <Eye className="w-4 h-4" />
                           View
-                        </a>
+                        </button>
                         <a
                           href={requisition.activityReportUrl}
                           download
@@ -614,18 +632,39 @@ function RequisitionCard({
             ) : (
               <div className="space-y-4">
                 {requisition.accountabilities.map((entry, index) => (
-                  <AccountabilityEntryCard key={entry.id} entry={entry} index={index + 1} />
+                  <AccountabilityEntryCard
+                    key={entry.id}
+                    entry={entry}
+                    index={index + 1}
+                    onViewDocument={openPdfViewer}
+                  />
                 ))}
               </div>
             )}
           </div>
         </div>
       )}
+
+      {/* PDF Viewer Modal */}
+      <PdfViewerModal
+        isOpen={pdfViewerOpen}
+        onClose={() => setPdfViewerOpen(false)}
+        url={pdfViewerUrl}
+        fileName={pdfViewerFileName}
+      />
     </div>
   );
 }
 
-function AccountabilityEntryCard({ entry, index }: { entry: PortalAccountabilityEntry; index: number }) {
+function AccountabilityEntryCard({
+  entry,
+  index,
+  onViewDocument,
+}: {
+  entry: PortalAccountabilityEntry;
+  index: number;
+  onViewDocument: (url: string, fileName: string) => void;
+}) {
   const getDocIcon = (category?: string) => {
     switch (category) {
       case 'photo':
@@ -745,15 +784,13 @@ function AccountabilityEntryCard({ entry, index }: { entry: PortalAccountability
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <a
-                    href={doc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    onClick={() => onViewDocument(doc.url, doc.name)}
                     className="p-2 text-gray-600 hover:text-primary hover:bg-white rounded-lg transition-colors"
                     title="View document"
                   >
                     <Eye className="w-4 h-4" />
-                  </a>
+                  </button>
                   <a
                     href={doc.url}
                     download
@@ -782,15 +819,13 @@ function AccountabilityEntryCard({ entry, index }: { entry: PortalAccountability
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <a
-                  href={entry.activityReportUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  onClick={() => onViewDocument(entry.activityReportUrl!, 'Activity-Report.pdf')}
                   className="p-2 text-green-700 hover:bg-green-100 rounded-lg transition-colors"
                   title="View report"
                 >
                   <Eye className="w-4 h-4" />
-                </a>
+                </button>
                 <a
                   href={entry.activityReportUrl}
                   download

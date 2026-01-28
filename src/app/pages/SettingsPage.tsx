@@ -3,7 +3,21 @@
  * Tab-based settings for organization, users, and access control
  */
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+
+// Adobe DC View SDK type declaration
+declare global {
+  interface Window {
+    AdobeDC?: {
+      View: new (config: { clientId: string; divId: string }) => {
+        previewFile: (
+          content: { content: { location: { url: string } }; metaData: { fileName: string } },
+          config: Record<string, unknown>
+        ) => Promise<void>;
+      };
+    };
+  }
+}
 import { Link } from 'react-router-dom';
 import {
   Building2,
@@ -21,6 +35,7 @@ import {
   Loader2,
   Upload,
   AlertCircle,
+  Plug,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useAuth } from '@/core/hooks/useAuth';
@@ -37,13 +52,14 @@ import {
 } from '@/core/settings';
 import { useSubsidiary } from '@/contexts/SubsidiaryContext';
 
-type Tab = 'general' | 'branding' | 'users' | 'access' | 'templates';
+type Tab = 'general' | 'branding' | 'users' | 'access' | 'integrations' | 'templates';
 
 const tabs = [
   { id: 'general' as Tab, label: 'General', icon: Building2 },
   { id: 'branding' as Tab, label: 'Branding', icon: Palette },
   { id: 'users' as Tab, label: 'Users', icon: Users },
   { id: 'access' as Tab, label: 'Access Control', icon: Shield },
+  { id: 'integrations' as Tab, label: 'Integrations', icon: Plug },
   { id: 'templates' as Tab, label: 'Templates', icon: FileText, disabled: true },
 ];
 
@@ -116,6 +132,7 @@ export default function SettingsPage() {
         {activeTab === 'branding' && <BrandingTab canEdit={canEditSettings} />}
         {activeTab === 'users' && <UsersTab canManage={canManageUsers} />}
         {activeTab === 'access' && <AccessControlTab canManage={canManageUsers} />}
+        {activeTab === 'integrations' && <IntegrationsTab />}
         {activeTab === 'templates' && <TemplatesTab />}
       </div>
     </div>
@@ -809,6 +826,407 @@ function AccessControlTab({ canManage }: { canManage: boolean }) {
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// INTEGRATIONS TAB
+// ============================================================================
+
+function IntegrationsTab() {
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900">External Integrations</h3>
+        <p className="text-sm text-gray-500 mt-1">
+          Test and manage connections to external services
+        </p>
+      </div>
+
+      {/* Adobe PDF Services */}
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">Ai</span>
+            </div>
+            <div>
+              <h4 className="font-medium text-gray-900">Adobe PDF Services</h4>
+              <p className="text-sm text-gray-500">PDF creation, extraction, compression & more</p>
+            </div>
+          </div>
+        </div>
+        <div className="p-4">
+          <AdobePdfTestPanel />
+        </div>
+      </div>
+
+      {/* Adobe PDF Embed API */}
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-500 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">PDF</span>
+            </div>
+            <div>
+              <h4 className="font-medium text-gray-900">Adobe PDF Embed API</h4>
+              <p className="text-sm text-gray-500">In-browser PDF viewing with annotations</p>
+            </div>
+          </div>
+        </div>
+        <div className="p-4">
+          <AdobePdfEmbedTestPanel />
+        </div>
+      </div>
+
+      {/* Placeholder for other integrations */}
+      <div className="border border-gray-200 rounded-lg p-4 opacity-50">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
+            <Plug className="w-5 h-5 text-gray-400" />
+          </div>
+          <div>
+            <h4 className="font-medium text-gray-500">More Integrations Coming Soon</h4>
+            <p className="text-sm text-gray-400">Adobe Sign, Photoshop, Firefly & more</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Adobe PDF Test Panel (inline for settings page)
+// Uses Firebase callable functions (httpsCallable) which handle auth automatically
+function AdobePdfTestPanel() {
+  const { user } = useAuth();
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [message, setMessage] = useState('Click a button to test Adobe PDF Services');
+  const [resultData, setResultData] = useState<unknown>(null);
+
+  // Helper to call Firebase callable functions
+  const callAdobeFunction = async (functionName: string, data: object) => {
+    if (!user) {
+      throw new Error('You must be logged in to test Adobe services.');
+    }
+
+    const { httpsCallable } = await import('firebase/functions');
+    const { functions } = await import('@/shared/services/firebase');
+
+    const callable = httpsCallable(functions, functionName);
+    const result = await callable(data);
+    return result.data;
+  };
+
+  const testConnectivity = async () => {
+    setStatus('loading');
+    setMessage('Testing Adobe API connectivity...');
+    setResultData(null);
+
+    try {
+      // Call with empty data - should get "Input file reference required" error
+      // which proves the function is working
+      await callAdobeFunction('adobeCreatePdf', {});
+      setStatus('success');
+      setMessage('Adobe API connectivity verified! Functions are working.');
+    } catch (error: unknown) {
+      const err = error as { message?: string; code?: string };
+      const errorMessage = err.message || '';
+
+      if (errorMessage.includes('Input file reference required') || errorMessage.includes('input')) {
+        setStatus('success');
+        setMessage('Adobe API connectivity verified! Functions are working.');
+        return;
+      }
+      if (errorMessage.includes('Adobe OAuth token request failed') || errorMessage.includes('OAuth')) {
+        setStatus('error');
+        setMessage('Adobe authentication failed. Check your credentials in Firebase secrets.');
+        return;
+      }
+      if (errorMessage.includes('not configured')) {
+        setStatus('error');
+        setMessage('Adobe PDF Services not configured. Check Firebase secrets.');
+        return;
+      }
+      if (err.code === 'unauthenticated' || errorMessage.includes('unauthenticated')) {
+        setStatus('error');
+        setMessage('You must be logged in to test Adobe services.');
+        return;
+      }
+      setStatus('error');
+      setMessage(`Unexpected error: ${errorMessage}`);
+    }
+  };
+
+  const testExtractPdf = async () => {
+    setStatus('loading');
+    setMessage('Extracting text from sample PDF...');
+    setResultData(null);
+
+    try {
+      const response = await callAdobeFunction('adobeExtractPdf', {
+        input: {
+          type: 'url',
+          value: 'https://documentcloud.adobe.com/view-sdk-demo/PDFs/Bodea%20Brochure.pdf',
+        },
+        elementsToExtract: ['text'],
+      });
+
+      setStatus('success');
+      setMessage('PDF extraction successful!');
+      setResultData(response);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      setStatus('error');
+      setMessage(`Extraction failed: ${err.message}`);
+    }
+  };
+
+  const testCompressPdf = async () => {
+    setStatus('loading');
+    setMessage('Compressing sample PDF...');
+    setResultData(null);
+
+    try {
+      const response = await callAdobeFunction('adobeCompressPdf', {
+        input: {
+          type: 'url',
+          value: 'https://documentcloud.adobe.com/view-sdk-demo/PDFs/Bodea%20Brochure.pdf',
+        },
+        compressionLevel: 'MEDIUM',
+      });
+
+      const data = response as {
+        originalSize?: number;
+        compressedSize?: number;
+        compressionRatio?: number;
+      };
+
+      setStatus('success');
+      setMessage(`Compression successful! ${data.originalSize?.toLocaleString()} → ${data.compressedSize?.toLocaleString()} bytes (${Math.round((data.compressionRatio || 0) * 100)}% reduction)`);
+      setResultData(response);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      setStatus('error');
+      setMessage(`Compression failed: ${err.message}`);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={testConnectivity}
+          disabled={status === 'loading'}
+          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium disabled:opacity-50"
+        >
+          Test Connectivity
+        </button>
+        <button
+          onClick={testExtractPdf}
+          disabled={status === 'loading'}
+          className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-medium disabled:opacity-50"
+        >
+          Test Extract PDF
+        </button>
+        <button
+          onClick={testCompressPdf}
+          disabled={status === 'loading'}
+          className="px-4 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm font-medium disabled:opacity-50"
+        >
+          Test Compress PDF
+        </button>
+      </div>
+
+      <div className={cn(
+        'p-4 rounded-lg',
+        status === 'loading' && 'bg-blue-50',
+        status === 'success' && 'bg-green-50',
+        status === 'error' && 'bg-red-50',
+        status === 'idle' && 'bg-gray-50'
+      )}>
+        <p className={cn(
+          'font-medium text-sm',
+          status === 'loading' && 'text-blue-600',
+          status === 'success' && 'text-green-600',
+          status === 'error' && 'text-red-600',
+          status === 'idle' && 'text-gray-600'
+        )}>
+          {status === 'loading' && <Loader2 className="w-4 h-4 inline mr-2 animate-spin" />}
+          {status === 'success' && <Check className="w-4 h-4 inline mr-2" />}
+          {status === 'error' && <X className="w-4 h-4 inline mr-2" />}
+          {message}
+        </p>
+
+        {resultData && (
+          <pre className="mt-2 p-2 bg-white rounded text-xs overflow-auto max-h-32 border">
+            {JSON.stringify(resultData, null, 2).slice(0, 500)}
+            {JSON.stringify(resultData, null, 2).length > 500 && '...'}
+          </pre>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Adobe PDF Embed Test Panel - uses a portal-like pattern to avoid React DOM conflicts
+function AdobePdfEmbedTestPanel() {
+  const [viewerState, setViewerState] = useState<'hidden' | 'loading' | 'ready'>('hidden');
+  const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const testPdfUrl = 'https://documentcloud.adobe.com/view-sdk-demo/PDFs/Bodea%20Brochure.pdf';
+  const clientId = import.meta.env.VITE_ADOBE_CLIENT_ID;
+  const viewDivId = 'adobe-pdf-embed-viewer';
+
+  // Cleanup function to safely remove Adobe SDK content
+  const cleanupViewer = () => {
+    const viewerDiv = document.getElementById(viewDivId);
+    if (viewerDiv) {
+      // Remove all children added by Adobe SDK
+      while (viewerDiv.firstChild) {
+        viewerDiv.removeChild(viewerDiv.firstChild);
+      }
+    }
+  };
+
+  const hideViewer = () => {
+    cleanupViewer();
+    setViewerState('hidden');
+  };
+
+  const loadPdfViewer = async () => {
+    if (!clientId) {
+      setError('VITE_ADOBE_CLIENT_ID not configured. Add it to your .env file.');
+      return;
+    }
+
+    // Clean up any existing viewer content first
+    cleanupViewer();
+
+    setViewerState('loading');
+    setError(null);
+
+    try {
+      // Dynamically load the Adobe DC View SDK
+      if (!window.AdobeDC) {
+        await new Promise<void>((resolve, reject) => {
+          // Check if script is already loading
+          const existingScript = document.querySelector('script[src*="acrobatservices.adobe.com/view-sdk"]');
+          if (existingScript) {
+            const checkReady = () => {
+              if (window.AdobeDC) resolve();
+              else setTimeout(checkReady, 100);
+            };
+            checkReady();
+            return;
+          }
+
+          const script = document.createElement('script');
+          script.src = 'https://acrobatservices.adobe.com/view-sdk/viewer.js';
+          script.async = true;
+          script.onload = () => {
+            const checkReady = () => {
+              if (window.AdobeDC) resolve();
+              else setTimeout(checkReady, 100);
+            };
+            checkReady();
+          };
+          script.onerror = () => reject(new Error('Failed to load Adobe PDF Embed SDK'));
+          document.head.appendChild(script);
+        });
+      }
+
+      // Small delay to ensure DOM is ready
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      const adobeDCView = new window.AdobeDC!.View({
+        clientId: clientId,
+        divId: viewDivId,
+      });
+
+      await adobeDCView.previewFile(
+        {
+          content: { location: { url: testPdfUrl } },
+          metaData: { fileName: 'Bodea Brochure.pdf' },
+        },
+        {
+          embedMode: 'SIZED_CONTAINER',
+          defaultViewMode: 'FIT_WIDTH',
+          showDownloadPDF: true,
+          showPrintPDF: true,
+          showFullScreen: true,
+          showAnnotationTools: false,
+        }
+      );
+
+      setViewerState('ready');
+    } catch (err) {
+      setViewerState('hidden');
+      setError(err instanceof Error ? err.message : 'Failed to load PDF viewer');
+    }
+  };
+
+  return (
+    <div className="space-y-4" ref={containerRef}>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={loadPdfViewer}
+          disabled={viewerState === 'loading'}
+          className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium disabled:opacity-50"
+        >
+          {viewerState === 'loading' ? 'Loading...' : viewerState === 'ready' ? 'Reload PDF Viewer' : 'Test PDF Embed'}
+        </button>
+        {viewerState !== 'hidden' && (
+          <button
+            onClick={hideViewer}
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium"
+          >
+            Hide Viewer
+          </button>
+        )}
+      </div>
+
+      {!clientId && (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm">
+          <AlertCircle className="w-4 h-4 inline mr-2" />
+          VITE_ADOBE_CLIENT_ID not configured. Add your Adobe Client ID to the .env file.
+        </div>
+      )}
+
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          <X className="w-4 h-4 inline mr-2" />
+          {error}
+        </div>
+      )}
+
+      {/* Loading indicator - shown separately from the viewer div */}
+      {viewerState === 'loading' && (
+        <div className="flex items-center justify-center h-[500px] bg-gray-50 border border-gray-200 rounded-lg">
+          <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+        </div>
+      )}
+
+      {/*
+        Adobe PDF Viewer container - ALWAYS rendered but hidden when not in use.
+        This div must NOT have any React children as Adobe SDK manages it directly.
+        We hide/show with CSS to avoid React DOM reconciliation issues.
+      */}
+      <div
+        id={viewDivId}
+        className="border border-gray-200 rounded-lg overflow-hidden"
+        style={{
+          height: viewerState === 'ready' ? '500px' : '0px',
+          display: viewerState === 'ready' ? 'block' : 'none'
+        }}
+      />
+
+      {viewerState === 'hidden' && !error && clientId && (
+        <p className="text-sm text-gray-500">
+          Click &quot;Test PDF Embed&quot; to load the Adobe PDF viewer with a sample document.
+        </p>
       )}
     </div>
   );
