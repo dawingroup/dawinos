@@ -48,6 +48,12 @@ const STAGE_DELIVERABLES: Record<DesignStage, DeliverableType[]> = {
   'procure-approve': [],
   'procure-order': [],
   'procure-received': [],
+  // Architectural stages
+  'arch-brief': ['concept-sketch', 'client-presentation'],
+  'arch-schematic': ['concept-sketch', '3d-model', 'rendering'],
+  'arch-development': ['3d-model', 'rendering', 'specification-sheet'],
+  'arch-construction-docs': ['shop-drawing', 'specification-sheet'],
+  'arch-approved': ['shop-drawing', 'specification-sheet', 'client-presentation'],
 };
 
 const STATUS_CONFIG = {

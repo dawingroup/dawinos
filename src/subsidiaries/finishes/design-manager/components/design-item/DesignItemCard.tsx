@@ -37,9 +37,14 @@ export function DesignItemCard({
   const worstStatus = getWorstStatus(item.ragStatus);
   const statusCounts = countByStatus(item.ragStatus);
   
-  const isOverdue = item.dueDate && 
-    item.dueDate.seconds * 1000 < Date.now() && 
-    (item.sourcingType === 'PROCURED' ? item.currentStage !== 'procure-received' : item.currentStage !== 'production-ready');
+  const getFinalStage = () => {
+    if (item.sourcingType === 'PROCURED') return 'procure-received';
+    if (item.sourcingType === 'ARCHITECTURAL') return 'arch-approved';
+    return 'production-ready';
+  };
+  const isOverdue = item.dueDate &&
+    item.dueDate.seconds * 1000 < Date.now() &&
+    item.currentStage !== getFinalStage();
 
   return (
     <div

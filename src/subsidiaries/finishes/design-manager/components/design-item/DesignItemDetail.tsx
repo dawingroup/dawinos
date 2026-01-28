@@ -5,7 +5,7 @@
 
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Activity, CheckSquare, Sparkles, Settings, Package, Trash2, Edit2 } from 'lucide-react';
+import { ArrowLeft, FileText, Activity, CheckSquare, Sparkles, Settings, Package, Trash2, Edit2, DollarSign } from 'lucide-react';
 import { DetailDrawer, DrawerTrigger } from './DetailDrawer';
 import { cn } from '@/shared/lib/utils';
 import { useDesignItem, useProject, useRAGUpdate } from '../../hooks';
@@ -51,8 +51,9 @@ const DesignChat = lazy(() =>
 
 import { useAIContext } from '../../hooks/useAIContext';
 import { EditDesignItemDialog } from './EditDesignItemDialog';
+import { ArchitecturalPricingTab } from './ArchitecturalPricingTab';
 
-type Tab = 'overview' | 'parameters' | 'parts-costing' | 'rag' | 'files-approvals' | 'ai';
+type Tab = 'overview' | 'parameters' | 'parts-costing' | 'pricing' | 'rag' | 'files-approvals' | 'ai';
 
 // Aspect labels for display
 const ASPECT_LABELS: Record<string, string> = {
@@ -128,6 +129,11 @@ export default function DesignItemDetail() {
 
   const nextStage = getNextStageForItem(item);
 
+  // Determine if this is an architectural item (check both sourcingType AND currentStage)
+  const isArchitecturalByType = (item as any).sourcingType === 'ARCHITECTURAL';
+  const isArchitecturalByStage = item.currentStage?.startsWith('arch-');
+  const isArchitectural = isArchitecturalByType || isArchitecturalByStage;
+
   const handleAdvance = async (
     _item: typeof item, 
     stage: typeof item.currentStage, 
@@ -151,7 +157,10 @@ export default function DesignItemDetail() {
   const tabs = [
     { id: 'overview' as Tab, label: 'Overview', icon: FileText },
     { id: 'parameters' as Tab, label: 'Parameters', icon: Settings },
-    { id: 'parts-costing' as Tab, label: 'Parts & Costing', icon: Package },
+    // Show Pricing tab for architectural items, Parts & Costing tab for others
+    isArchitectural
+      ? { id: 'pricing' as Tab, label: 'Pricing', icon: DollarSign }
+      : { id: 'parts-costing' as Tab, label: 'Parts & Costing', icon: Package },
     { id: 'rag' as Tab, label: 'RAG Status', icon: Activity },
     { id: 'files-approvals' as Tab, label: 'Files & Workflow', icon: CheckSquare },
     { id: 'ai' as Tab, label: 'AI Analysis', icon: Sparkles },
@@ -304,14 +313,31 @@ export default function DesignItemDetail() {
           <ParametersTab item={item} projectId={projectId!} />
         )}
         
-        {activeTab === 'parts-costing' && (
-          <PartsCostingTab 
-            item={item} 
-            projectId={projectId!} 
+        {activeTab === 'parts-costing' && !isArchitectural && (
+          <PartsCostingTab
+            item={item}
+            projectId={projectId!}
             onOpenCostSummary={() => setShowCostSummaryDrawer(true)}
           />
         )}
-        
+
+        {activeTab === 'pricing' && isArchitectural && (
+          <ArchitecturalPricingTabWrapper
+            item={item}
+            projectId={projectId!}
+            userId={user?.uid || ''}
+          />
+        )}
+
+        {/* Fallback: If architectural item but tab is parts-costing, show pricing instead */}
+        {activeTab === 'parts-costing' && isArchitectural && (
+          <ArchitecturalPricingTabWrapper
+            item={item}
+            projectId={projectId!}
+            userId={user?.uid || ''}
+          />
+        )}
+
         {activeTab === 'rag' && (
           <RAGStagePanel 
             ragStatus={item.ragStatus}
@@ -446,7 +472,8 @@ function OverviewTab({
   const dimensions = params.dimensions || {};
   const hasDimensions = dimensions.width || dimensions.height || dimensions.depth;
 
-  const sourcingType = (item as any)?.sourcingType as ('MANUFACTURED' | 'PROCURED' | undefined);
+  const sourcingType = (item as any)?.sourcingType as ('MANUFACTURED' | 'PROCURED' | 'ARCHITECTURAL' | undefined);
+  const isArchitecturalItem = sourcingType === 'ARCHITECTURAL';
 
   const handleLinkClip = async (clip: any) => {
     try {
@@ -522,7 +549,7 @@ function OverviewTab({
             value={sourcingType || ''}
             disabled={isUpdatingSourcing}
             onChange={async (e) => {
-              const next = (e.target.value || undefined) as ('MANUFACTURED' | 'PROCURED' | undefined);
+              const next = (e.target.value || undefined) as ('MANUFACTURED' | 'PROCURED' | 'ARCHITECTURAL' | undefined);
               setIsUpdatingSourcing(true);
               try {
                 const { updateDesignItem } = await import('../../services/firestore');
@@ -538,6 +565,7 @@ function OverviewTab({
             <option value="">Not set</option>
             <option value="MANUFACTURED">Manufactured</option>
             <option value="PROCURED">Procured</option>
+            <option value="ARCHITECTURAL">Architectural</option>
           </select>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-4">
@@ -546,86 +574,156 @@ function OverviewTab({
         </div>
       </div>
 
-      {/* Key Parameters Summary */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">Key Parameters</h3>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Dimensions */}
-          <div>
-            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Dimensions</h4>
-            {hasDimensions ? (
-              <p className="text-sm text-gray-900">
-                {dimensions.width || '-'} × {dimensions.height || '-'} × {dimensions.depth || '-'} {dimensions.unit || 'mm'}
+      {/* Key Parameters Summary - Different content for Architectural vs Manufactured/Procured */}
+      {isArchitecturalItem ? (
+        // Architectural Drawing Details
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Drawing Details</h3>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Discipline */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Discipline</h4>
+              <p className="text-sm text-gray-900 capitalize">
+                {(item as any).architectural?.discipline || <span className="text-gray-400 italic">Not specified</span>}
               </p>
-            ) : (
-              <p className="text-sm text-gray-400 italic">Not specified</p>
-            )}
-          </div>
-          
-          {/* Primary Material */}
-          <div>
-            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Primary Material</h4>
-            <p className="text-sm text-gray-900">
-              {params.primaryMaterial?.name || <span className="text-gray-400 italic">Not specified</span>}
-            </p>
-          </div>
-          
-          {/* Finish */}
-          <div>
-            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Finish</h4>
-            <p className="text-sm text-gray-900">
-              {params.finish ? (
-                typeof params.finish === 'string' 
-                  ? params.finish 
-                  : `${params.finish.type || 'Unknown'}${params.finish.color ? ` - ${params.finish.color}` : ''}${params.finish.sheen ? ` (${params.finish.sheen})` : ''}`
-              ) : (
-                <span className="text-gray-400 italic">Not specified</span>
-              )}
-            </p>
-          </div>
-          
-          {/* Construction Method */}
-          <div>
-            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Construction</h4>
-            <p className="text-sm text-gray-900 capitalize">
-              {params.constructionMethod || <span className="text-gray-400 italic">Not specified</span>}
-            </p>
-          </div>
-          
-          {/* AWI Grade */}
-          <div>
-            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">AWI Grade</h4>
-            <p className="text-sm text-gray-900 uppercase">
-              {params.awiGrade || <span className="text-gray-400 italic">Not specified</span>}
-            </p>
-          </div>
-          
-          {/* Hardware Count */}
-          <div>
-            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Hardware Items</h4>
-            <p className="text-sm text-gray-900">
-              {params.hardware?.length > 0 
-                ? `${params.hardware.length} item${params.hardware.length !== 1 ? 's' : ''}`
-                : <span className="text-gray-400 italic">None specified</span>
-              }
-            </p>
-          </div>
-        </div>
-        
-        {/* Special Requirements */}
-        {params.specialRequirements?.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Special Requirements</h4>
-            <div className="flex flex-wrap gap-2">
-              {params.specialRequirements.map((req: string, index: number) => (
-                <span key={index} className="px-2 py-1 bg-amber-50 text-amber-700 text-xs rounded-full">
-                  {req}
-                </span>
-              ))}
+            </div>
+
+            {/* Drawing Number */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Drawing Number</h4>
+              <p className="text-sm text-gray-900">
+                {(item as any).architectural?.drawingNumber || <span className="text-gray-400 italic">Not assigned</span>}
+              </p>
+            </div>
+
+            {/* Scale */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Scale</h4>
+              <p className="text-sm text-gray-900">
+                {(item as any).architectural?.scale || <span className="text-gray-400 italic">Not specified</span>}
+              </p>
+            </div>
+
+            {/* Sheet Size */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Sheet Size</h4>
+              <p className="text-sm text-gray-900">
+                {(item as any).architectural?.sheetSize || <span className="text-gray-400 italic">Not specified</span>}
+              </p>
+            </div>
+
+            {/* Hourly Rate */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Hourly Rate</h4>
+              <p className="text-sm text-gray-900">
+                {(item as any).architectural?.hourlyRate
+                  ? `R ${(item as any).architectural.hourlyRate.toLocaleString('en-ZA')}/hr`
+                  : <span className="text-gray-400 italic">Not set</span>
+                }
+              </p>
+            </div>
+
+            {/* Total Hours */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Total Hours</h4>
+              <p className="text-sm text-gray-900">
+                {(item as any).architectural?.totalHours?.toFixed(1) || '0.0'} hrs
+              </p>
             </div>
           </div>
-        )}
-      </div>
+
+          {/* Cost Summary */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="flex justify-between items-center">
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Cost</h4>
+              <p className="text-lg font-semibold text-blue-600">
+                R {((item as any).architectural?.totalCost || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        // Manufacturing/Procurement Parameters
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Key Parameters</h3>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Dimensions */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Dimensions</h4>
+              {hasDimensions ? (
+                <p className="text-sm text-gray-900">
+                  {dimensions.width || '-'} × {dimensions.height || '-'} × {dimensions.depth || '-'} {dimensions.unit || 'mm'}
+                </p>
+              ) : (
+                <p className="text-sm text-gray-400 italic">Not specified</p>
+              )}
+            </div>
+
+            {/* Primary Material */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Primary Material</h4>
+              <p className="text-sm text-gray-900">
+                {params.primaryMaterial?.name || <span className="text-gray-400 italic">Not specified</span>}
+              </p>
+            </div>
+
+            {/* Finish */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Finish</h4>
+              <p className="text-sm text-gray-900">
+                {params.finish ? (
+                  typeof params.finish === 'string'
+                    ? params.finish
+                    : `${params.finish.type || 'Unknown'}${params.finish.color ? ` - ${params.finish.color}` : ''}${params.finish.sheen ? ` (${params.finish.sheen})` : ''}`
+                ) : (
+                  <span className="text-gray-400 italic">Not specified</span>
+                )}
+              </p>
+            </div>
+
+            {/* Construction Method */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Construction</h4>
+              <p className="text-sm text-gray-900 capitalize">
+                {params.constructionMethod || <span className="text-gray-400 italic">Not specified</span>}
+              </p>
+            </div>
+
+            {/* AWI Grade */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">AWI Grade</h4>
+              <p className="text-sm text-gray-900 uppercase">
+                {params.awiGrade || <span className="text-gray-400 italic">Not specified</span>}
+              </p>
+            </div>
+
+            {/* Hardware Count */}
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Hardware Items</h4>
+              <p className="text-sm text-gray-900">
+                {params.hardware?.length > 0
+                  ? `${params.hardware.length} item${params.hardware.length !== 1 ? 's' : ''}`
+                  : <span className="text-gray-400 italic">None specified</span>
+                }
+              </p>
+            </div>
+          </div>
+
+          {/* Special Requirements */}
+          {params.specialRequirements?.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Special Requirements</h4>
+              <div className="flex flex-wrap gap-2">
+                {params.specialRequirements.map((req: string, index: number) => (
+                  <span key={index} className="px-2 py-1 bg-amber-50 text-amber-700 text-xs rounded-full">
+                    {req}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       
         {/* Metadata */}
         <div className="grid grid-cols-2 gap-4">
@@ -940,7 +1038,15 @@ interface ParametersTabProps {
 
 function ParametersTab({ item, projectId }: ParametersTabProps) {
   const { user } = useAuth();
-  
+  const sourcingType = (item as any).sourcingType;
+  // Check both sourcingType AND currentStage for architectural items
+  const isArchitecturalByType = sourcingType === 'ARCHITECTURAL';
+  const isArchitecturalByStage = item.currentStage?.startsWith('arch-');
+  const isArchitectural = isArchitecturalByType || isArchitecturalByStage;
+
+  // Debug logging
+  console.log('[ParametersTab] sourcingType:', sourcingType, '| currentStage:', item.currentStage, '| isArchitectural:', isArchitectural);
+
   const handleSaveParameters = async (parameters: any) => {
     try {
       // Import updateDesignItem dynamically to avoid circular deps
@@ -953,7 +1059,18 @@ function ParametersTab({ item, projectId }: ParametersTabProps) {
     }
   };
 
-  // Get existing parameters or use defaults
+  // For architectural items, show architectural-specific parameters
+  if (isArchitectural) {
+    return (
+      <ArchitecturalParametersEditor
+        item={item}
+        projectId={projectId}
+        userId={user?.email || 'system'}
+      />
+    );
+  }
+
+  // Get existing parameters or use defaults for manufacturing/procured items
   const existingParams = (item as any).parameters || {
     dimensions: { width: null, height: null, depth: null, unit: 'mm' },
     primaryMaterial: null,
@@ -2314,5 +2431,275 @@ function ParametersSummaryDrawerContent({ item }: { item: NonNullable<ReturnType
         </div>
       )}
     </div>
+  );
+}
+
+// Architectural Parameters Editor - For ARCHITECTURAL items
+interface ArchitecturalParametersEditorProps {
+  item: DesignItem;
+  projectId: string;
+  userId: string;
+}
+
+function ArchitecturalParametersEditor({ item, projectId, userId }: ArchitecturalParametersEditorProps) {
+  const arch = (item as any).architectural || {};
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Form state
+  const [drawingNumber, setDrawingNumber] = useState(arch.drawingNumber || '');
+  const [scale, setScale] = useState(arch.scale || '');
+  const [sheetSize, setSheetSize] = useState(arch.sheetSize || '');
+  const [discipline, setDiscipline] = useState(arch.discipline || 'architectural');
+  const [notes, setNotes] = useState(arch.notes || '');
+
+  const disciplines = [
+    { value: 'architectural', label: 'Architectural' },
+    { value: 'structural', label: 'Structural' },
+    { value: 'mep', label: 'MEP (Mechanical, Electrical, Plumbing)' },
+    { value: 'landscaping', label: 'Landscaping' },
+    { value: 'furniture-millwork', label: 'Furniture & Millwork' },
+  ];
+
+  const sheetSizes = ['A0', 'A1', 'A2', 'A3', 'A4', 'ARCH-D', 'ARCH-E'];
+  const commonScales = ['1:1', '1:5', '1:10', '1:20', '1:50', '1:100', '1:200', '1:500'];
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveSuccess(false);
+    try {
+      const { updateDesignItem } = await import('../../services/firestore');
+      await updateDesignItem(projectId, item.id, {
+        architectural: {
+          ...arch,
+          drawingNumber: drawingNumber || undefined,
+          scale: scale || undefined,
+          sheetSize: sheetSize || undefined,
+          discipline,
+          notes: notes || undefined,
+        },
+      } as any, userId);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (error) {
+      console.error('Failed to save architectural parameters:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900">Drawing Parameters</h3>
+        <div className="flex items-center gap-2">
+          {saveSuccess && (
+            <span className="text-sm text-green-600">✓ Saved</span>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className={cn(
+              'px-4 py-2 text-sm font-medium rounded-lg',
+              saving
+                ? 'bg-gray-200 text-gray-500'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            )}
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Drawing Number */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Drawing Number
+          </label>
+          <input
+            type="text"
+            value={drawingNumber}
+            onChange={(e) => setDrawingNumber(e.target.value)}
+            placeholder="e.g., A-101, S-001"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Standard drawing reference number
+          </p>
+        </div>
+
+        {/* Discipline */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Discipline
+          </label>
+          <select
+            value={discipline}
+            onChange={(e) => setDiscipline(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            {disciplines.map((d) => (
+              <option key={d.value} value={d.value}>{d.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Scale */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Scale
+          </label>
+          <div className="flex gap-2">
+            <select
+              value={scale}
+              onChange={(e) => setScale(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Select scale...</option>
+              {commonScales.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={scale}
+              onChange={(e) => setScale(e.target.value)}
+              placeholder="Custom"
+              className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        </div>
+
+        {/* Sheet Size */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Sheet Size
+          </label>
+          <select
+            value={sheetSize}
+            onChange={(e) => setSheetSize(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Select sheet size...</option>
+            {sheetSizes.map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Notes
+        </label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={4}
+          placeholder="Any additional notes about this drawing..."
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        />
+      </div>
+
+      {/* Info card */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h4 className="text-sm font-medium text-blue-800 mb-2">About Drawing Parameters</h4>
+        <p className="text-sm text-blue-700">
+          These parameters define the technical specifications of the architectural drawing.
+          Time tracking and costing are managed in the Pricing tab.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Architectural Pricing Tab Wrapper - For ARCHITECTURAL items
+interface ArchitecturalPricingTabWrapperProps {
+  item: NonNullable<ReturnType<typeof useDesignItem>['item']>;
+  projectId: string;
+  userId: string;
+}
+
+function ArchitecturalPricingTabWrapper({ item, projectId, userId }: ArchitecturalPricingTabWrapperProps) {
+  const [isInitializing, setIsInitializing] = useState(false);
+
+  // Default hourly rate for architectural discipline
+  const DEFAULT_ARCHITECTURAL_RATE = 850;
+
+  // Initialize architectural data if missing
+  const existingArch = (item as any).architectural;
+  const hasArchitecturalData = existingArch && existingArch.discipline;
+
+  // Create item with default architectural data if missing
+  const itemWithArch = hasArchitecturalData ? item : {
+    ...item,
+    architectural: {
+      discipline: 'architectural' as const,
+      hourlyRate: DEFAULT_ARCHITECTURAL_RATE,
+      timeEntries: [],
+      totalHours: 0,
+      totalLaborCost: 0,
+      fixedCosts: [],
+      totalFixedCosts: 0,
+      totalCost: 0,
+      currency: 'ZAR',
+      revisionCount: 0,
+      ...existingArch, // preserve any partial data
+    },
+  };
+
+  // Auto-initialize if missing
+  useEffect(() => {
+    const initializeData = async () => {
+      if (!hasArchitecturalData && !isInitializing) {
+        setIsInitializing(true);
+        try {
+          const { updateDesignItem } = await import('../../services/firestore');
+          await updateDesignItem(projectId, item.id, {
+            architectural: (itemWithArch as any).architectural,
+          }, userId);
+        } catch (err) {
+          console.error('Failed to initialize architectural data:', err);
+        } finally {
+          setIsInitializing(false);
+        }
+      }
+    };
+    initializeData();
+  }, [hasArchitecturalData, isInitializing, projectId, item.id, userId]);
+
+  const handleUpdate = async (updates: any) => {
+    try {
+      const { updateDesignItem } = await import('../../services/firestore');
+      await updateDesignItem(projectId, item.id, {
+        architectural: {
+          ...(itemWithArch as any).architectural,
+          ...updates,
+        },
+      } as any, userId);
+    } catch (error) {
+      console.error('Failed to update architectural pricing:', error);
+      throw error;
+    }
+  };
+
+  if (isInitializing) {
+    return (
+      <div className="p-6 text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+        <p className="text-sm text-gray-500">Initializing pricing data...</p>
+      </div>
+    );
+  }
+
+  return (
+    <ArchitecturalPricingTab
+      item={itemWithArch as any}
+      projectId={projectId}
+      userId={userId}
+      onUpdate={handleUpdate}
+    />
   );
 }

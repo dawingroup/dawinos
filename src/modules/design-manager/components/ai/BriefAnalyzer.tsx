@@ -21,6 +21,7 @@ const CATEGORY_LABELS: Record<DesignCategory, string> = {
   doors: 'Doors',
   fixtures: 'Fixtures',
   specialty: 'Specialty',
+  architectural: 'Architectural',
 };
 
 export function BriefAnalyzer({

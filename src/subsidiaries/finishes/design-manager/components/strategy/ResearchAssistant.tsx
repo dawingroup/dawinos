@@ -47,9 +47,9 @@ export function ResearchAssistant({ messages, isSending, onSendQuery, onSaveFind
   ];
 
   return (
-    <div className="flex flex-col h-[500px]">
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div className="flex flex-col">
+      {/* Messages - constrained scroll area */}
+      <div className="min-h-[250px] max-h-[500px] overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
           <div className="text-center py-8">
             <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">

@@ -12,11 +12,13 @@ import { EditDesignItemDialog } from '../design-item/EditDesignItemDialog';
 import { cn } from '@/shared/lib/utils';
 import type { DesignItem, DesignStage } from '../../types';
 import { STAGE_LABELS } from '../../utils/formatting';
-import { 
-  MANUFACTURING_STAGE_ORDER, 
+import {
+  MANUFACTURING_STAGE_ORDER,
   PROCUREMENT_STAGE_ORDER,
-  getStageOrderForItem 
+  ARCHITECTURAL_STAGE_ORDER,
+  getStageOrderForItem
 } from '../../utils/stage-gate';
+import { FileText } from 'lucide-react';
 
 interface DesignItemsTableProps {
   items: DesignItem[];
@@ -43,6 +45,12 @@ const STAGE_TIMELINE_DAYS: Record<DesignStage, number> = {
   'procure-approve': 2,
   'procure-order': 1,
   'procure-received': 7,
+  // Architectural stages (Brief → Schematic → Development → Construction Docs → Approved)
+  'arch-brief': 5,
+  'arch-schematic': 10,
+  'arch-development': 15,
+  'arch-construction-docs': 10,
+  'arch-approved': 0,
 };
 
 function getStageStatus(item: DesignItem, stage: DesignStage): StageStatus {
@@ -126,16 +134,35 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<DesignItem | null>(null);
 
-  // Separate items by type
-  const manufacturedItems = useMemo(() => 
-    items.filter(i => (i as any).sourcingType !== 'PROCURED'),
-    [items]
-  );
-  
-  const procuredItems = useMemo(() => 
-    items.filter(i => (i as any).sourcingType === 'PROCURED'),
-    [items]
-  );
+  // Separate items by type (check both sourcingType AND stage prefix for robustness)
+  const { manufacturedItems, procuredItems, architecturalItems } = useMemo(() => {
+    const architectural: DesignItem[] = [];
+    const procured: DesignItem[] = [];
+    const manufactured: DesignItem[] = [];
+
+    items.forEach(item => {
+      const isArch = item.sourcingType === 'ARCHITECTURAL' || item.currentStage?.startsWith('arch-');
+      const isProc = item.sourcingType === 'PROCURED' || item.currentStage?.startsWith('procure-');
+
+      console.log('[DesignItemsTable] Item:', item.name, '| sourcingType:', item.sourcingType, '| currentStage:', item.currentStage, '| isArch:', isArch, '| isProc:', isProc);
+
+      if (isArch) {
+        architectural.push(item);
+      } else if (isProc) {
+        procured.push(item);
+      } else {
+        manufactured.push(item);
+      }
+    });
+
+    console.log('[DesignItemsTable] Counts - Manufactured:', manufactured.length, '| Procured:', procured.length, '| Architectural:', architectural.length);
+
+    return {
+      manufacturedItems: manufactured,
+      procuredItems: procured,
+      architecturalItems: architectural,
+    };
+  }, [items]);
 
   // Sort items
   const sortedManufactured = useMemo(() => {
@@ -183,6 +210,29 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
       return sortDirection === 'asc' ? comparison : -comparison;
     });
   }, [procuredItems, sortField, sortDirection]);
+
+  const sortedArchitectural = useMemo(() => {
+    return [...architecturalItems].sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'category':
+          comparison = (a.category || '').localeCompare(b.category || '');
+          break;
+        case 'readiness':
+          comparison = a.overallReadiness - b.overallReadiness;
+          break;
+        case 'stage':
+          const aIndex = ARCHITECTURAL_STAGE_ORDER.indexOf(a.currentStage);
+          const bIndex = ARCHITECTURAL_STAGE_ORDER.indexOf(b.currentStage);
+          comparison = aIndex - bIndex;
+          break;
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [architecturalItems, sortField, sortDirection]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -398,6 +448,14 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
         <ShoppingCart className="w-4 h-4 text-purple-600" />,
         sortedProcured,
         PROCUREMENT_STAGE_ORDER
+      )}
+
+      {/* Architectural Items Table */}
+      {renderTable(
+        'Architectural Drawings',
+        <FileText className="w-4 h-4 text-slate-600" />,
+        sortedArchitectural,
+        ARCHITECTURAL_STAGE_ORDER
       )}
 
       {/* Empty state */}

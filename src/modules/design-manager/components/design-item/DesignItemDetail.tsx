@@ -53,8 +53,10 @@ const DesignChat = lazy(() =>
 
 import { useAIContext } from '../../hooks/useAIContext';
 import { EditDesignItemDialog } from './EditDesignItemDialog';
+import { ArchitecturalPricingTab } from './ArchitecturalPricingTab';
+import { DollarSign } from 'lucide-react';
 
-type Tab = 'overview' | 'parameters' | 'parts-costing' | 'rag' | 'files-approvals' | 'ai';
+type Tab = 'overview' | 'parameters' | 'parts-costing' | 'pricing' | 'rag' | 'files-approvals' | 'ai';
 
 // Aspect labels for display
 const ASPECT_LABELS: Record<string, string> = {
@@ -151,10 +153,16 @@ export default function DesignItemDetail() {
     setShowGateCheck(false);
   };
 
+  // Determine if this is an architectural item
+  const isArchitectural = (item as any).sourcingType === 'ARCHITECTURAL';
+
   const tabs = [
     { id: 'overview' as Tab, label: 'Overview', icon: FileText },
     { id: 'parameters' as Tab, label: 'Parameters', icon: Settings },
-    { id: 'parts-costing' as Tab, label: 'Parts', icon: Package },
+    // Show Pricing tab for architectural items, Parts tab for others
+    isArchitectural
+      ? { id: 'pricing' as Tab, label: 'Pricing', icon: DollarSign }
+      : { id: 'parts-costing' as Tab, label: 'Parts', icon: Package },
     { id: 'rag' as Tab, label: 'RAG', icon: Activity },
     { id: 'files-approvals' as Tab, label: 'Files', icon: CheckSquare },
     { id: 'ai' as Tab, label: 'AI', icon: Sparkles },
@@ -337,10 +345,18 @@ export default function DesignItemDetail() {
         )}
         
         {activeTab === 'parts-costing' && (
-          <PartsCostingTab 
-            item={item} 
-            projectId={projectId!} 
+          <PartsCostingTab
+            item={item}
+            projectId={projectId!}
             onOpenCostSummary={() => setShowCostSummaryDrawer(true)}
+          />
+        )}
+
+        {activeTab === 'pricing' && isArchitectural && (
+          <ArchitecturalPricingTabWrapper
+            item={item}
+            projectId={projectId!}
+            userId={user?.uid || ''}
           />
         )}
         
@@ -862,6 +878,9 @@ function FilesTab({ item, projectId }: FilesTabProps) {
       <DeliverablesManager
         deliverables={deliverables}
         currentStage={item.currentStage}
+        projectId={projectId}
+        itemId={item.id}
+        userId={user?.uid || user?.email || ''}
         onUpload={handleUpload}
         onDelete={handleDelete}
         onApprove={handleApprove}
@@ -1831,6 +1850,40 @@ function PartsCostingTab({ item, projectId, onOpenCostSummary }: PartsCostingTab
   );
 }
 
+// Architectural Pricing Tab - For ARCHITECTURAL items
+interface ArchitecturalPricingTabWrapperProps {
+  item: NonNullable<ReturnType<typeof useDesignItem>['item']>;
+  projectId: string;
+  userId: string;
+}
+
+function ArchitecturalPricingTabWrapper({ item, projectId, userId }: ArchitecturalPricingTabWrapperProps) {
+  const { updateDesignItem } = require('../../services/firestore');
+
+  const handleUpdate = async (updates: any) => {
+    try {
+      await updateDesignItem(projectId, item.id, {
+        architectural: {
+          ...(item as any).architectural,
+          ...updates,
+        },
+      } as any, userId);
+    } catch (error) {
+      console.error('Failed to update architectural pricing:', error);
+      throw error;
+    }
+  };
+
+  return (
+    <ArchitecturalPricingTab
+      item={item}
+      projectId={projectId}
+      userId={userId}
+      onUpdate={handleUpdate}
+    />
+  );
+}
+
 // Files & Approvals Tab - Combines Files, Approvals with History drawer trigger
 interface FilesApprovalsTabProps {
   item: NonNullable<ReturnType<typeof useDesignItem>['item']>;
@@ -2035,6 +2088,9 @@ function FilesApprovalsTab({ item, projectId, onOpenHistory }: FilesApprovalsTab
           <DeliverablesManager
             deliverables={deliverables}
             currentStage={item.currentStage}
+            projectId={projectId}
+            itemId={item.id}
+            userId={user?.uid || user?.email || ''}
             onUpload={handleUpload}
             onDelete={handleDelete}
             onApprove={handleApprove}

@@ -6,17 +6,19 @@
 
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronUp, ChevronDown, Package, ShoppingCart, Edit2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, Package, ShoppingCart, Edit2, FileText, HardHat } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { EditDesignItemDialog } from '../design-item/EditDesignItemDialog';
 import { cn } from '@/shared/lib/utils';
 import type { DesignItem, DesignStage } from '../../types';
 import { STAGE_LABELS } from '../../utils/formatting';
-import { 
-  MANUFACTURING_STAGE_ORDER, 
+import {
+  MANUFACTURING_STAGE_ORDER,
   PROCUREMENT_STAGE_ORDER,
-  getStageOrderForItem 
+  ARCHITECTURAL_STAGE_ORDER,
+  getStageOrderForItem
 } from '../../utils/stage-gate';
+import { CONSTRUCTION_STAGES, normalizeSourcingType } from '../../types/deliverables';
 
 interface DesignItemsTableProps {
   items: DesignItem[];
@@ -43,6 +45,20 @@ const STAGE_TIMELINE_DAYS: Record<DesignStage, number> = {
   'procure-approve': 2,
   'procure-order': 1,
   'procure-received': 7,
+  // Architectural stages
+  'arch-brief': 5,
+  'arch-schematic': 10,
+  'arch-development': 15,
+  'arch-construction-docs': 10,
+  'arch-approved': 0,
+  // Construction stages
+  'const-scope': 3,
+  'const-spec': 5,
+  'const-quote': 5,
+  'const-approve': 3,
+  'const-in-progress': 14,
+  'const-inspection': 2,
+  'const-complete': 0,
 };
 
 function getStageStatus(item: DesignItem, stage: DesignStage): StageStatus {
@@ -126,14 +142,27 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<DesignItem | null>(null);
 
-  // Separate items by type
-  const manufacturedItems = useMemo(() => 
-    items.filter(i => (i as any).sourcingType !== 'PROCURED'),
+  // Separate items by normalized type
+  const manufacturedItems = useMemo(() =>
+    items.filter(i => {
+      const normalizedType = normalizeSourcingType((i as any).sourcingType);
+      return normalizedType === 'CUSTOM_FURNITURE_MILLWORK';
+    }),
     [items]
   );
-  
-  const procuredItems = useMemo(() => 
-    items.filter(i => (i as any).sourcingType === 'PROCURED'),
+
+  const procuredItems = useMemo(() =>
+    items.filter(i => normalizeSourcingType((i as any).sourcingType) === 'PROCURED'),
+    [items]
+  );
+
+  const architecturalItems = useMemo(() =>
+    items.filter(i => normalizeSourcingType((i as any).sourcingType) === 'DESIGN_DOCUMENT'),
+    [items]
+  );
+
+  const constructionItems = useMemo(() =>
+    items.filter(i => normalizeSourcingType((i as any).sourcingType) === 'CONSTRUCTION'),
     [items]
   );
 
@@ -183,6 +212,52 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
       return sortDirection === 'asc' ? comparison : -comparison;
     });
   }, [procuredItems, sortField, sortDirection]);
+
+  const sortedArchitectural = useMemo(() => {
+    return [...architecturalItems].sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'category':
+          comparison = (a.category || '').localeCompare(b.category || '');
+          break;
+        case 'readiness':
+          comparison = a.overallReadiness - b.overallReadiness;
+          break;
+        case 'stage':
+          const aIndex = ARCHITECTURAL_STAGE_ORDER.indexOf(a.currentStage);
+          const bIndex = ARCHITECTURAL_STAGE_ORDER.indexOf(b.currentStage);
+          comparison = aIndex - bIndex;
+          break;
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [architecturalItems, sortField, sortDirection]);
+
+  const sortedConstruction = useMemo(() => {
+    return [...constructionItems].sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'category':
+          comparison = (a.category || '').localeCompare(b.category || '');
+          break;
+        case 'readiness':
+          comparison = a.overallReadiness - b.overallReadiness;
+          break;
+        case 'stage':
+          const aIndex = CONSTRUCTION_STAGES.indexOf(a.currentStage);
+          const bIndex = CONSTRUCTION_STAGES.indexOf(b.currentStage);
+          comparison = aIndex - bIndex;
+          break;
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [constructionItems, sortField, sortDirection]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -398,6 +473,22 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
         <ShoppingCart className="w-4 h-4 text-purple-600" />,
         sortedProcured,
         PROCUREMENT_STAGE_ORDER
+      )}
+
+      {/* Design Documents Table */}
+      {renderTable(
+        'Design Documents',
+        <FileText className="w-4 h-4 text-indigo-600" />,
+        sortedArchitectural,
+        ARCHITECTURAL_STAGE_ORDER
+      )}
+
+      {/* Construction Items Table */}
+      {renderTable(
+        'Construction Items',
+        <HardHat className="w-4 h-4 text-amber-600" />,
+        sortedConstruction,
+        CONSTRUCTION_STAGES
       )}
 
       {/* Empty state */}

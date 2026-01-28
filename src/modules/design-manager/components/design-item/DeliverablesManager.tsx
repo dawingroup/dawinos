@@ -4,10 +4,10 @@
  */
 
 import { useState } from 'react';
-import { 
-  FileText, Upload, Download, Trash2, Eye, Check, 
+import {
+  FileText, Upload, Download, Trash2, Eye, Check,
   FileImage, Box, FileSpreadsheet, Clock, ChevronDown, ChevronUp,
-  Share2, Globe, CheckCircle
+  Share2, Globe
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import type { Deliverable, DeliverableType, DesignStage } from '../../types';
@@ -54,6 +54,20 @@ const STAGE_DELIVERABLES: Record<DesignStage, DeliverableType[]> = {
   'procure-approve': [],
   'procure-order': [],
   'procure-received': [],
+  // Architectural/Design Document stages
+  'arch-brief': ['concept-sketch', 'client-presentation'],
+  'arch-schematic': ['concept-sketch', '3d-model', 'rendering'],
+  'arch-development': ['3d-model', 'rendering', 'specification-sheet'],
+  'arch-construction-docs': ['shop-drawing', 'specification-sheet'],
+  'arch-approved': ['shop-drawing', 'specification-sheet', 'client-presentation'],
+  // Construction stages (typically don't use deliverables the same way)
+  'const-scope': [],
+  'const-spec': ['specification-sheet'],
+  'const-quote': [],
+  'const-approve': [],
+  'const-in-progress': [],
+  'const-inspection': [],
+  'const-complete': ['specification-sheet', 'client-presentation'],
 };
 
 const STATUS_CONFIG = {

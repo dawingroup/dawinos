@@ -5,8 +5,8 @@
 
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { 
-  ArrowLeft, Plus, LayoutGrid, List, FolderOpen, Calendar, User, Clock, 
+import {
+  ArrowLeft, Plus, LayoutGrid, List, FolderOpen, Calendar, User, Clock,
   CheckCircle, AlertTriangle, Package, Edit2, Scissors, Sparkles, Calculator, Upload,
   X, Library, FileText
 } from 'lucide-react';
@@ -17,7 +17,8 @@ import { useProject, useDesignItems } from '../../hooks';
 import { ProjectDialog } from './ProjectDialog';
 import type { DesignStage, DesignCategory } from '../../types';
 import { STAGE_LABELS, CATEGORY_LABELS } from '../../utils/formatting';
-import { STAGE_ORDER, MANUFACTURING_STAGE_ORDER, PROCUREMENT_STAGE_ORDER, isAtFinalStageForItem } from '../../utils/stage-gate';
+import { STAGE_ORDER, MANUFACTURING_STAGE_ORDER, PROCUREMENT_STAGE_ORDER, ARCHITECTURAL_STAGE_ORDER, isAtFinalStageForItem } from '../../utils/stage-gate';
+import { CONSTRUCTION_STAGES, normalizeSourcingType } from '../../types/deliverables';
 import { DesignItemCard } from '../design-item/DesignItemCard';
 import { NewDesignItemDialog } from '../design-item/NewDesignItemDialog';
 import { StageKanban } from '../dashboard/StageKanban';
@@ -396,23 +397,43 @@ export default function ProjectView() {
             </div>
           ) : viewMode === 'kanban' ? (
             <div className="space-y-8">
-              {/* Manufacturing Kanban */}
-              {items.filter(i => (i as any).sourcingType !== 'PROCURED').length > 0 && (
-                <StageKanban 
-                  items={items.filter(i => (i as any).sourcingType !== 'PROCURED')} 
+              {/* Custom Furniture/Millwork Kanban */}
+              {items.filter(i => normalizeSourcingType((i as any).sourcingType) === 'CUSTOM_FURNITURE_MILLWORK').length > 0 && (
+                <StageKanban
+                  items={items.filter(i => normalizeSourcingType((i as any).sourcingType) === 'CUSTOM_FURNITURE_MILLWORK')}
                   projectId={projectId!}
                   stageOrder={MANUFACTURING_STAGE_ORDER}
-                  title="🏭 Manufacturing"
+                  title="🏭 Custom Furniture/Millwork"
                 />
               )}
-              
+
               {/* Procurement Kanban */}
-              {items.filter(i => (i as any).sourcingType === 'PROCURED').length > 0 && (
-                <StageKanban 
-                  items={items.filter(i => (i as any).sourcingType === 'PROCURED')} 
+              {items.filter(i => normalizeSourcingType((i as any).sourcingType) === 'PROCURED').length > 0 && (
+                <StageKanban
+                  items={items.filter(i => normalizeSourcingType((i as any).sourcingType) === 'PROCURED')}
                   projectId={projectId!}
                   stageOrder={PROCUREMENT_STAGE_ORDER}
                   title="📦 Procurement"
+                />
+              )}
+
+              {/* Design Documents Kanban */}
+              {items.filter(i => normalizeSourcingType((i as any).sourcingType) === 'DESIGN_DOCUMENT').length > 0 && (
+                <StageKanban
+                  items={items.filter(i => normalizeSourcingType((i as any).sourcingType) === 'DESIGN_DOCUMENT')}
+                  projectId={projectId!}
+                  stageOrder={ARCHITECTURAL_STAGE_ORDER}
+                  title="📐 Design Documents"
+                />
+              )}
+
+              {/* Construction Kanban */}
+              {items.filter(i => normalizeSourcingType((i as any).sourcingType) === 'CONSTRUCTION').length > 0 && (
+                <StageKanban
+                  items={items.filter(i => normalizeSourcingType((i as any).sourcingType) === 'CONSTRUCTION')}
+                  projectId={projectId!}
+                  stageOrder={CONSTRUCTION_STAGES}
+                  title="🔨 Construction"
                 />
               )}
 
@@ -424,6 +445,7 @@ export default function ProjectView() {
               )}
             </div>
           ) : (
+            // List view - DesignItemsTable handles all filtering internally
             <DesignItemsTable items={items} projectId={projectId!} />
           )}
         </>

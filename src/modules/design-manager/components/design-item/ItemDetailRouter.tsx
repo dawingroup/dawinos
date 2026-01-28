@@ -1,15 +1,19 @@
 /**
  * Item Detail Router
  * Routes to the appropriate detail page based on item sourcing type
+ * Supports all 4 deliverable types: Custom Furniture, Procured, Design Document, Construction
  */
 
 import { lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDesignItem } from '../../hooks';
+import { normalizeSourcingType } from '../../types/deliverables';
 
-// Lazy load detail pages
-const DesignItemDetail = lazy(() => import('./DesignItemDetail'));
+// Lazy load detail pages for code splitting
+const ManufacturedItemDetail = lazy(() => import('./DesignItemDetail')); // Will be renamed later
 const ProcuredItemDetail = lazy(() => import('./ProcuredItemDetail'));
+const DesignDocumentDetail = lazy(() => import('./DesignDocumentDetail'));
+const ConstructionItemDetail = lazy(() => import('./ConstructionItemDetail'));
 
 function PageLoader() {
   return (
@@ -35,12 +39,27 @@ export default function ItemDetailRouter() {
     );
   }
 
-  // Route based on sourcing type
-  const isProcured = (item as any).sourcingType === 'PROCURED';
+  // Normalize the sourcing type to handle legacy values
+  const sourcingType = normalizeSourcingType((item as any).sourcingType);
+
+  // Route to the appropriate detail component based on sourcing type
+  const DetailComponent = (() => {
+    switch (sourcingType) {
+      case 'PROCURED':
+        return ProcuredItemDetail;
+      case 'DESIGN_DOCUMENT':
+        return DesignDocumentDetail;
+      case 'CONSTRUCTION':
+        return ConstructionItemDetail;
+      case 'CUSTOM_FURNITURE_MILLWORK':
+      default:
+        return ManufacturedItemDetail;
+    }
+  })();
 
   return (
     <Suspense fallback={<PageLoader />}>
-      {isProcured ? <ProcuredItemDetail /> : <DesignItemDetail />}
+      <DetailComponent />
     </Suspense>
   );
 }

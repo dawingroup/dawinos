@@ -15,8 +15,7 @@ import { useProject, useDesignItems } from '../../hooks';
 import { ProjectDialog } from './ProjectDialog';
 import type { DesignStage, DesignCategory } from '../../types';
 import { STAGE_LABELS, CATEGORY_LABELS } from '../../utils/formatting';
-import { STAGE_ORDER, MANUFACTURING_STAGE_ORDER, PROCUREMENT_STAGE_ORDER, isAtFinalStageForItem } from '../../utils/stage-gate';
-import { DesignItemCard } from '../design-item/DesignItemCard';
+import { STAGE_ORDER, MANUFACTURING_STAGE_ORDER, PROCUREMENT_STAGE_ORDER, ARCHITECTURAL_STAGE_ORDER, isAtFinalStageForItem } from '../../utils/stage-gate';
 import { NewDesignItemDialog } from '../design-item/NewDesignItemDialog';
 import { StageKanban } from '../dashboard/StageKanban';
 import { DesignItemsTable } from './DesignItemsTable';
@@ -24,7 +23,6 @@ import { CutlistTab } from './CutlistTab';
 import { EstimateTab } from './EstimateTab';
 import { ProductionTab } from './ProductionTab';
 import { ProjectDocuments } from './ProjectDocuments';
-import { StrategyCanvas } from '../strategy';
 import type { Project } from '@/shared/types';
 import { BulkImporter } from '../ProjectEstimation/BulkImporter';
 import { runProjectProduction } from '@/shared/services/optimization';
@@ -41,7 +39,6 @@ export default function ProjectView() {
   const [categoryFilter, setCategoryFilter] = useState<DesignCategory | 'all'>('all');
   const [showNewItem, setShowNewItem] = useState(false);
   const [showEditProject, setShowEditProject] = useState(false);
-  const [showStrategy, setShowStrategy] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [activeTab, setActiveTab] = useState<ProjectTab>('items');
 
@@ -50,30 +47,16 @@ export default function ProjectView() {
     category: categoryFilter === 'all' ? undefined : categoryFilter,
   });
 
-  // Prevent body scroll when modal is open
+  // Prevent body scroll when bulk import modal is open
   useEffect(() => {
-    if (showStrategy || showBulkImport) {
-      const scrollY = window.scrollY;
-      document.body.style.position = 'fixed';
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.width = '100%';
-    } else {
-      const scrollY = document.body.style.top;
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-      if (scrollY) {
-        window.scrollTo(0, parseInt(scrollY || '0') * -1);
-      }
+    if (showBulkImport) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
     }
-
-    // Cleanup on unmount
-    return () => {
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-    };
-  }, [showStrategy, showBulkImport]);
+  }, [showBulkImport]);
 
   if (projectLoading) {
     return (
@@ -166,13 +149,13 @@ export default function ProjectView() {
             <Upload className="w-4 h-4" />
             Bulk Import
           </button>
-          <button
-            onClick={() => setShowStrategy(true)}
+          <Link
+            to={`/design/project/${projectId}/strategy`}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:opacity-90 transition-opacity"
           >
             <Sparkles className="w-4 h-4" />
             AI Strategy
-          </button>
+          </Link>
           <button
             onClick={() => setShowEditProject(true)}
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
@@ -422,22 +405,32 @@ export default function ProjectView() {
           ) : viewMode === 'kanban' ? (
             <div className="space-y-8">
               {/* Manufacturing Kanban */}
-              {items.filter(i => (i as any).sourcingType !== 'PROCURED').length > 0 && (
-                <StageKanban 
-                  items={items.filter(i => (i as any).sourcingType !== 'PROCURED')} 
+              {items.filter(i => !i.sourcingType || i.sourcingType === 'MANUFACTURED').length > 0 && (
+                <StageKanban
+                  items={items.filter(i => !i.sourcingType || i.sourcingType === 'MANUFACTURED')}
                   projectId={projectId!}
                   stageOrder={MANUFACTURING_STAGE_ORDER}
                   title="🏭 Manufacturing"
                 />
               )}
-              
+
               {/* Procurement Kanban */}
-              {items.filter(i => (i as any).sourcingType === 'PROCURED').length > 0 && (
-                <StageKanban 
-                  items={items.filter(i => (i as any).sourcingType === 'PROCURED')} 
+              {items.filter(i => i.sourcingType === 'PROCURED').length > 0 && (
+                <StageKanban
+                  items={items.filter(i => i.sourcingType === 'PROCURED')}
                   projectId={projectId!}
                   stageOrder={PROCUREMENT_STAGE_ORDER}
                   title="📦 Procurement"
+                />
+              )}
+
+              {/* Architectural Kanban */}
+              {items.filter(i => i.sourcingType === 'ARCHITECTURAL').length > 0 && (
+                <StageKanban
+                  items={items.filter(i => i.sourcingType === 'ARCHITECTURAL')}
+                  projectId={projectId!}
+                  stageOrder={ARCHITECTURAL_STAGE_ORDER}
+                  title="📐 Architectural Drawings"
                 />
               )}
 
@@ -449,7 +442,11 @@ export default function ProjectView() {
               )}
             </div>
           ) : (
-            <DesignItemsTable items={items} projectId={projectId!} />
+            // List view - DesignItemsTable handles internal grouping by sourcing type
+            <DesignItemsTable
+              items={items}
+              projectId={projectId!}
+            />
           )}
         </>
       )}
@@ -502,20 +499,6 @@ export default function ProjectView() {
         userId={user?.email || ''}
         project={project}
       />
-
-      {/* Strategy Canvas with AI Report Generation */}
-      {showStrategy && (
-        <div className="fixed inset-0 z-50 bg-white overflow-y-auto" style={{ height: '100vh', overflowY: 'auto' }}>
-          <StrategyCanvas
-            projectId={projectId!}
-            projectName={project.name}
-            projectCode={project.code}
-            clientBrief={project.description}
-            userId={user?.email || undefined}
-            onClose={() => setShowStrategy(false)}
-          />
-        </div>
-      )}
 
       {/* Bulk Importer */}
       {showBulkImport && (

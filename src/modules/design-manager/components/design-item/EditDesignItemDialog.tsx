@@ -7,7 +7,8 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { updateDesignItem } from '../../services/firestore';
-import type { DesignCategory, DesignItem } from '../../types';
+import type { DesignCategory, DesignItem, ArchitecturalDiscipline } from '../../types';
+import { DISCIPLINE_LABELS } from '../../types';
 import { CATEGORY_LABELS } from '../../utils/formatting';
 
 export interface EditDesignItemDialogProps {
@@ -18,16 +19,18 @@ export interface EditDesignItemDialogProps {
   userId: string;
 }
 
-const categories: DesignCategory[] = ['casework', 'furniture', 'millwork', 'doors', 'fixtures', 'specialty'];
+const categories: DesignCategory[] = ['casework', 'furniture', 'millwork', 'doors', 'fixtures', 'specialty', 'architectural'];
 const priorities = ['low', 'medium', 'high', 'urgent'] as const;
-const sourcingTypes: Array<DesignItem['sourcingType']> = ['MANUFACTURED', 'PROCURED'];
+const sourcingTypes: Array<DesignItem['sourcingType']> = ['MANUFACTURED', 'PROCURED', 'ARCHITECTURAL'];
 
-export function EditDesignItemDialog({ 
-  open, 
-  onClose, 
+const disciplines: ArchitecturalDiscipline[] = ['architectural', 'structural', 'mep', 'landscaping', 'furniture-millwork'];
+
+export function EditDesignItemDialog({
+  open,
+  onClose,
   item,
-  projectId, 
-  userId 
+  projectId,
+  userId
 }: EditDesignItemDialogProps) {
   const [name, setName] = useState(item.name);
   const [category, setCategory] = useState<DesignCategory>(item.category);
@@ -38,6 +41,14 @@ export function EditDesignItemDialog({
   const [dueDate, setDueDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Architectural-specific fields (minimal - pricing is in detail page)
+  const [discipline, setDiscipline] = useState<ArchitecturalDiscipline>(
+    (item as any).architectural?.discipline || 'architectural'
+  );
+  const [drawingNumber, setDrawingNumber] = useState(
+    (item as any).architectural?.drawingNumber || ''
+  );
 
   // Initialize due date from item
   useEffect(() => {
@@ -55,11 +66,14 @@ export function EditDesignItemDialog({
     setPriority(item.priority || 'medium');
     setSourcingType((item as any).sourcingType || 'MANUFACTURED');
     setRequiredQuantity((item as any).requiredQuantity || 1);
+    // Reset architectural fields
+    setDiscipline((item as any).architectural?.discipline || 'architectural');
+    setDrawingNumber((item as any).architectural?.drawingNumber || '');
   }, [item]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!name.trim()) {
       setError('Item name is required');
       return;
@@ -69,14 +83,26 @@ export function EditDesignItemDialog({
       setLoading(true);
       setError(null);
 
+      // For architectural items, only update discipline and drawingNumber
+      // Pricing data (time entries, fixed costs) is managed in the Pricing tab
+      const architecturalUpdate = sourcingType === 'ARCHITECTURAL'
+        ? {
+            // Preserve existing pricing data, only update basic info
+            ...(item as any).architectural,
+            discipline,
+            ...(drawingNumber ? { drawingNumber } : {}),
+          }
+        : undefined;
+
       await updateDesignItem(projectId, item.id, {
         name: name.trim(),
-        category,
+        category: sourcingType === 'ARCHITECTURAL' ? 'architectural' : category,
         description: description.trim(),
         priority,
         sourcingType,
         requiredQuantity: requiredQuantity || 1,
         dueDate: dueDate ? { seconds: new Date(dueDate).getTime() / 1000, nanoseconds: 0 } : undefined,
+        architectural: architecturalUpdate,
       } as any, userId);
 
       onClose();
@@ -92,13 +118,13 @@ export function EditDesignItemDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black/50" 
+      <div
+        className="absolute inset-0 bg-black/50"
         onClick={onClose}
       />
-      
+
       {/* Dialog */}
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+      <div className="relative bg-white rounded-lg shadow-xl w-full mx-4 max-w-md max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">Edit Design Item</h2>
@@ -127,39 +153,9 @@ export function EditDesignItemDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
-              placeholder="e.g., Kitchen Island Unit"
+              placeholder={sourcingType === 'ARCHITECTURAL' ? 'e.g., Ground Floor Plan' : 'e.g., Kitchen Island Unit'}
               autoFocus
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Category
-              </label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as DesignCategory)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
-              >
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Required Quantity
-              </label>
-              <input
-                type="number"
-                value={requiredQuantity}
-                onChange={(e) => setRequiredQuantity(parseInt(e.target.value) || 1)}
-                min="1"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
-              />
-            </div>
           </div>
 
           <div>
@@ -173,11 +169,83 @@ export function EditDesignItemDialog({
             >
               {sourcingTypes.map((st) => (
                 <option key={st} value={st}>
-                  {st === 'MANUFACTURED' ? 'Manufactured' : 'Procured'}
+                  {st === 'MANUFACTURED' ? 'Manufactured' : st === 'PROCURED' ? 'Procured' : 'Architectural Drawing'}
                 </option>
               ))}
             </select>
           </div>
+
+          {/* Category and Quantity - only for non-architectural items */}
+          {sourcingType !== 'ARCHITECTURAL' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Category
+                </label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as DesignCategory)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+                >
+                  {categories.filter(cat => cat !== 'architectural').map((cat) => (
+                    <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Required Quantity
+                </label>
+                <input
+                  type="number"
+                  value={requiredQuantity}
+                  onChange={(e) => setRequiredQuantity(parseInt(e.target.value) || 1)}
+                  min="1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Architectural Drawing Fields - simplified, no pricing */}
+          {sourcingType === 'ARCHITECTURAL' && (
+            <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h3 className="text-sm font-semibold text-blue-900">Drawing Details</h3>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Discipline <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={discipline}
+                  onChange={(e) => setDiscipline(e.target.value as ArchitecturalDiscipline)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+                >
+                  {disciplines.map((d) => (
+                    <option key={d} value={d}>{DISCIPLINE_LABELS[d]}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Drawing Number
+                </label>
+                <input
+                  type="text"
+                  value={drawingNumber}
+                  onChange={(e) => setDrawingNumber(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent"
+                  placeholder="e.g., A-101"
+                />
+              </div>
+
+              <p className="text-xs text-blue-700 bg-blue-100 p-2 rounded">
+                Time tracking and project costs are managed in the Pricing tab.
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -219,7 +287,9 @@ export function EditDesignItemDialog({
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A7C8E] focus:border-transparent resize-none"
-              placeholder="Brief description of the design item..."
+              placeholder={sourcingType === 'ARCHITECTURAL'
+                ? 'Brief description of the drawing scope...'
+                : 'Brief description of the design item...'}
             />
           </div>
 
