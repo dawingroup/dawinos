@@ -1,5 +1,5 @@
 /**
- * Cloud Function - Document Export
+ * Cloud Function - Document Export (Gen 2)
  *
  * Scheduled function that exports documents to external storage:
  * - SharePoint
@@ -8,7 +8,8 @@
  * Triggered by Cloud Scheduler (configurable frequency)
  */
 
-import * as functions from 'firebase-functions';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { DocumentExportService, ExportJob } from '../../../src/subsidiaries/advisory/delivery/core/services/document-export.service';
 
@@ -21,14 +22,14 @@ if (!admin.apps.length) {
  * Daily document export
  * Runs at 2:00 AM EAT every day
  */
-export const dailyDocumentExport = functions
-  .runWith({
+export const dailyDocumentExport = onSchedule(
+  {
+    schedule: '0 2 * * *', // 2:00 AM daily
+    timeZone: 'Africa/Nairobi',
     timeoutSeconds: 540, // 9 minutes
-    memory: '1GB',
-  })
-  .pubsub.schedule('0 2 * * *') // 2:00 AM daily
-  .timeZone('Africa/Nairobi')
-  .onRun(async (context) => {
+    memory: '1GiB',
+  },
+  async () => {
     const service = new DocumentExportService();
 
     try {
@@ -45,7 +46,7 @@ export const dailyDocumentExport = functions
 
       if (configurationsSnapshot.empty) {
         console.log('[DocumentExport] No enabled export configurations found');
-        return { success: true, message: 'No configurations to process' };
+        return;
       }
 
       const results: { configurationId: string; status: string; exportedCount: number }[] = [];
@@ -99,8 +100,6 @@ export const dailyDocumentExport = functions
         configurations: configurationsSnapshot.size,
         results,
       });
-
-      return { success: true, results };
     } catch (error) {
       console.error('[DocumentExport] Error during daily export:', error);
 
@@ -115,41 +114,43 @@ export const dailyDocumentExport = functions
 
       throw error;
     }
-  });
+  }
+);
 
 /**
  * Manual export trigger
  * Callable function for admin to manually trigger export
  */
-export const triggerDocumentExport = functions
-  .runWith({
+export const triggerDocumentExport = onCall(
+  {
     timeoutSeconds: 540,
-    memory: '1GB',
-  })
-  .https.onCall(async (data: { configurationId: string }, context) => {
+    memory: '1GiB',
+  },
+  async (request) => {
     // Verify authentication
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
+    if (!request.auth) {
+      throw new HttpsError(
         'unauthenticated',
         'User must be authenticated to trigger document export'
       );
     }
 
     // Verify admin role
-    const userDoc = await admin.firestore().collection('users').doc(context.auth.uid).get();
+    const userDoc = await admin.firestore().collection('users').doc(request.auth.uid).get();
     const userData = userDoc.data();
 
     if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'permission-denied',
         'Only admins can manually trigger document export'
       );
     }
 
     const service = new DocumentExportService();
+    const data = request.data as { configurationId: string };
 
     try {
-      console.log('[DocumentExport] Manual trigger by:', context.auth.uid);
+      console.log('[DocumentExport] Manual trigger by:', request.auth.uid);
 
       const job = await service.exportPendingDocuments(data.configurationId);
 
@@ -157,7 +158,7 @@ export const triggerDocumentExport = functions
       await admin.firestore().collection('document_export_logs').add({
         timestamp: admin.firestore.Timestamp.now(),
         type: 'manual_trigger',
-        triggeredBy: context.auth.uid,
+        triggeredBy: request.auth.uid,
         configurationId: data.configurationId,
         jobId: job.id,
         status: 'success',
@@ -179,40 +180,46 @@ export const triggerDocumentExport = functions
     } catch (error) {
       console.error('[DocumentExport] Error in manual trigger:', error);
 
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'internal',
         'Error running document export',
         error instanceof Error ? error.message : String(error)
       );
     }
-  });
+  }
+);
 
 /**
  * Retry failed exports
  * Callable function to retry failed exports from a previous job
  */
-export const retryFailedExports = functions
-  .https.onCall(async (data: { jobId: string }, context) => {
+export const retryFailedExports = onCall(
+  {
+    timeoutSeconds: 540,
+    memory: '1GiB',
+  },
+  async (request) => {
     // Verify authentication
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
+    if (!request.auth) {
+      throw new HttpsError(
         'unauthenticated',
         'User must be authenticated'
       );
     }
 
     // Verify admin role
-    const userDoc = await admin.firestore().collection('users').doc(context.auth.uid).get();
+    const userDoc = await admin.firestore().collection('users').doc(request.auth.uid).get();
     const userData = userDoc.data();
 
     if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'permission-denied',
         'Only admins can retry failed exports'
       );
     }
 
     const service = new DocumentExportService();
+    const data = request.data as { jobId: string };
 
     try {
       console.log('[DocumentExport] Retry failed exports for job:', data.jobId);
@@ -231,33 +238,40 @@ export const retryFailedExports = functions
     } catch (error) {
       console.error('[DocumentExport] Error retrying failed exports:', error);
 
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'internal',
         'Error retrying failed exports',
         error instanceof Error ? error.message : String(error)
       );
     }
-  });
+  }
+);
 
 /**
  * Get export job status
  * Callable function to get status of an export job
  */
-export const getExportJobStatus = functions
-  .https.onCall(async (data: { jobId: string }, context) => {
+export const getExportJobStatus = onCall(
+  {
+    timeoutSeconds: 60,
+    memory: '256MiB',
+  },
+  async (request) => {
     // Verify authentication
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
+    if (!request.auth) {
+      throw new HttpsError(
         'unauthenticated',
         'User must be authenticated'
       );
     }
 
+    const data = request.data as { jobId: string };
+
     try {
       const jobDoc = await admin.firestore().collection('export_jobs').doc(data.jobId).get();
 
       if (!jobDoc.exists) {
-        throw new functions.https.HttpsError(
+        throw new HttpsError(
           'not-found',
           `Export job ${data.jobId} not found`
         );
@@ -283,14 +297,15 @@ export const getExportJobStatus = functions
     } catch (error) {
       console.error('[DocumentExport] Error getting job status:', error);
 
-      if (error instanceof functions.https.HttpsError) {
+      if (error instanceof HttpsError) {
         throw error;
       }
 
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'internal',
         'Error getting export job status',
         error instanceof Error ? error.message : String(error)
       );
     }
-  });
+  }
+);

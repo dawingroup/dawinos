@@ -1,12 +1,11 @@
 /**
- * Strategy Report Generator Cloud Function
+ * Strategy Report Generator Cloud Function (Gen 2)
  * Uses Gemini with Google Search grounding to generate design strategy reports
  * that match current trends to available manufacturing features
- * 
- * Using v1 API for better CORS support
  */
 
-const functions = require('firebase-functions');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const admin = require('firebase-admin');
 
@@ -17,6 +16,9 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
+// Define secret for Gemini API key
+const geminiApiKey = defineSecret('GEMINI_API_KEY');
+
 /**
  * Generate a strategy report for a design project
  * Step 1: Search for design trends
@@ -24,19 +26,17 @@ const db = admin.firestore();
  * Step 3: Match trends to available features
  * Step 4: Return structured JSON for PDF report
  */
-exports.generateStrategyReport = functions
-  .runWith({
-    memory: '1GB',
+exports.generateStrategyReport = onCall(
+  {
+    memory: '1GiB',
     timeoutSeconds: 300,
-    secrets: ['GEMINI_API_KEY'],
-  })
-  .https.onCall(async (data, context) => {
+    secrets: [geminiApiKey],
+  },
+  async (request) => {
     // Get API key from environment/secrets
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    
-    // Map v1 API parameters to match v2 structure
-    const request = { data, auth: context.auth };
-    const { 
+    const GEMINI_API_KEY = geminiApiKey.value();
+
+    const {
       projectName,
       projectType,
       clientBrief,
@@ -60,7 +60,7 @@ exports.generateStrategyReport = functions
 
     // Validate input
     if (!projectName || !clientBrief) {
-      throw new functions.https.HttpsError('invalid-argument', 'projectName and clientBrief are required');
+      throw new HttpsError('invalid-argument', 'projectName and clientBrief are required');
     }
 
     console.log(`Generating strategy report for: ${projectName}`);
@@ -72,7 +72,7 @@ exports.generateStrategyReport = functions
       // Step 1: Fetch Available Features from Firestore
       // ============================================
       console.log('Step 1: Fetching available features...');
-      
+
       // Use consolidated featureLibrary collection (migrated from legacy 'features')
       const featuresSnapshot = await db
         .collection('featureLibrary')
@@ -110,14 +110,14 @@ exports.generateStrategyReport = functions
       // Step 1b: Fetch Relevant Products and Inspirations
       // ============================================
       console.log('Step 1b: Fetching products and inspirations...');
-      
+
       // Fetch products from launch pipeline for recommendations
       const productsSnapshot = await db
         .collection('launchProducts')
         .where('currentStage', 'in', ['launched', 'ready', 'photoshoot', 'seo'])
         .limit(30)
         .get();
-      
+
       const catalogProducts = productsSnapshot.docs.map(doc => ({
         id: doc.id,
         name: doc.data().name,
@@ -126,16 +126,16 @@ exports.generateStrategyReport = functions
         materials: doc.data().specifications?.materials || [],
         tags: doc.data().tags || [],
       }));
-      
+
       console.log(`Found ${catalogProducts.length} catalog products`);
-      
+
       // Fetch design inspirations
       const clipsSnapshot = await db
         .collection('designClips')
         .orderBy('createdAt', 'desc')
         .limit(20)
         .get();
-      
+
       const inspirations = clipsSnapshot.docs.map(doc => ({
         id: doc.id,
         title: doc.data().title,
@@ -143,7 +143,7 @@ exports.generateStrategyReport = functions
         imageUrl: doc.data().imageUrl,
         notes: doc.data().notes?.substring(0, 100),
       }));
-      
+
       console.log(`Found ${inspirations.length} inspirations`);
 
       // Build feature list for prompt
@@ -160,12 +160,12 @@ exports.generateStrategyReport = functions
       // ============================================
       console.log('Step 2: Generating strategy with AI...');
 
-      const genAI = new GoogleGenerativeAI(GEMINI_API_KEY.value());
-      
+      const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
       // Try with Google Search grounding first, fallback to non-grounded if it fails
       let model;
       let useGrounding = true;
-      
+
       try {
         model = genAI.getGenerativeModel({
           model: 'gemini-2.0-flash',
@@ -193,32 +193,32 @@ exports.generateStrategyReport = functions
       }
 
       // Build context sections
-      const constraintsSection = constraints.length > 0 
-        ? `\n**CLIENT CONSTRAINTS:**\n${constraints.map(c => `- ${c}`).join('\n')}` 
+      const constraintsSection = constraints.length > 0
+        ? `\n**CLIENT CONSTRAINTS:**\n${constraints.map(c => `- ${c}`).join('\n')}`
         : '';
-      
-      const painPointsSection = painPoints.length > 0 
-        ? `\n**PAIN POINTS TO ADDRESS:**\n${painPoints.map(p => `- ${p}`).join('\n')}` 
+
+      const painPointsSection = painPoints.length > 0
+        ? `\n**PAIN POINTS TO ADDRESS:**\n${painPoints.map(p => `- ${p}`).join('\n')}`
         : '';
-      
-      const goalsSection = goals.length > 0 
-        ? `\n**PROJECT GOALS:**\n${goals.map(g => `- ${g}`).join('\n')}` 
+
+      const goalsSection = goals.length > 0
+        ? `\n**PROJECT GOALS:**\n${goals.map(g => `- ${g}`).join('\n')}`
         : '';
-      
-      const budgetSection = budgetTier 
-        ? `\n**BUDGET TIER:** ${budgetTier}` 
+
+      const budgetSection = budgetTier
+        ? `\n**BUDGET TIER:** ${budgetTier}`
         : '';
-      
-      const spaceSection = spaceDetails 
-        ? `\n**SPACE DETAILS:** ${spaceDetails}` 
+
+      const spaceSection = spaceDetails
+        ? `\n**SPACE DETAILS:** ${spaceDetails}`
         : '';
-      
-      const findingsSection = researchFindings.length > 0 
-        ? `\n**PRIOR RESEARCH FINDINGS:**\n${researchFindings.map(f => `- ${f.title}: ${f.content.substring(0, 200)}`).join('\n')}` 
+
+      const findingsSection = researchFindings.length > 0
+        ? `\n**PRIOR RESEARCH FINDINGS:**\n${researchFindings.map(f => `- ${f.title}: ${f.content.substring(0, 200)}`).join('\n')}`
         : '';
-      
-      const excerptSection = researchExcerpts.length > 0 
-        ? `\n**RESEARCH ASSISTANT INSIGHTS:**\n${researchExcerpts.map((e, i) => `[Insight ${i+1}]: ${e}`).join('\n\n')}` 
+
+      const excerptSection = researchExcerpts.length > 0
+        ? `\n**RESEARCH ASSISTANT INSIGHTS:**\n${researchExcerpts.map((e, i) => `[Insight ${i+1}]: ${e}`).join('\n\n')}`
         : '';
 
       // Project context section
@@ -237,18 +237,18 @@ ${projectContext.requirements?.localSourcing ? '- Local Sourcing: Required' : ''
 ` : '';
 
       // Recommended products section (user-selected from catalog)
-      const recommendedProductsSection = recommendedProducts.length > 0 
-        ? `\n**PRE-SELECTED PRODUCT RECOMMENDATIONS:**\nThe following products have been selected from our catalog for this project:\n${recommendedProducts.map(p => `- ${p.productName} (${p.category}): ${p.reason || 'No reason provided'}`).join('\n')}` 
+      const recommendedProductsSection = recommendedProducts.length > 0
+        ? `\n**PRE-SELECTED PRODUCT RECOMMENDATIONS:**\nThe following products have been selected from our catalog for this project:\n${recommendedProducts.map(p => `- ${p.productName} (${p.category}): ${p.reason || 'No reason provided'}`).join('\n')}`
         : '';
 
       // Catalog products section (for AI to consider)
-      const catalogSection = catalogProducts.length > 0 
-        ? `\n**AVAILABLE CATALOG PRODUCTS:**\nThese products from our catalog may be relevant:\n${catalogProducts.slice(0, 15).map(p => `- ${p.name} (${p.category}): ${p.description || 'No description'}`).join('\n')}` 
+      const catalogSection = catalogProducts.length > 0
+        ? `\n**AVAILABLE CATALOG PRODUCTS:**\nThese products from our catalog may be relevant:\n${catalogProducts.slice(0, 15).map(p => `- ${p.name} (${p.category}): ${p.description || 'No description'}`).join('\n')}`
         : '';
 
       // Inspirations section
-      const inspirationsSection = inspirations.length > 0 
-        ? `\n**SAVED DESIGN INSPIRATIONS:**\n${inspirations.slice(0, 10).map(i => `- ${i.title || 'Untitled'}: ${i.notes || 'No notes'}${i.tags?.length ? ` [Tags: ${i.tags.join(', ')}]` : ''}`).join('\n')}` 
+      const inspirationsSection = inspirations.length > 0
+        ? `\n**SAVED DESIGN INSPIRATIONS:**\n${inspirations.slice(0, 10).map(i => `- ${i.title || 'Untitled'}: ${i.notes || 'No notes'}${i.tags?.length ? ` [Tags: ${i.tags.join(', ')}]` : ''}`).join('\n')}`
         : '';
 
       const prompt = `You are a Senior Interior Design Strategist for a custom millwork and furniture manufacturing company in ${location}.
@@ -366,7 +366,7 @@ Return ONLY valid JSON matching this exact schema:
 
       let result;
       let text;
-      
+
       try {
         result = await model.generateContent(prompt);
         const response = result.response;
@@ -392,7 +392,7 @@ Return ONLY valid JSON matching this exact schema:
 
       // Parse JSON response - try multiple extraction methods
       let jsonStr = text;
-      
+
       // Method 1: Extract from code blocks
       const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (jsonMatch) {
@@ -414,7 +414,7 @@ Return ONLY valid JSON matching this exact schema:
       } catch (parseError) {
         console.error('Failed to parse AI response:', parseError.message);
         console.error('JSON string preview:', jsonStr.substring(0, 300));
-        throw new functions.https.HttpsError('internal', `Failed to parse strategy response: ${parseError.message}`);
+        throw new HttpsError('internal', `Failed to parse strategy response: ${parseError.message}`);
       }
 
       // ============================================
@@ -452,7 +452,7 @@ Return ONLY valid JSON matching this exact schema:
       for (const featureId of allMatchedFeatureIds) {
         const feature = availableFeatures.find(f => f.id === featureId);
         const assets = featureAssetMap.get(featureId) || [];
-        
+
         if (feature) {
           productionDetails.push({
             featureId,
@@ -470,7 +470,7 @@ Return ONLY valid JSON matching this exact schema:
       // Step 4: Enrich Product Recommendations
       // ============================================
       console.log('Step 4: Enriching product recommendations...');
-      
+
       // Merge AI-suggested products with user-selected products
       const allProductRecommendations = [
         // User-selected products take priority
@@ -487,9 +487,9 @@ Return ONLY valid JSON matching this exact schema:
           .filter(p => !recommendedProducts.some(rp => rp.productId === p.productId))
           .map(p => ({ ...p, source: 'ai-recommended' })),
       ];
-      
+
       strategyData.productRecommendations = allProductRecommendations;
-      
+
       // Add full product details for recommendations
       if (strategyData.productRecommendations) {
         for (const rec of strategyData.productRecommendations) {
@@ -503,16 +503,16 @@ Return ONLY valid JSON matching this exact schema:
           }
         }
       }
-      
+
       // ============================================
       // Step 5: Enrich Inspiration Gallery
       // ============================================
       console.log('Step 5: Enriching inspiration gallery...');
-      
+
       // Match AI inspiration suggestions with actual clips
       if (strategyData.inspirationGallery) {
         for (const insp of strategyData.inspirationGallery) {
-          const clip = inspirations.find(c => 
+          const clip = inspirations.find(c =>
             c.title?.toLowerCase().includes(insp.title?.toLowerCase()) ||
             insp.title?.toLowerCase().includes(c.title?.toLowerCase())
           );
@@ -545,9 +545,10 @@ Return ONLY valid JSON matching this exact schema:
 
     } catch (error) {
       console.error('Error generating strategy report:', error);
-      if (error instanceof functions.https.HttpsError) {
+      if (error instanceof HttpsError) {
         throw error;
       }
-      throw new functions.https.HttpsError('internal', `Failed to generate strategy report: ${error.message}`);
+      throw new HttpsError('internal', `Failed to generate strategy report: ${error.message}`);
     }
-  });
+  }
+);

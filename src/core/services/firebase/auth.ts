@@ -20,6 +20,7 @@ export const auth: Auth = getAuth(app);
 // Initialize Google Auth Provider with required scopes
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('https://www.googleapis.com/auth/drive');
+googleProvider.addScope('https://www.googleapis.com/auth/documents');
 
 /**
  * Sign in with Google popup

@@ -1,5 +1,5 @@
 /**
- * Cloud Function - Deadline Monitoring
+ * Cloud Function - Deadline Monitoring (Gen 2)
  *
  * Scheduled function that runs hourly to check for:
  * - Overdue accountabilities
@@ -9,7 +9,8 @@
  * Triggered by Cloud Scheduler (cron: 0 * * * *)
  */
 
-import * as functions from 'firebase-functions';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { DeadlineMonitoringService, DeadlineCheckResult } from '../../../src/subsidiaries/advisory/delivery/core/services/deadline-monitoring.service';
 
@@ -22,14 +23,14 @@ if (!admin.apps.length) {
  * Hourly deadline monitoring check
  * Runs every hour at minute 0
  */
-export const hourlyDeadlineCheck = functions
-  .runWith({
+export const hourlyDeadlineCheck = onSchedule(
+  {
+    schedule: '0 * * * *', // Every hour at minute 0
+    timeZone: 'Africa/Nairobi', // Kenya timezone
     timeoutSeconds: 540, // 9 minutes
-    memory: '512MB',
-  })
-  .pubsub.schedule('0 * * * *') // Every hour at minute 0
-  .timeZone('Africa/Nairobi') // Kenya timezone
-  .onRun(async (context) => {
+    memory: '512MiB',
+  },
+  async () => {
     const service = new DeadlineMonitoringService();
 
     try {
@@ -74,8 +75,6 @@ export const hourlyDeadlineCheck = functions
           metadata: result.summary,
         });
       }
-
-      return { success: true, summary: result.summary };
     } catch (error) {
       console.error('[DeadlineMonitoring] Error during hourly check:', error);
 
@@ -90,20 +89,21 @@ export const hourlyDeadlineCheck = functions
 
       throw error;
     }
-  });
+  }
+);
 
 /**
  * Daily summary report
  * Runs at 8:00 AM EAT every day
  */
-export const dailyDeadlineSummary = functions
-  .runWith({
+export const dailyDeadlineSummary = onSchedule(
+  {
+    schedule: '0 8 * * *', // 8:00 AM daily
+    timeZone: 'Africa/Nairobi',
     timeoutSeconds: 300, // 5 minutes
-    memory: '256MB',
-  })
-  .pubsub.schedule('0 8 * * *') // 8:00 AM daily
-  .timeZone('Africa/Nairobi')
-  .onRun(async (context) => {
+    memory: '256MiB',
+  },
+  async () => {
     const service = new DeadlineMonitoringService();
 
     try {
@@ -139,8 +139,6 @@ export const dailyDeadlineSummary = functions
       }
 
       console.log('[DeadlineMonitoring] Daily summary generated:', summary);
-
-      return { success: true, summary };
     } catch (error) {
       console.error('[DeadlineMonitoring] Error generating daily summary:', error);
 
@@ -153,32 +151,33 @@ export const dailyDeadlineSummary = functions
 
       throw error;
     }
-  });
+  }
+);
 
 /**
  * Manual trigger for deadline check
  * Callable function for admin to manually trigger deadline check
  */
-export const triggerDeadlineCheck = functions
-  .runWith({
+export const triggerDeadlineCheck = onCall(
+  {
     timeoutSeconds: 540,
-    memory: '512MB',
-  })
-  .https.onCall(async (data, context) => {
+    memory: '512MiB',
+  },
+  async (request) => {
     // Verify authentication
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
+    if (!request.auth) {
+      throw new HttpsError(
         'unauthenticated',
         'User must be authenticated to trigger deadline check'
       );
     }
 
     // Verify admin role
-    const userDoc = await admin.firestore().collection('users').doc(context.auth.uid).get();
+    const userDoc = await admin.firestore().collection('users').doc(request.auth.uid).get();
     const userData = userDoc.data();
 
     if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'permission-denied',
         'Only admins can manually trigger deadline checks'
       );
@@ -187,7 +186,7 @@ export const triggerDeadlineCheck = functions
     const service = new DeadlineMonitoringService();
 
     try {
-      console.log('[DeadlineMonitoring] Manual trigger by:', context.auth.uid);
+      console.log('[DeadlineMonitoring] Manual trigger by:', request.auth.uid);
 
       const result = await service.runDeadlineChecks();
 
@@ -195,7 +194,7 @@ export const triggerDeadlineCheck = functions
       await admin.firestore().collection('deadline_monitoring_logs').add({
         timestamp: admin.firestore.Timestamp.fromDate(result.timestamp),
         type: 'manual_trigger',
-        triggeredBy: context.auth.uid,
+        triggeredBy: request.auth.uid,
         totalChecked: result.totalChecked,
         summary: result.summary,
         status: 'success',
@@ -212,29 +211,35 @@ export const triggerDeadlineCheck = functions
     } catch (error) {
       console.error('[DeadlineMonitoring] Error in manual trigger:', error);
 
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'internal',
         'Error running deadline check',
         error instanceof Error ? error.message : String(error)
       );
     }
-  });
+  }
+);
 
 /**
  * Get deadline summary for project
  * Callable function for dashboard
  */
-export const getProjectDeadlineSummary = functions
-  .https.onCall(async (data: { projectId?: string }, context) => {
+export const getProjectDeadlineSummary = onCall(
+  {
+    timeoutSeconds: 60,
+    memory: '256MiB',
+  },
+  async (request) => {
     // Verify authentication
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
+    if (!request.auth) {
+      throw new HttpsError(
         'unauthenticated',
         'User must be authenticated'
       );
     }
 
     const service = new DeadlineMonitoringService();
+    const data = request.data as { projectId?: string };
 
     try {
       const summary = await service.getDeadlineSummary(data.projectId);
@@ -246,10 +251,11 @@ export const getProjectDeadlineSummary = functions
     } catch (error) {
       console.error('[DeadlineMonitoring] Error getting summary:', error);
 
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'internal',
         'Error getting deadline summary',
         error instanceof Error ? error.message : String(error)
       );
     }
-  });
+  }
+);

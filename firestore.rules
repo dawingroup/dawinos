@@ -1611,6 +1611,20 @@ service cloud.firestore {
         allow update: if isAuthenticated();
         allow delete: if isAdmin();
       }
+
+      // Report Templates (Google Docs report generation)
+      match /report_templates/{templateId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated();
+        allow delete: if isAdmin();
+      }
+
+      // Generated Reports (report history and metadata)
+      match /generated_reports/{reportId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated();
+        allow delete: if isAdmin();
+      }
     }
     
     // ----------------------------------------
