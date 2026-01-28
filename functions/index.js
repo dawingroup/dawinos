@@ -87,11 +87,11 @@ exports.initializeFirstAdmin = initializeFirstAdmin;
 exports.getCurrentClaims = getCurrentClaims;
 
 // DawinOS v2.0 - Task Generation Functions
-const { 
-  onBusinessEventCreated, 
-  processOverdueEscalations, 
-  sendTaskReminders, 
-  retryUnassignedTasks 
+const {
+  onBusinessEventCreated,
+  processOverdueEscalations,
+  sendTaskReminders,
+  retryUnassignedTasks
 } = require('./src/triggers/taskGeneration');
 exports.onBusinessEventCreated = onBusinessEventCreated;
 exports.processOverdueEscalations = processOverdueEscalations;
@@ -99,9 +99,9 @@ exports.sendTaskReminders = sendTaskReminders;
 exports.retryUnassignedTasks = retryUnassignedTasks;
 
 // Customer Sync Functions
-const { 
-  syncCustomerCallable, 
-  syncAllCustomersCallable, 
+const {
+  syncCustomerCallable,
+  syncAllCustomersCallable,
   scheduledCustomerSync,
   importFromQuickBooksCallable,
 } = require('./src/sync/customerSync');
@@ -138,18 +138,18 @@ exports.onCustomerCreatedQBO = onCustomerCreatedQBO;
 exports.syncCustomerToQuickBooks = syncCustomerToQuickBooks;
 
 // AI Utilities (new modular structure)
-const { 
-  getModel, 
-  parseJsonResponse, 
+const {
+  getModel,
+  parseJsonResponse,
   generateWithRetry,
   MODEL_CONFIGS,
 } = require('./src/utils/geminiClient');
-const { 
+const {
   checkRateLimit: checkRateLimitV2,
   enforceRateLimit,
   RATE_LIMITS,
 } = require('./src/utils/rateLimiter');
-const { 
+const {
   validateChatInput,
   validateAssetInput,
   validateCutlistInput,
@@ -160,6 +160,7 @@ const {
 const { onAssetStatusChange } = require('./src/triggers/syncAssetStatus');
 exports.onAssetStatusChange = onAssetStatusChange;
 
+<<<<<<< Updated upstream
 // Feature Cache Invalidation Triggers
 const { onFeatureWritten, onFeatureLibraryWritten } = require('./src/triggers/invalidateFeatureCache');
 exports.onFeatureWritten = onFeatureWritten;
