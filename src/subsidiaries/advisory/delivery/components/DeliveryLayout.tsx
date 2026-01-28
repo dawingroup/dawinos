@@ -16,6 +16,7 @@ import {
   FileBarChart,
   ClipboardCheck,
   FileStack,
+  FileCode2,
 } from 'lucide-react';
 import { ModuleTabNav, type TabNavItem } from '@/core/components/navigation/ModuleTabNav';
 
@@ -29,6 +30,7 @@ const deliveryTabs: TabNavItem[] = [
   { id: 'accountability', path: '/advisory/delivery/accountability', label: 'Accountability', icon: ClipboardCheck },
   { id: 'backlog', path: '/advisory/delivery/backlog', label: 'Backlog', icon: FileStack },
   { id: 'reports', path: '/advisory/delivery/reports', label: 'Reports', icon: FileBarChart },
+  { id: 'templates', path: '/advisory/delivery/templates', label: 'Templates', icon: FileCode2 },
 ];
 
 export function DeliveryLayout() {

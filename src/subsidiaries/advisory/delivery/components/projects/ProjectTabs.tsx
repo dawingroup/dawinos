@@ -16,6 +16,7 @@ import {
   Wallet,
   Package,
   Settings,
+  ClipboardList,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
@@ -32,6 +33,7 @@ export type ProjectTabId =
   | 'visits'
   | 'boq'
   | 'procurement'
+  | 'reports'
   | 'settings';
 
 interface Tab {
@@ -55,6 +57,7 @@ const TABS: Tab[] = [
   { id: 'timeline', label: 'Timeline', icon: Calendar, path: 'timeline' },
   { id: 'team', label: 'Team', icon: Users, path: 'team' },
   { id: 'documents', label: 'Documents', icon: FileText, path: 'documents' },
+  { id: 'reports', label: 'Reports', icon: ClipboardList, path: 'reports' },
   { id: 'settings', label: 'Settings', icon: Settings, path: 'settings' },
 ];
 

@@ -10,7 +10,7 @@
  * - Other relevant documents
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   FileText,
   Upload,
@@ -27,6 +27,8 @@ import {
   FileImage,
   Download,
   Eye,
+  Search,
+  UserPlus,
 } from 'lucide-react';
 import { Button } from '@/core/components/ui/button';
 import { Input } from '@/core/components/ui/input';
@@ -66,6 +68,8 @@ import {
   PaymentMethod,
   PAYMENT_METHOD_LABELS,
 } from '../../types/manual-requisition';
+import { useSuppliers } from '@/subsidiaries/advisory/matflow/hooks/supplier-hooks';
+import type { Supplier } from '@/subsidiaries/advisory/matflow/types/supplier';
 
 // ─────────────────────────────────────────────────────────────────
 // TYPES
@@ -166,6 +170,9 @@ export function AccountabilityEntryForm({
     return isNaN(parsed.getTime()) ? new Date() : parsed;
   };
 
+  // Fetch shared suppliers from MatFlow database
+  const { suppliers, loading: suppliersLoading } = useSuppliers({ status: 'active' });
+
   // Form state
   const [date, setDate] = useState<string>(() => {
     try {
@@ -178,7 +185,31 @@ export function AccountabilityEntryForm({
   const [description, setDescription] = useState(existingEntry?.description || '');
   const [category, setCategory] = useState<ExpenseCategory>(existingEntry?.category || 'construction_materials');
   const [vendor, setVendor] = useState(existingEntry?.vendor || '');
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const [useCustomVendor, setUseCustomVendor] = useState<boolean>(!existingEntry?.vendor || false);
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
   const [amount, setAmount] = useState<number>(existingEntry?.amount || 0);
+
+  // Filter suppliers based on search
+  const filteredSuppliers = useMemo(() => {
+    if (!supplierSearch.trim()) return suppliers.slice(0, 10);
+    const search = supplierSearch.toLowerCase();
+    return suppliers.filter(s =>
+      s.name?.toLowerCase().includes(search) ||
+      s.phone?.includes(search) ||
+      s.contactPerson?.toLowerCase().includes(search)
+    ).slice(0, 10);
+  }, [suppliers, supplierSearch]);
+
+  // Handle supplier selection
+  const handleSupplierSelect = useCallback((supplier: Supplier) => {
+    setSelectedSupplierId(supplier.id);
+    setVendor(supplier.name || supplier.phone);
+    setSupplierSearch('');
+    setShowSupplierDropdown(false);
+    setUseCustomVendor(false);
+  }, []);
   const [receiptNumber, setReceiptNumber] = useState(existingEntry?.receiptNumber || '');
   const [invoiceNumber, setInvoiceNumber] = useState(existingEntry?.invoiceNumber || '');
   const [notes, setNotes] = useState(existingEntry?.notes || '');
@@ -429,18 +460,138 @@ export function AccountabilityEntryForm({
           />
         </div>
 
-        {/* Vendor */}
-        <div>
+        {/* Vendor/Supplier Selector */}
+        <div className="relative">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             <Building2 className="w-4 h-4 inline mr-1" />
             Vendor/Supplier
           </label>
-          <Input
-            type="text"
-            value={vendor}
-            onChange={e => setVendor(e.target.value)}
-            placeholder="Name of vendor or supplier"
-          />
+
+          {/* Toggle between database and custom vendor */}
+          <div className="flex gap-2 mb-2">
+            <button
+              type="button"
+              onClick={() => {
+                setUseCustomVendor(false);
+                setShowSupplierDropdown(true);
+              }}
+              className={`flex items-center gap-1 px-2 py-1 text-xs rounded ${
+                !useCustomVendor
+                  ? 'bg-amber-100 text-amber-700 border border-amber-300'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Search className="w-3 h-3" />
+              From Database
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setUseCustomVendor(true);
+                setShowSupplierDropdown(false);
+                setSelectedSupplierId('');
+              }}
+              className={`flex items-center gap-1 px-2 py-1 text-xs rounded ${
+                useCustomVendor
+                  ? 'bg-amber-100 text-amber-700 border border-amber-300'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <UserPlus className="w-3 h-3" />
+              Custom Entry
+            </button>
+          </div>
+
+          {useCustomVendor ? (
+            /* Custom vendor input */
+            <Input
+              type="text"
+              value={vendor}
+              onChange={e => setVendor(e.target.value)}
+              placeholder="Enter vendor/supplier name"
+            />
+          ) : (
+            /* Supplier database selector */
+            <div className="relative">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  type="text"
+                  value={supplierSearch || vendor}
+                  onChange={e => {
+                    setSupplierSearch(e.target.value);
+                    setShowSupplierDropdown(true);
+                  }}
+                  onFocus={() => setShowSupplierDropdown(true)}
+                  placeholder="Search suppliers by name or phone..."
+                  className="pl-10"
+                />
+              </div>
+
+              {/* Supplier dropdown */}
+              {showSupplierDropdown && (
+                <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {suppliersLoading ? (
+                    <div className="p-3 text-center text-gray-500">
+                      <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+                      Loading suppliers...
+                    </div>
+                  ) : filteredSuppliers.length === 0 ? (
+                    <div className="p-3 text-center text-gray-500">
+                      <p className="text-sm">No suppliers found</p>
+                      <button
+                        type="button"
+                        onClick={() => setUseCustomVendor(true)}
+                        className="text-xs text-amber-600 hover:underline mt-1"
+                      >
+                        Enter custom vendor instead
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {filteredSuppliers.map(supplier => (
+                        <button
+                          key={supplier.id}
+                          type="button"
+                          onClick={() => handleSupplierSelect(supplier)}
+                          className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b last:border-b-0"
+                        >
+                          <div className="font-medium text-sm">
+                            {supplier.name || 'Unnamed Supplier'}
+                          </div>
+                          <div className="text-xs text-gray-500 flex items-center gap-2">
+                            <span>{supplier.phone}</span>
+                            {supplier.contactPerson && (
+                              <span>• {supplier.contactPerson}</span>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSupplierDropdown(false);
+                          setUseCustomVendor(true);
+                        }}
+                        className="w-full px-3 py-2 text-left text-xs text-amber-600 hover:bg-amber-50 border-t"
+                      >
+                        <UserPlus className="w-3 h-3 inline mr-1" />
+                        Add custom vendor
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Selected supplier indicator */}
+          {selectedSupplierId && !useCustomVendor && (
+            <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+              <CheckCircle className="w-3 h-3" />
+              Linked to supplier database
+            </p>
+          )}
         </div>
 
         {/* Amount */}

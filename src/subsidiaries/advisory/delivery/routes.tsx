@@ -47,6 +47,12 @@ import { ManualRequisitionDetailPage } from './pages/ManualRequisitionDetailPage
 // Country Director Dashboard (ADD-FIN-001 consolidated accountability view)
 import { CountryDirectorDashboard } from './pages/CountryDirectorDashboard';
 
+// Reports (Google Docs report generation)
+import { ReportsPage } from './pages/ReportsPage';
+
+// Template Management (admin)
+import { TemplateManagementPage } from './pages/TemplateManagementPage';
+
 // Country Director Portal (public, token-based access)
 import { CDPortalPage } from './pages/CDPortalPage';
 
@@ -128,6 +134,9 @@ export function DeliveryRoutes() {
 
           {/* Project Settings (branding, configuration) */}
           <Route path="settings" element={<ProjectSettingsPage />} />
+
+          {/* Reports (Google Docs report generation) */}
+          <Route path="reports" element={<ReportsPage />} />
         </Route>
 
         {/* Module-Level Routes (not project-specific) */}
@@ -165,6 +174,9 @@ export function DeliveryRoutes() {
 
         {/* Data Recovery utility (admin) */}
         <Route path="data-recovery" element={<DataRecoveryPage />} />
+
+        {/* Report Template Management (admin) */}
+        <Route path="templates" element={<TemplateManagementPage />} />
       </Route>
     </Routes>
   );

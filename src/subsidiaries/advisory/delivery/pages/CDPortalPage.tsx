@@ -10,8 +10,9 @@
  * URL format: /advisory/delivery/cd-portal?token=<access_token>
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { PortalFilterBar, PortalFilters, PortalSort } from '../components/cd-portal/PortalFilterBar';
 import {
   Shield,
   AlertTriangle,
@@ -51,7 +52,7 @@ import {
   getAlertTypeLabel,
 } from '../types/country-director-dashboard';
 import { AccountabilityStatus } from '../types/requisition';
-import { VARIANCE_STATUS_CONFIG } from '../types/accountability';
+import { VarianceStatus, VARIANCE_STATUS_CONFIG } from '../types/accountability';
 
 // ─────────────────────────────────────────────────────────────────
 // HELPERS
@@ -828,6 +829,96 @@ export function CDPortalPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<'actions' | 'all'>('all');
 
+  // Filter state
+  const [filters, setFilters] = useState<PortalFilters>({
+    searchQuery: '',
+    status: 'all',
+    variance: 'all',
+  });
+
+  // Sort state
+  const [sort, setSort] = useState<PortalSort>({
+    field: 'date',
+    direction: 'desc',
+  });
+
+  // Filter and sort requisitions
+  const filteredRequisitions = useMemo(() => {
+    let result = [...requisitions];
+
+    // Search filter
+    if (filters.searchQuery) {
+      const query = filters.searchQuery.toLowerCase();
+      result = result.filter((r) => {
+        // Search in main fields
+        const matchesMain =
+          r.referenceNumber.toLowerCase().includes(query) ||
+          r.description.toLowerCase().includes(query) ||
+          r.projectName?.toLowerCase().includes(query);
+
+        // Search in accountability entries (vendor names)
+        const matchesVendor = r.accountabilities?.some(
+          (a) => a.vendor?.toLowerCase().includes(query)
+        );
+
+        return matchesMain || matchesVendor;
+      });
+    }
+
+    // Status filter
+    if (filters.status !== 'all') {
+      result = result.filter((r) => r.accountabilityStatus === filters.status);
+    }
+
+    // Variance filter
+    if (filters.variance !== 'all') {
+      result = result.filter((r) => r.varianceStatus === filters.variance);
+    }
+
+    // Sorting
+    const statusOrder: Record<AccountabilityStatus, number> = {
+      overdue: 0,
+      pending: 1,
+      partial: 2,
+      complete: 3,
+      not_required: 4,
+    };
+
+    const varianceOrder: Record<VarianceStatus, number> = {
+      severe: 0,
+      moderate: 1,
+      minor: 2,
+      compliant: 3,
+    };
+
+    result.sort((a, b) => {
+      let comparison = 0;
+
+      switch (sort.field) {
+        case 'date':
+          comparison = a.requisitionDate.getTime() - b.requisitionDate.getTime();
+          break;
+        case 'amount':
+          comparison = a.amount - b.amount;
+          break;
+        case 'status':
+          comparison =
+            (statusOrder[a.accountabilityStatus] || 4) -
+            (statusOrder[b.accountabilityStatus] || 4);
+          break;
+        case 'variance':
+          comparison =
+            (varianceOrder[a.varianceStatus || 'compliant'] || 3) -
+            (varianceOrder[b.varianceStatus || 'compliant'] || 3);
+          break;
+      }
+
+      return sort.direction === 'asc' ? comparison : -comparison;
+    });
+
+    return result;
+  }, [requisitions, filters, sort]);
+
   // Load data
   useEffect(() => {
     async function loadPortalData() {
@@ -987,6 +1078,18 @@ export function CDPortalPage() {
         {/* Status Breakdown */}
         {summary && <StatusBreakdown summary={summary} />}
 
+        {/* Filter Bar */}
+        {requisitions.length > 0 && (
+          <PortalFilterBar
+            filters={filters}
+            onChange={setFilters}
+            sort={sort}
+            onSortChange={setSort}
+            totalCount={requisitions.length}
+            filteredCount={filteredRequisitions.length}
+          />
+        )}
+
         {/* Section Tabs */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="flex border-b border-gray-200">
@@ -1006,7 +1109,9 @@ export function CDPortalPage() {
                     ? 'bg-primary text-white'
                     : 'bg-gray-100 text-gray-600'
                 }`}>
-                  {requisitions.length}
+                  {filteredRequisitions.length !== requisitions.length
+                    ? `${filteredRequisitions.length}/${requisitions.length}`
+                    : requisitions.length}
                 </span>
               </div>
             </button>
@@ -1046,8 +1151,16 @@ export function CDPortalPage() {
                       No requisitions have been linked to this program yet.
                     </p>
                   </div>
+                ) : filteredRequisitions.length === 0 ? (
+                  <div className="bg-gray-50 rounded-xl border border-gray-200 p-12 text-center">
+                    <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="font-semibold text-gray-900 text-lg">No Matching Requisitions</h3>
+                    <p className="text-gray-500 mt-2">
+                      No requisitions match your current filters. Try adjusting your search or filters.
+                    </p>
+                  </div>
                 ) : (
-                  Array.from(groupRequisitionsByYear(requisitions)).map(([year, yearRequisitions]) => (
+                  Array.from(groupRequisitionsByYear(filteredRequisitions)).map(([year, yearRequisitions]) => (
                     <YearSection
                       key={year}
                       year={year}
