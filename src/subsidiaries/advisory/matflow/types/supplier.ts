@@ -255,14 +255,14 @@ export interface RFQItem {
 // ============================================================================
 
 export interface CreateSupplierInput {
-  code: string;
-  name: string;
+  code?: string;
+  name?: string;
   tradeName?: string;
-  contactPerson: string;
-  email: string;
-  phone: string;
-  address: SupplierAddress;
-  categories: string[];
+  contactPerson?: string;
+  email?: string;
+  phone: string; // Only phone is mandatory
+  address?: SupplierAddress;
+  categories?: string[];
   paymentTerms?: string;
 }
 

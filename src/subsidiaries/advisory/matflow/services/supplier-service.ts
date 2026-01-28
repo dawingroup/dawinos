@@ -98,11 +98,11 @@ export interface SupplierPerformance {
 // ============================================================================
 
 export interface CreateSupplierInput {
-  name: string;
+  name?: string;
   code?: string;
   category: SupplierCategory;
   description?: string;
-  address: {
+  address?: {
     line1: string;
     line2?: string;
     city: string;
@@ -110,9 +110,9 @@ export interface CreateSupplierInput {
     country: string;
     postalCode?: string;
   };
-  contactPerson: string;
-  email: string;
-  phone: string;
+  contactPerson?: string;
+  email?: string;
+  phone: string; // Only phone is mandatory
   alternatePhone?: string;
   taxId?: string;
   bankDetails?: {
@@ -139,24 +139,27 @@ export const createSupplier = async (
   const supplierId = generateId('sup');
   const supplierCode = input.code || await generateSupplierCode(input.category);
 
+  // Default address if not provided
+  const defaultAddress = {
+    line1: '',
+    city: '',
+    country: 'Uganda',
+  };
+
   const supplier: Supplier = {
     id: supplierId,
     code: supplierCode,
-    name: input.name,
-    contactPerson: input.contactPerson,
-    email: input.email,
-    phone: input.phone,
-    alternatePhone: input.alternatePhone,
-    address: input.address,
-    taxId: input.taxId,
-    bankDetails: input.bankDetails,
+    name: input.name || '', // Optional - can be empty
+    contactPerson: input.contactPerson || '', // Optional - can be empty
+    email: input.email || '', // Optional - can be empty
+    phone: input.phone, // Only phone is mandatory
+    address: input.address || defaultAddress,
     categories: input.categories || [input.category],
     materials: [],
     status: 'active',
     totalOrders: 0,
     totalValue: { amount: 0, currency: 'UGX' },
     paymentTerms: input.paymentTerms || 'Net 30',
-    creditLimit: input.creditLimit ? { amount: input.creditLimit, currency: 'UGX' } : undefined,
     audit: {
       createdAt: Timestamp.now(),
       createdBy: input.createdBy,
@@ -165,6 +168,12 @@ export const createSupplier = async (
       version: 1,
     },
   };
+
+  // Add optional fields only if they have values (Firestore doesn't accept undefined)
+  if (input.alternatePhone) supplier.alternatePhone = input.alternatePhone;
+  if (input.taxId) supplier.taxId = input.taxId;
+  if (input.bankDetails) supplier.bankDetails = input.bankDetails;
+  if (input.creditLimit) supplier.creditLimit = { amount: input.creditLimit, currency: 'UGX' };
 
   await setDoc(doc(suppliersRef, supplierId), supplier);
   return supplier;

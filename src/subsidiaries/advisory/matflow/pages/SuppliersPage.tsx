@@ -173,23 +173,21 @@ function NewSupplierModal({ isOpen, onClose, onSubmit, loading }: NewSupplierMod
         <h2 className="text-lg font-semibold mb-4">Add New Supplier</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              required
               className="w-full px-3 py-2 border rounded-lg"
               placeholder="Enter company name"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
             <input
               type="text"
               value={contactPerson}
               onChange={(e) => setContactPerson(e.target.value)}
-              required
               className="w-full px-3 py-2 border rounded-lg"
               placeholder="Primary contact name"
             />
@@ -220,14 +218,13 @@ function NewSupplierModal({ isOpen, onClose, onSubmit, loading }: NewSupplierMod
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
               className="w-full px-3 py-2 border rounded-lg"
-              placeholder="email@example.com"
+              placeholder="email@example.com (optional)"
             />
           </div>
           <div>
@@ -250,7 +247,7 @@ function NewSupplierModal({ isOpen, onClose, onSubmit, loading }: NewSupplierMod
             </button>
             <button
               type="submit"
-              disabled={loading || !name || !phone || !email || !contactPerson}
+              disabled={loading || !phone}
               className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
             >
               {loading ? 'Adding...' : 'Add Supplier'}
