@@ -40,6 +40,14 @@ export const PROCUREMENT_STAGE_ORDER: DesignStage[] = [
   'procure-received',
 ];
 
+export const ARCHITECTURAL_STAGE_ORDER: DesignStage[] = [
+  'arch-brief',
+  'arch-schematic',
+  'arch-development',
+  'arch-construction-docs',
+  'arch-approved',
+];
+
 export function isProcurementStage(stage: DesignStage): boolean {
   return PROCUREMENT_STAGE_ORDER.includes(stage);
 }
@@ -48,8 +56,14 @@ export function isManufacturingStage(stage: DesignStage): boolean {
   return MANUFACTURING_STAGE_ORDER.includes(stage);
 }
 
+export function isArchitecturalStage(stage: DesignStage): boolean {
+  return ARCHITECTURAL_STAGE_ORDER.includes(stage);
+}
+
 export function getStageOrderForItem(item: Pick<DesignItem, 'sourcingType'>): DesignStage[] {
-  return item.sourcingType === 'PROCURED' ? PROCUREMENT_STAGE_ORDER : MANUFACTURING_STAGE_ORDER;
+  if (item.sourcingType === 'PROCURED') return PROCUREMENT_STAGE_ORDER;
+  if (item.sourcingType === 'ARCHITECTURAL') return ARCHITECTURAL_STAGE_ORDER;
+  return MANUFACTURING_STAGE_ORDER;
 }
 
 export function getFinalStageForItem(item: Pick<DesignItem, 'sourcingType'>): DesignStage {
@@ -138,6 +152,33 @@ export const GATE_CRITERIA: Record<DesignStage, GateCriteriaSet> = {
     shouldMeet: [],
     minimumReadiness: 0,
   },
+
+  // Architectural workflow stages (Brief → Schematic → Development → Construction Docs → Approved)
+  'arch-brief': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 0,
+  },
+  'arch-schematic': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 20,
+  },
+  'arch-development': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 40,
+  },
+  'arch-construction-docs': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 70,
+  },
+  'arch-approved': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 95,
+  },
 };
 
 /**
@@ -156,22 +197,21 @@ export interface GateCheckResult {
  * @returns Gate check result
  */
 export function canAdvanceToStage(
-  item: DesignItem, 
+  item: DesignItem,
   targetStage: DesignStage
 ): GateCheckResult {
-  // Enforce workflow branching based on sourcing
-  if (item.sourcingType === 'PROCURED' && !isProcurementStage(targetStage)) {
-    return {
-      canAdvance: false,
-      failures: ['Procured items can only move through the procurement workflow stages'],
-      warnings: [],
-    };
-  }
+  // Enforce workflow branching based on sourcing type
+  const expectedStages = getStageOrderForItem(item);
 
-  if (item.sourcingType !== 'PROCURED' && isProcurementStage(targetStage)) {
+  if (!expectedStages.includes(targetStage)) {
+    const workflowName = item.sourcingType === 'PROCURED'
+      ? 'procurement'
+      : item.sourcingType === 'ARCHITECTURAL'
+        ? 'architectural'
+        : 'manufacturing';
     return {
       canAdvance: false,
-      failures: ['Manufactured items can only move through the manufacturing workflow stages'],
+      failures: [`${item.sourcingType || 'Manufactured'} items can only move through the ${workflowName} workflow stages`],
       warnings: [],
     };
   }
@@ -256,6 +296,7 @@ function formatAspectName(path: string): string {
 export const STAGE_ORDER: DesignStage[] = [
   ...MANUFACTURING_STAGE_ORDER,
   ...PROCUREMENT_STAGE_ORDER,
+  ...ARCHITECTURAL_STAGE_ORDER,
 ];
 
 /**

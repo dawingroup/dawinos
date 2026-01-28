@@ -4,6 +4,7 @@
  */
 
 import type { DesignItem, DesignStage, RAGStatus, RAGStatusValue } from '../types';
+import { normalizeSourcingType, CONSTRUCTION_STAGES } from '../types/deliverables';
 import { getWorstStatus } from './rag-calculations';
 
 /**
@@ -40,6 +41,14 @@ export const PROCUREMENT_STAGE_ORDER: DesignStage[] = [
   'procure-received',
 ];
 
+export const ARCHITECTURAL_STAGE_ORDER: DesignStage[] = [
+  'arch-brief',
+  'arch-schematic',
+  'arch-development',
+  'arch-construction-docs',
+  'arch-approved',
+];
+
 export function isProcurementStage(stage: DesignStage): boolean {
   return PROCUREMENT_STAGE_ORDER.includes(stage);
 }
@@ -48,8 +57,28 @@ export function isManufacturingStage(stage: DesignStage): boolean {
   return MANUFACTURING_STAGE_ORDER.includes(stage);
 }
 
+export function isArchitecturalStage(stage: DesignStage): boolean {
+  return ARCHITECTURAL_STAGE_ORDER.includes(stage);
+}
+
+export function isConstructionStage(stage: DesignStage): boolean {
+  return CONSTRUCTION_STAGES.includes(stage);
+}
+
 export function getStageOrderForItem(item: Pick<DesignItem, 'sourcingType'>): DesignStage[] {
-  return item.sourcingType === 'PROCURED' ? PROCUREMENT_STAGE_ORDER : MANUFACTURING_STAGE_ORDER;
+  const normalizedType = normalizeSourcingType(item.sourcingType);
+
+  switch (normalizedType) {
+    case 'PROCURED':
+      return PROCUREMENT_STAGE_ORDER;
+    case 'DESIGN_DOCUMENT':
+      return ARCHITECTURAL_STAGE_ORDER;
+    case 'CONSTRUCTION':
+      return CONSTRUCTION_STAGES;
+    case 'CUSTOM_FURNITURE_MILLWORK':
+    default:
+      return MANUFACTURING_STAGE_ORDER;
+  }
 }
 
 export function getFinalStageForItem(item: Pick<DesignItem, 'sourcingType'>): DesignStage {
@@ -138,6 +167,70 @@ export const GATE_CRITERIA: Record<DesignStage, GateCriteriaSet> = {
     shouldMeet: [],
     minimumReadiness: 0,
   },
+
+  // Architectural workflow stages
+  'arch-brief': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 0,
+  },
+  'arch-schematic': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 20,
+  },
+  'arch-development': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 40,
+  },
+  'arch-construction-docs': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 70,
+  },
+  'arch-approved': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 95,
+  },
+
+  // Construction workflow stages
+  'const-scope': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 0,
+  },
+  'const-spec': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 15,
+  },
+  'const-quote': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 30,
+  },
+  'const-approve': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 50,
+  },
+  'const-in-progress': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 60,
+  },
+  'const-inspection': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 85,
+  },
+  'const-complete': {
+    mustMeet: [],
+    shouldMeet: [],
+    minimumReadiness: 100,
+  },
 };
 
 /**
@@ -156,22 +249,24 @@ export interface GateCheckResult {
  * @returns Gate check result
  */
 export function canAdvanceToStage(
-  item: DesignItem, 
+  item: DesignItem,
   targetStage: DesignStage
 ): GateCheckResult {
-  // Enforce workflow branching based on sourcing
-  if (item.sourcingType === 'PROCURED' && !isProcurementStage(targetStage)) {
-    return {
-      canAdvance: false,
-      failures: ['Procured items can only move through the procurement workflow stages'],
-      warnings: [],
-    };
-  }
+  const normalizedType = normalizeSourcingType(item.sourcingType);
+  const validStages = getStageOrderForItem(item);
 
-  if (item.sourcingType !== 'PROCURED' && isProcurementStage(targetStage)) {
+  // Enforce workflow branching based on normalized sourcing type
+  if (!validStages.includes(targetStage)) {
+    const typeLabel = {
+      'CUSTOM_FURNITURE_MILLWORK': 'Custom furniture/millwork',
+      'PROCURED': 'Procured',
+      'DESIGN_DOCUMENT': 'Design document',
+      'CONSTRUCTION': 'Construction',
+    }[normalizedType] || normalizedType;
+
     return {
       canAdvance: false,
-      failures: ['Manufactured items can only move through the manufacturing workflow stages'],
+      failures: [`${typeLabel} items can only move through their designated workflow stages`],
       warnings: [],
     };
   }
@@ -251,11 +346,13 @@ function formatAspectName(path: string): string {
 }
 
 /**
- * Ordered list of design stages
+ * Ordered list of design stages (all workflows)
  */
 export const STAGE_ORDER: DesignStage[] = [
   ...MANUFACTURING_STAGE_ORDER,
   ...PROCUREMENT_STAGE_ORDER,
+  ...ARCHITECTURAL_STAGE_ORDER,
+  ...CONSTRUCTION_STAGES,
 ];
 
 /**

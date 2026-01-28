@@ -19,6 +19,12 @@ export const STAGE_LABELS: Record<DesignStage, string> = {
   'procure-approve': 'Procurement - Approve',
   'procure-order': 'Procurement - Order',
   'procure-received': 'Procurement - Received',
+  // Architectural stages (Brief → Schematic → Development → Construction Docs → Approval)
+  'arch-brief': 'Project Brief',
+  'arch-schematic': 'Schematic Design',
+  'arch-development': 'Design Development',
+  'arch-construction-docs': 'Construction Documents',
+  'arch-approved': 'Approved',
 };
 
 /**
@@ -35,6 +41,12 @@ export const STAGE_SHORT_LABELS: Record<DesignStage, string> = {
   'procure-approve': 'Approve',
   'procure-order': 'Order',
   'procure-received': 'Received',
+  // Architectural stages
+  'arch-brief': 'Brief',
+  'arch-schematic': 'Schematic',
+  'arch-development': 'Development',
+  'arch-construction-docs': 'Const. Docs',
+  'arch-approved': 'Approved',
 };
 
 /**
@@ -51,6 +63,12 @@ export const STAGE_ICONS: Record<DesignStage, string> = {
   'procure-approve': '🟣',
   'procure-order': '🛒',
   'procure-received': '📦',
+  // Architectural stages
+  'arch-brief': '📋',
+  'arch-schematic': '✏️',
+  'arch-development': '📐',
+  'arch-construction-docs': '📄',
+  'arch-approved': '✅',
 };
 
 /**
@@ -63,6 +81,7 @@ export const CATEGORY_LABELS: Record<DesignCategory, string> = {
   'doors': 'Doors',
   'fixtures': 'Fixtures',
   'specialty': 'Specialty',
+  'architectural': 'Architectural Drawing',
 };
 
 /**

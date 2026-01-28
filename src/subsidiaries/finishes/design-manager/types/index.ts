@@ -17,7 +17,7 @@ export type RAGStatusValue = 'red' | 'amber' | 'green' | 'not-applicable';
 /**
  * Design stages in the workflow
  */
-export type DesignStage = 
+export type DesignStage =
   | 'concept'
   | 'preliminary'
   | 'technical'
@@ -27,18 +27,25 @@ export type DesignStage =
   | 'procure-quote'
   | 'procure-approve'
   | 'procure-order'
-  | 'procure-received';
+  | 'procure-received'
+  // Architectural drawing stages (Brief → Schematic → Development → Construction Docs → Approval)
+  | 'arch-brief'
+  | 'arch-schematic'
+  | 'arch-development'
+  | 'arch-construction-docs'
+  | 'arch-approved';
 
 /**
  * Design item categories
  */
-export type DesignCategory = 
+export type DesignCategory =
   | 'casework'
   | 'furniture'
   | 'millwork'
   | 'doors'
   | 'fixtures'
-  | 'specialty';
+  | 'specialty'
+  | 'architectural';
 
 /**
  * Approval status
@@ -275,24 +282,124 @@ export interface ManufacturingCost {
 }
 
 /**
+ * Architectural drawing disciplines
+ */
+export type ArchitecturalDiscipline =
+  | 'architectural'
+  | 'structural'
+  | 'mep'
+  | 'landscaping'
+  | 'furniture-millwork';
+
+/**
+ * Default hourly rates per discipline (in ZAR)
+ */
+export const DEFAULT_DISCIPLINE_RATES: Record<ArchitecturalDiscipline, number> = {
+  'architectural': 850,
+  'structural': 950,
+  'mep': 900,
+  'landscaping': 750,
+  'furniture-millwork': 800,
+};
+
+/**
+ * Human-readable labels for disciplines
+ */
+export const DISCIPLINE_LABELS: Record<ArchitecturalDiscipline, string> = {
+  'architectural': 'Architectural',
+  'structural': 'Structural',
+  'mep': 'MEP (Mechanical, Electrical, Plumbing)',
+  'landscaping': 'Landscaping',
+  'furniture-millwork': 'Furniture & Millwork',
+};
+
+/**
+ * Fixed cost line item for architectural projects
+ */
+export interface ArchitecturalFixedCost {
+  id: string;
+  category: 'site-visit' | 'geotechnical' | 'survey' | 'consultant' | 'regulatory' | 'printing' | 'other';
+  description: string;
+  amount: number;
+  currency: string;
+  vendor?: string;
+  invoiceRef?: string;
+  date?: Timestamp;
+  notes?: string;
+}
+
+/**
+ * Time entry for hourly tracking
+ */
+export interface ArchitecturalTimeEntry {
+  id: string;
+  discipline: ArchitecturalDiscipline;
+  date: Timestamp;
+  hours: number;
+  rate: number;
+  description: string;
+  staffMember?: string;
+  stage: DesignStage;
+}
+
+/**
+ * Architectural pricing for drawing items (stored in detail page, not creation form)
+ */
+export interface ArchitecturalPricing {
+  discipline: ArchitecturalDiscipline;
+  drawingNumber?: string;
+  scale?: string;
+  sheetSize?: 'A0' | 'A1' | 'A2' | 'A3' | 'A4' | 'ARCH-D' | 'ARCH-E';
+
+  // Hourly tracking
+  hourlyRate: number;
+  timeEntries: ArchitecturalTimeEntry[];
+  totalHours: number;
+  totalLaborCost: number;
+
+  // Fixed costs
+  fixedCosts: ArchitecturalFixedCost[];
+  totalFixedCosts: number;
+
+  // Totals
+  totalCost: number;
+  currency: string;
+
+  // Revision tracking
+  revisionCount: number;
+  lastRevisedAt?: Timestamp;
+}
+
+// Legacy type alias for backwards compatibility
+export type ArchitecturalDrawingType = ArchitecturalDiscipline;
+
+/**
+ * Legacy: Default fees by drawing type (deprecated, use DEFAULT_DISCIPLINE_RATES instead)
+ */
+export const DEFAULT_ARCHITECTURAL_FEES: Record<ArchitecturalDiscipline, number> = DEFAULT_DISCIPLINE_RATES;
+
+/**
  * Design Item - Main entity
  */
 export interface DesignItem {
   id: string;
-  
+
   // Identification
   itemCode: string;
   name: string;
   description?: string;
   category: DesignCategory;
 
-  sourcingType?: 'MANUFACTURED' | 'PROCURED';
-  
+  sourcingType?: 'MANUFACTURED' | 'PROCURED' | 'ARCHITECTURAL';
+
   // Procurement pricing (only for PROCURED items)
   procurement?: ProcurementPricing;
-  
+
   // Manufacturing cost (only for MANUFACTURED items)
   manufacturing?: ManufacturingCost;
+
+  // Architectural pricing (only for ARCHITECTURAL items)
+  architectural?: ArchitecturalPricing;
   
   // Project relationship
   projectId: string;
@@ -570,7 +677,7 @@ export interface Approval {
 /**
  * Deliverable types
  */
-export type DeliverableType = 
+export type DeliverableType =
   | 'concept-sketch'
   | 'mood-board'
   | '3d-model'
@@ -582,6 +689,10 @@ export type DeliverableType =
   | 'assembly-instructions'
   | 'specification-sheet'
   | 'client-presentation'
+  | 'purchase-order'           // Procurement: formal PO for ordering
+  | 'procurement-quotation'    // Procurement: cost breakdown for client
+  | 'supplier-rfq'             // Procurement: request for quotation to vendors
+  | 'architectural-drawing'    // Architectural drawings
   | 'other';
 
 /**
@@ -925,3 +1036,10 @@ export interface ConsolidatedEstimate {
   quickbooksInvoiceId?: string;
   quickbooksInvoiceNumber?: string;
 }
+
+// ============================================
+// Re-exports from sub-modules
+// ============================================
+
+// Architectural Drawing Types
+export * from './architectural';

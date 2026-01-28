@@ -17,28 +17,45 @@ export type RAGStatusValue = 'red' | 'amber' | 'green' | 'not-applicable';
 /**
  * Design stages in the workflow
  */
-export type DesignStage = 
+export type DesignStage =
+  // Manufacturing stages (Custom Furniture/Millwork)
   | 'concept'
   | 'preliminary'
   | 'technical'
   | 'pre-production'
   | 'production-ready'
+  // Procurement stages
   | 'procure-identify'
   | 'procure-quote'
   | 'procure-approve'
   | 'procure-order'
-  | 'procure-received';
+  | 'procure-received'
+  // Design Document stages (formerly Architectural)
+  | 'arch-brief'
+  | 'arch-schematic'
+  | 'arch-development'
+  | 'arch-construction-docs'
+  | 'arch-approved'
+  // Construction stages (NEW)
+  | 'const-scope'
+  | 'const-spec'
+  | 'const-quote'
+  | 'const-approve'
+  | 'const-in-progress'
+  | 'const-inspection'
+  | 'const-complete';
 
 /**
  * Design item categories
  */
-export type DesignCategory = 
+export type DesignCategory =
   | 'casework'
   | 'furniture'
   | 'millwork'
   | 'doors'
   | 'fixtures'
-  | 'specialty';
+  | 'specialty'
+  | 'architectural';
 
 /**
  * Approval status
@@ -188,6 +205,98 @@ export interface ProcurementPricing {
   quoteReference?: string;
   validUntil?: Timestamp;
 }
+
+/**
+ * Architectural drawing disciplines
+ */
+export type ArchitecturalDiscipline =
+  | 'architectural'
+  | 'structural'
+  | 'mep'
+  | 'landscaping'
+  | 'furniture-millwork';
+
+/**
+ * Default hourly rates per discipline (in ZAR)
+ */
+export const DEFAULT_DISCIPLINE_RATES: Record<ArchitecturalDiscipline, number> = {
+  'architectural': 850,
+  'structural': 950,
+  'mep': 900,
+  'landscaping': 750,
+  'furniture-millwork': 800,
+};
+
+/**
+ * Human-readable labels for disciplines
+ */
+export const DISCIPLINE_LABELS: Record<ArchitecturalDiscipline, string> = {
+  'architectural': 'Architectural',
+  'structural': 'Structural',
+  'mep': 'MEP (Mechanical, Electrical, Plumbing)',
+  'landscaping': 'Landscaping',
+  'furniture-millwork': 'Furniture & Millwork',
+};
+
+/**
+ * Fixed cost line item for architectural projects
+ */
+export interface ArchitecturalFixedCost {
+  id: string;
+  category: 'site-visit' | 'geotechnical' | 'survey' | 'consultant' | 'regulatory' | 'printing' | 'other';
+  description: string;
+  amount: number;
+  currency: string;
+  vendor?: string;
+  invoiceRef?: string;
+  date?: Timestamp;
+  notes?: string;
+}
+
+/**
+ * Time entry for hourly tracking
+ */
+export interface ArchitecturalTimeEntry {
+  id: string;
+  discipline: ArchitecturalDiscipline;
+  date: Timestamp;
+  hours: number;
+  rate: number;
+  description: string;
+  staffMember?: string;
+  stage: DesignStage;
+}
+
+/**
+ * Architectural pricing for drawing items (stored in detail page, not creation form)
+ */
+export interface ArchitecturalPricing {
+  discipline: ArchitecturalDiscipline;
+  drawingNumber?: string;
+  scale?: string;
+  sheetSize?: 'A0' | 'A1' | 'A2' | 'A3' | 'A4' | 'ARCH-D' | 'ARCH-E';
+
+  // Hourly tracking
+  hourlyRate: number;
+  timeEntries: ArchitecturalTimeEntry[];
+  totalHours: number;
+  totalLaborCost: number;
+
+  // Fixed costs
+  fixedCosts: ArchitecturalFixedCost[];
+  totalFixedCosts: number;
+
+  // Totals
+  totalCost: number;
+  currency: string;
+
+  // Revision tracking
+  revisionCount: number;
+  lastRevisedAt?: Timestamp;
+}
+
+// Legacy type alias for backwards compatibility
+export type ArchitecturalDrawingType = ArchitecturalDiscipline;
 
 /**
  * Standard part entry (hinges, screws, edging, etc. from Katana)
@@ -362,14 +471,20 @@ export interface DesignItem {
   description?: string;
   category: DesignCategory;
 
-  sourcingType?: 'MANUFACTURED' | 'PROCURED';
-  
+  sourcingType?: 'MANUFACTURED' | 'PROCURED' | 'ARCHITECTURAL' | 'CONSTRUCTION' | 'CUSTOM_FURNITURE_MILLWORK' | 'DESIGN_DOCUMENT';
+
   // Procurement pricing (only for PROCURED items)
   procurement?: ProcurementPricing;
-  
+
   // Manufacturing cost (only for MANUFACTURED items)
   manufacturing?: ManufacturingCost;
-  
+
+  // Architectural pricing (only for ARCHITECTURAL/DESIGN_DOCUMENT items)
+  architectural?: ArchitecturalPricing;
+
+  // Construction pricing (only for CONSTRUCTION items)
+  construction?: import('./deliverables').ConstructionPricing;
+
   // Project relationship
   projectId: string;
   projectCode: string;
@@ -1017,3 +1132,6 @@ export interface ConsolidatedEstimate {
 
 // Re-export client portal types
 export * from './clientPortal';
+
+// Re-export deliverable types
+export * from './deliverables';

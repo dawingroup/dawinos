@@ -9,48 +9,96 @@ import type { DesignStage, DesignCategory, RAGStatusValue } from '../types';
  * Human-readable labels for design stages
  */
 export const STAGE_LABELS: Record<DesignStage, string> = {
+  // Manufacturing stages (Custom Furniture/Millwork)
   'concept': 'Concept Development',
   'preliminary': 'Preliminary Design',
   'technical': 'Technical Design',
   'pre-production': 'Pre-Production',
   'production-ready': 'Production Ready',
+  // Procurement stages
   'procure-identify': 'Procurement - Identify',
   'procure-quote': 'Procurement - Quote',
   'procure-approve': 'Procurement - Approve',
   'procure-order': 'Procurement - Order',
   'procure-received': 'Procurement - Received',
+  // Design Document stages (Brief → Schematic → Development → Construction Docs → Approval)
+  'arch-brief': 'Project Brief',
+  'arch-schematic': 'Schematic Design',
+  'arch-development': 'Design Development',
+  'arch-construction-docs': 'Construction Documents',
+  'arch-approved': 'Approved',
+  // Construction stages
+  'const-scope': 'Scope Definition',
+  'const-spec': 'Specification',
+  'const-quote': 'Quotation',
+  'const-approve': 'Approval',
+  'const-in-progress': 'Work In Progress',
+  'const-inspection': 'Inspection/QC',
+  'const-complete': 'Completed',
 };
 
 /**
  * Short labels for design stages
  */
 export const STAGE_SHORT_LABELS: Record<DesignStage, string> = {
+  // Manufacturing stages
   'concept': 'Concept',
   'preliminary': 'Preliminary',
   'technical': 'Technical',
   'pre-production': 'Pre-Prod',
   'production-ready': 'Ready',
+  // Procurement stages
   'procure-identify': 'Identify',
   'procure-quote': 'Quote',
   'procure-approve': 'Approve',
   'procure-order': 'Order',
   'procure-received': 'Received',
+  // Design Document stages
+  'arch-brief': 'Brief',
+  'arch-schematic': 'Schematic',
+  'arch-development': 'Development',
+  'arch-construction-docs': 'Const. Docs',
+  'arch-approved': 'Approved',
+  // Construction stages
+  'const-scope': 'Scope',
+  'const-spec': 'Spec',
+  'const-quote': 'Quote',
+  'const-approve': 'Approve',
+  'const-in-progress': 'In Progress',
+  'const-inspection': 'Inspection',
+  'const-complete': 'Complete',
 };
 
 /**
  * Emoji icons for design stages
  */
 export const STAGE_ICONS: Record<DesignStage, string> = {
+  // Manufacturing stages
   'concept': '💡',
   'preliminary': '📐',
   'technical': '⚙️',
   'pre-production': '🔧',
   'production-ready': '✅',
+  // Procurement stages
   'procure-identify': '🔎',
   'procure-quote': '💬',
   'procure-approve': '🟣',
   'procure-order': '🛒',
   'procure-received': '📦',
+  // Design Document stages
+  'arch-brief': '📋',
+  'arch-schematic': '✏️',
+  'arch-development': '📐',
+  'arch-construction-docs': '📄',
+  'arch-approved': '✅',
+  // Construction stages
+  'const-scope': '📋',
+  'const-spec': '📝',
+  'const-quote': '💰',
+  'const-approve': '✓',
+  'const-in-progress': '🔨',
+  'const-inspection': '🔍',
+  'const-complete': '🏁',
 };
 
 /**
@@ -63,6 +111,7 @@ export const CATEGORY_LABELS: Record<DesignCategory, string> = {
   'doors': 'Doors',
   'fixtures': 'Fixtures',
   'specialty': 'Specialty',
+  'architectural': 'Architectural',
 };
 
 /**
