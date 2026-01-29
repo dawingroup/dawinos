@@ -42,6 +42,9 @@ import { Skeleton } from '@/core/components/ui/skeleton';
 import { cn } from '@/shared/lib/utils';
 
 import { useEmployee } from '@/modules/hr-central/hooks/useEmployee';
+import { RoleAssignmentSection } from '@/modules/hr-central/components/employees';
+import { employeeService } from '@/modules/hr-central/services/employee.service';
+import { useAuth } from '@/integration/store';
 import {
   EMPLOYMENT_STATUS_LABELS,
   EMPLOYMENT_TYPE_LABELS,
@@ -122,7 +125,8 @@ export function EmployeeDetailPage() {
   const { employeeId } = useParams<{ employeeId: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
-  
+  const { user } = useAuth();
+
   const { employee, loading, error } = useEmployee(employeeId || null);
 
   if (loading) {
@@ -288,7 +292,7 @@ export function EmployeeDetailPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             Overview
@@ -308,6 +312,10 @@ export function EmployeeDetailPage() {
           <TabsTrigger value="performance" className="flex items-center gap-2">
             <Award className="h-4 w-4" />
             Performance
+          </TabsTrigger>
+          <TabsTrigger value="system" className="flex items-center gap-2">
+            <UserCheck className="h-4 w-4" />
+            System Access
           </TabsTrigger>
         </TabsList>
 
@@ -673,6 +681,31 @@ export function EmployeeDetailPage() {
                   )}
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* System Access Tab */}
+        <TabsContent value="system" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Role Assignment</CardTitle>
+              <CardDescription>
+                Assign role profiles to enable automatic task routing via the Intelligence Layer
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RoleAssignmentSection
+                employee={employee}
+                onUpdate={async (empId, accessRoles) => {
+                  await employeeService.updateEmployeeRoles(
+                    empId,
+                    accessRoles,
+                    user?.uid || 'system'
+                  );
+                }}
+                isEditable={true}
+              />
             </CardContent>
           </Card>
         </TabsContent>

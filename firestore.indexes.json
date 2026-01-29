@@ -1482,6 +1482,15 @@
       "collectionGroup": "generatedTasks",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "assignedTo", "order": "ASCENDING" },
+        { "fieldPath": "dueDate", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "generatedTasks",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "entityType", "order": "ASCENDING" },
         { "fieldPath": "entityId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }

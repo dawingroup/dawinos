@@ -879,7 +879,15 @@ export function CDPortalPage() {
         const service = getCDPortalService(db);
 
         // Validate token
-        const validSession = await service.validateToken(token);
+        let validSession: PortalSession | null;
+        try {
+          validSession = await service.validateToken(token);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Authentication error';
+          setError(message);
+          setLoading(false);
+          return;
+        }
         if (!validSession) {
           setError('Invalid or expired access token. Please contact your administrator.');
           setLoading(false);

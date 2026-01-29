@@ -20,6 +20,7 @@ import {
   increment,
   Timestamp,
 } from 'firebase/firestore';
+import { signInAnonymouslyForPortal } from '../../../../core/services/firebase/auth';
 import {
   PortalAccessToken,
   PortalSession,
@@ -70,6 +71,18 @@ export class CDPortalService {
    * Validate a portal access token and return session data
    */
   async validateToken(token: string): Promise<PortalSession | null> {
+    // Sign in anonymously to satisfy Firestore auth requirements
+    // This happens silently in the background - no user interaction needed
+    try {
+      await signInAnonymouslyForPortal();
+    } catch (authError) {
+      console.error('Anonymous sign-in failed:', authError);
+      throw new Error(
+        'Portal authentication failed. Anonymous sign-in may not be enabled in Firebase Console. ' +
+        'Please enable Anonymous authentication in Firebase Console > Authentication > Sign-in method.'
+      );
+    }
+
     try {
       // Query for token
       const tokensRef = collection(this.db, 'portal_access_tokens');
@@ -115,7 +128,7 @@ export class CDPortalService {
       };
     } catch (error) {
       console.error('Error validating portal token:', error);
-      return null;
+      throw error;
     }
   }
 

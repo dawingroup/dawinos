@@ -10,6 +10,7 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { defineString, defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 // Katana API configuration
 const KATANA_API_BASE = defineString('KATANA_API_BASE', { default: 'https://api-okekivpl2a-uc.a.run.app' });
@@ -443,7 +444,7 @@ const { onRequest } = require('firebase-functions/v2/https');
 const triggerKatanaSync = onRequest({
   memory: '512MiB',
   timeoutSeconds: 300,
-  cors: true,
+  cors: ALLOWED_ORIGINS,
   secrets: [KATANA_API_KEY],
 }, async (req, res) => {
   // Verify authorization (simple API key check)

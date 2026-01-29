@@ -35,7 +35,8 @@ import { OfflineBanner } from '@/shared/components/offline/OfflineBanner';
 import { useSubsidiary } from '@/contexts/SubsidiaryContext';
 import { useNavigationStore } from '@/shared/stores/navigationStore';
 import { CommandPalette } from '@/core/components/navigation/CommandPalette';
-import { 
+import { GlobalTaskButton } from '@/modules/intelligence-layer/components/GlobalTaskButton';
+import {
   getAllCommandItems,
   FINISHES_NAVIGATION,
   ADVISORY_NAVIGATION,
@@ -314,6 +315,9 @@ export function AppShell({ children }: AppShellProps) {
           onAddFavorite={addFavorite}
           onRemoveFavorite={removeFavorite}
         />
+
+        {/* Global Task Button */}
+        <GlobalTaskButton />
 
         {/* User Menu */}
         <DropdownMenu>

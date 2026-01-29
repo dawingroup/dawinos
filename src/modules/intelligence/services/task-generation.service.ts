@@ -300,6 +300,8 @@ function evaluateCondition(
       return Array.isArray(condition.value) && !condition.value.includes(value);
     case 'exists':
       return condition.value ? value !== undefined : value === undefined;
+    case 'contains':
+      return typeof value === 'string' && value.includes(String(condition.value));
     default:
       return true;
   }

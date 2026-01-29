@@ -6,6 +6,7 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 const db = getFirestore();
 
@@ -266,7 +267,7 @@ async function syncAllCustomers(platforms = ['shopify', 'quickbooks']) {
 /**
  * Callable function to sync a single customer
  */
-const syncCustomerCallable = onCall({ cors: true, invoker: 'public' }, async (request) => {
+const syncCustomerCallable = onCall({ cors: ALLOWED_ORIGINS, invoker: 'public' }, async (request) => {
   const { customerId, platforms } = request.data;
 
   if (!customerId) {
@@ -284,7 +285,7 @@ const syncCustomerCallable = onCall({ cors: true, invoker: 'public' }, async (re
 /**
  * Callable function to sync all customers
  */
-const syncAllCustomersCallable = onCall({ cors: true, invoker: 'public' }, async (request) => {
+const syncAllCustomersCallable = onCall({ cors: ALLOWED_ORIGINS, invoker: 'public' }, async (request) => {
   const { platforms } = request.data || {};
 
   try {
@@ -458,7 +459,7 @@ async function importCustomersFromQuickBooks(qbConfig) {
 /**
  * Callable function to import customers from QuickBooks
  */
-const importFromQuickBooksCallable = onCall({ cors: true, invoker: 'public' }, async (request) => {
+const importFromQuickBooksCallable = onCall({ cors: ALLOWED_ORIGINS, invoker: 'public' }, async (request) => {
   try {
     // Get QuickBooks config from integrations/quickbooks (existing OAuth setup)
     const qbDoc = await db.collection('integrations').doc('quickbooks').get();

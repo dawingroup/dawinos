@@ -2,13 +2,18 @@
  * Strategy Report Generator Cloud Function
  * Uses Gemini with Google Search grounding to generate design strategy reports
  * that match current trends to available manufacturing features
- * 
- * Using v1 API for better CORS support
+ *
+ * Using v2 API (firebase-functions v4.x)
  */
 
-const functions = require('firebase-functions');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const admin = require('firebase-admin');
+const { ALLOWED_ORIGINS } = require('../config/cors');
+
+// Define secrets
+const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 
 // Initialize admin if not already done
 if (!admin.apps.length) {
@@ -24,18 +29,17 @@ const db = admin.firestore();
  * Step 3: Match trends to available features
  * Step 4: Return structured JSON for PDF report
  */
-exports.generateStrategyReport = functions
-  .runWith({
-    memory: '1GB',
+exports.generateStrategyReport = onCall(
+  {
+    memory: '1GiB',
     timeoutSeconds: 300,
-    secrets: ['GEMINI_API_KEY'],
-  })
-  .https.onCall(async (data, context) => {
-    // Get API key from environment/secrets
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    
-    // Map v1 API parameters to match v2 structure
-    const request = { data, auth: context.auth };
+    secrets: [GEMINI_API_KEY],
+    cors: ALLOWED_ORIGINS,
+  },
+  async (request) => {
+    // Get API key from secrets
+    const apiKey = GEMINI_API_KEY.value();
+
     const { 
       projectName,
       projectType,
@@ -60,7 +64,7 @@ exports.generateStrategyReport = functions
 
     // Validate input
     if (!projectName || !clientBrief) {
-      throw new functions.https.HttpsError('invalid-argument', 'projectName and clientBrief are required');
+      throw new HttpsError('invalid-argument', 'projectName and clientBrief are required');
     }
 
     console.log(`Generating strategy report for: ${projectName}`);
@@ -160,7 +164,7 @@ exports.generateStrategyReport = functions
       // ============================================
       console.log('Step 2: Generating strategy with AI...');
 
-      const genAI = new GoogleGenerativeAI(GEMINI_API_KEY.value());
+      const genAI = new GoogleGenerativeAI(apiKey);
       
       // Try with Google Search grounding first, fallback to non-grounded if it fails
       let model;
@@ -414,7 +418,7 @@ Return ONLY valid JSON matching this exact schema:
       } catch (parseError) {
         console.error('Failed to parse AI response:', parseError.message);
         console.error('JSON string preview:', jsonStr.substring(0, 300));
-        throw new functions.https.HttpsError('internal', `Failed to parse strategy response: ${parseError.message}`);
+        throw new HttpsError('internal', `Failed to parse strategy response: ${parseError.message}`);
       }
 
       // ============================================
@@ -545,9 +549,10 @@ Return ONLY valid JSON matching this exact schema:
 
     } catch (error) {
       console.error('Error generating strategy report:', error);
-      if (error instanceof functions.https.HttpsError) {
+      if (error instanceof HttpsError) {
         throw error;
       }
-      throw new functions.https.HttpsError('internal', `Failed to generate strategy report: ${error.message}`);
+      throw new HttpsError('internal', `Failed to generate strategy report: ${error.message}`);
     }
-  });
+  }
+);

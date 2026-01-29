@@ -8,8 +8,8 @@ export * from './pipeline';
 // Product components
 export * from './product';
 
-// Deliverables - TODO: Implement
-// export * from './deliverables';
+// Deliverables
+export * from './deliverables';
 
 // AI Assistant
 export * from './ai-assistant';
@@ -17,5 +17,5 @@ export * from './ai-assistant';
 // Shopify integration
 export * from './shopify';
 
-// Common components - TODO: Implement
-// export * from './common';
+// Common components
+export * from './common';

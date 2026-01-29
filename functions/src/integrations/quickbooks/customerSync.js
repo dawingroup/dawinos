@@ -7,6 +7,7 @@ const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 const fetch = require('node-fetch');
 const { refreshTokens } = require('./auth');
+const { ALLOWED_ORIGINS } = require('../../config/cors');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -164,7 +165,7 @@ exports.onCustomerCreatedQBO = onDocumentCreated('customers/{customerId}', async
 /**
  * Manual sync callable function
  */
-exports.syncCustomerToQuickBooks = onCall({ cors: true }, async (request) => {
+exports.syncCustomerToQuickBooks = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'User must be authenticated');
     }

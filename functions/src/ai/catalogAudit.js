@@ -6,6 +6,7 @@
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 // Initialize if not already done
 if (!admin.apps.length) {
@@ -14,14 +15,14 @@ if (!admin.apps.length) {
 
 /**
  * Audit Shopify Product
- * 
+ *
  * @param {Object} request.data
  * @param {Object} request.data.shopifyProduct - Shopify product data
  * @param {Object} request.data.auditConfig - Audit configuration
  */
 const auditShopifyProduct = onCall(
-  { 
-    cors: true,
+  {
+    cors: ALLOWED_ORIGINS,
     invoker: 'public',
     memory: '512MiB', 
     timeoutSeconds: 60,

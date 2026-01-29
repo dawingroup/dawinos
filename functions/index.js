@@ -5,6 +5,7 @@ const { Client } = require('@notionhq/client');
 const AnthropicModule = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const admin = require('firebase-admin');
+const { ALLOWED_ORIGINS } = require('./src/config/cors');
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
@@ -21,6 +22,7 @@ const { projectScoping } = require('./src/ai/projectScoping');
 const { designItemEnhancement } = require('./src/ai/designItemEnhancement');
 const { imageAnalysis } = require('./src/ai/imageAnalysis');
 const { analyzeClip } = require('./src/ai/analyzeClip');
+const { assistantChat } = require('./src/ai/assistantChat');
 const { generateProductNames } = require('./src/ai/productNaming');
 const { generateProductContent, generateDiscoverabilityData } = require('./src/ai/productContent');
 const { auditShopifyProduct } = require('./src/ai/catalogAudit');
@@ -68,6 +70,7 @@ exports.projectScoping = projectScoping;
 exports.designItemEnhancement = designItemEnhancement;
 exports.imageAnalysis = imageAnalysis;
 exports.analyzeClip = analyzeClip;
+exports.assistantChat = assistantChat;
 exports.generateProductNames = generateProductNames;
 exports.generateProductContent = generateProductContent;
 exports.generateDiscoverabilityData = generateDiscoverabilityData;
@@ -222,6 +225,46 @@ exports.checkCriticalItems = checkCriticalItems;
 const { migrateMatflowProjects } = require('./src/migrations/migrateMatflowProjects');
 exports.migrateMatflowProjects = migrateMatflowProjects;
 
+// Adobe PDF Services Functions
+const {
+  adobeCreatePdf,
+  adobeExportPdf,
+  adobeCombinePdf,
+  adobeExtractPdf,
+  adobeOcrPdf,
+  adobeCompressPdf,
+  adobeProtectPdf,
+  adobeSplitPdf,
+  adobeLinearizePdf,
+  adobeWatermarkPdf,
+  // v2 functions with manual CORS handling (onRequest Gen 2)
+  adobeCreatePdfV2,
+  adobeExtractPdfV2,
+  adobeCompressPdfV2,
+  // Gen 1 functions for CORS compatibility
+  adobeCreatePdfGen1,
+  adobeExtractPdfGen1,
+  adobeCompressPdfGen1,
+} = require('./src/adobe');
+exports.adobeCreatePdf = adobeCreatePdf;
+exports.adobeExportPdf = adobeExportPdf;
+exports.adobeCombinePdf = adobeCombinePdf;
+exports.adobeExtractPdf = adobeExtractPdf;
+exports.adobeOcrPdf = adobeOcrPdf;
+exports.adobeCompressPdf = adobeCompressPdf;
+exports.adobeProtectPdf = adobeProtectPdf;
+exports.adobeSplitPdf = adobeSplitPdf;
+exports.adobeLinearizePdf = adobeLinearizePdf;
+exports.adobeWatermarkPdf = adobeWatermarkPdf;
+// v2 exports (onRequest Gen 2)
+exports.adobeCreatePdfV2 = adobeCreatePdfV2;
+exports.adobeExtractPdfV2 = adobeExtractPdfV2;
+exports.adobeCompressPdfV2 = adobeCompressPdfV2;
+// Gen 1 exports (for CORS compatibility with org policy)
+exports.adobeCreatePdfGen1 = adobeCreatePdfGen1;
+exports.adobeExtractPdfGen1 = adobeExtractPdfGen1;
+exports.adobeCompressPdfGen1 = adobeCompressPdfGen1;
+
 // API Keys configuration
 const NOTION_API_KEY = defineString('NOTION_API_KEY');
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
@@ -233,7 +276,7 @@ const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 // Katana Materials Callable (bypasses Cloud Run IAM for org policy compliance)
 exports.getKatanaMaterialsCallable = onCall({
   secrets: [KATANA_API_KEY],
-  cors: true,
+  cors: ALLOWED_ORIGINS,
   timeoutSeconds: 120,
 }, async (request) => {
   // Require authentication
@@ -731,20 +774,23 @@ async function verifyFirebaseToken(req) {
   }
 }
 
-// Main API handler - Gen 2 with public access
-exports.api = onRequest({ 
-  cors: true,
+// Main API handler - Gen 2 with restricted CORS and required authentication
+exports.api = onRequest({
+  cors: ALLOWED_ORIGINS,
   invoker: "public",
   secrets: [ANTHROPIC_API_KEY, KATANA_API_KEY, GEMINI_API_KEY, QUICKBOOKS_CLIENT_ID, QUICKBOOKS_CLIENT_SECRET]
 }, async (req, res) => {
   const path = req.path.replace('/api', '');
   console.log('API Request:', req.method, path);
 
-  // Verify Firebase token if provided (required for sensitive endpoints)
+  // Require authentication for all API endpoints
   const user = await verifyFirebaseToken(req);
-  if (user) {
-    console.log('Authenticated user:', user.email);
+  if (!user) {
+    console.log('Authentication required but no valid token provided');
+    res.status(401).json({ error: 'Authentication required' });
+    return;
   }
+  console.log('Authenticated user:', user.email);
 
   try {
     switch (path) {
@@ -4651,3 +4697,8 @@ async function handleAuditProduct(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
+
+// Admin Functions
+const { generateDesignManagerEvents, generateDesignManagerEventsHTTP } = require('./src/admin/generateDesignManagerEvents');
+exports.generateDesignManagerEvents = generateDesignManagerEvents;
+exports.generateDesignManagerEventsHTTP = generateDesignManagerEventsHTTP;

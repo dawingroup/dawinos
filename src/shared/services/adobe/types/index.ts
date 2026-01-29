@@ -5,7 +5,7 @@
  */
 
 export * from './common';
-// export * from './pdf-services.types';        // Phase 2
+export * from './pdf-services.types';          // Phase 2
 // export * from './document-generation.types'; // Phase 3
 // export * from './sign.types';                // Phase 4
 // export * from './photoshop.types';           // Phase 5

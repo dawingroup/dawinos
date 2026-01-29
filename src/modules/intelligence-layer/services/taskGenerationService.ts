@@ -29,6 +29,9 @@ import type {
   TaskTriggerCondition,
 } from '../types/businessEvents';
 import { ALL_TASK_TEMPLATES } from '../constants/businessEvents';
+import { employeeAssignmentService } from '@/modules/intelligence/services/employeeAssignmentService';
+import { STANDARD_ROLE_PROFILES } from '@/modules/intelligence/config/role-profile.constants';
+import type { RoleProfile } from '@/modules/intelligence/types/role-profile.types';
 
 // ============================================================================
 // COLLECTION REFERENCES
@@ -268,34 +271,197 @@ class TaskGenerationService {
       .replace(/\{eventType\}/g, event.eventType);
   }
 
+  /**
+   * Validate that a role profile can handle a specific task type for an event
+   */
+  private validateTaskCapability(
+    roleSlug: string,
+    eventType: string,
+    taskType: string
+  ): { isValid: boolean; reason?: string } {
+    const roleProfile = STANDARD_ROLE_PROFILES[roleSlug] as Partial<RoleProfile> | undefined;
+
+    if (!roleProfile) {
+      return {
+        isValid: false,
+        reason: `Role profile '${roleSlug}' not found`,
+      };
+    }
+
+    // Check if role has task capabilities defined
+    if (!roleProfile.taskCapabilities || roleProfile.taskCapabilities.length === 0) {
+      // No capabilities defined - allow by default for backward compatibility
+      return { isValid: true };
+    }
+
+    // Find matching task capability for this event type
+    const capability = roleProfile.taskCapabilities.find(
+      (cap) => cap.eventType === eventType
+    );
+
+    if (!capability) {
+      return {
+        isValid: false,
+        reason: `Role '${roleProfile.title}' has no capability defined for event '${eventType}'`,
+      };
+    }
+
+    // Check if this task type is in the capability's taskTypes
+    if (!capability.taskTypes.includes(taskType)) {
+      return {
+        isValid: false,
+        reason: `Role '${roleProfile.title}' cannot handle task type '${taskType}' for event '${eventType}'`,
+      };
+    }
+
+    // Check if role can execute this task type
+    if (!capability.canExecute) {
+      return {
+        isValid: false,
+        reason: `Role '${roleProfile.title}' cannot execute tasks for event '${eventType}'`,
+      };
+    }
+
+    return { isValid: true };
+  }
+
   private async determineAssignee(
     template: TaskTemplate,
     event: BusinessEvent
   ): Promise<{ assignedTo?: string; assignedToName?: string }> {
-    switch (template.assignmentStrategy) {
-      case 'creator':
+    try {
+      switch (template.assignmentStrategy) {
+        case 'creator':
+          return {
+            assignedTo: event.triggeredBy,
+            assignedToName: event.triggeredByName,
+          };
+
+        case 'specific_user':
+          if (template.assignToUserId) {
+            const result = await employeeAssignmentService.resolveAssignment(
+              { type: 'user', value: template.assignToUserId },
+              {
+                subsidiaryId: event.subsidiary,
+                departmentId: undefined,
+                eventTriggerUserId: event.triggeredBy,
+                projectId: event.projectId,
+                entityData: event.currentState,
+              }
+            );
+            if (result) {
+              return {
+                assignedTo: result.employeeId,
+                assignedToName: result.employeeName,
+              };
+            }
+          }
+          return {
+            assignedTo: template.assignToUserId,
+            assignedToName: undefined,
+          };
+
+        case 'specific_role':
+          if (template.assignToRole) {
+            // Validate task capability before assignment
+            const validation = this.validateTaskCapability(
+              template.assignToRole,
+              event.eventType,
+              template.taskType
+            );
+
+            if (!validation.isValid) {
+              console.warn(
+                `Task capability validation failed: ${validation.reason}. ` +
+                `Proceeding with assignment anyway for backward compatibility.`
+              );
+              // Continue with assignment despite validation failure for now
+              // In future, you may want to skip assignment or use fallback
+            }
+
+            const result = await employeeAssignmentService.resolveAssignment(
+              { type: 'role', value: template.assignToRole },
+              {
+                subsidiaryId: event.subsidiary,
+                departmentId: undefined,
+                eventTriggerUserId: event.triggeredBy,
+                projectId: event.projectId,
+                entityData: event.currentState,
+              },
+              { preferLowerWorkload: true }
+            );
+            if (result) {
+              return {
+                assignedTo: result.employeeId,
+                assignedToName: result.employeeName,
+              };
+            }
+          }
+          return {
+            assignedTo: undefined,
+            assignedToName: undefined,
+          };
+
+        case 'project_lead':
+          // Try to find project lead or manager
+          const projectLeadResult = await employeeAssignmentService.resolveAssignment(
+            { type: 'role', value: 'project-manager' },
+            {
+              subsidiaryId: event.subsidiary,
+              departmentId: undefined,
+              eventTriggerUserId: event.triggeredBy,
+              projectId: event.projectId,
+              entityData: event.currentState,
+            }
+          );
+          if (projectLeadResult) {
+            return {
+              assignedTo: projectLeadResult.employeeId,
+              assignedToName: projectLeadResult.employeeName,
+            };
+          }
+          return {
+            assignedTo: undefined,
+            assignedToName: undefined,
+          };
+
+        case 'manager':
+          if (event.triggeredBy) {
+            const managerResult = await employeeAssignmentService.resolveAssignment(
+              { type: 'manager' },
+              {
+                subsidiaryId: event.subsidiary,
+                departmentId: undefined,
+                eventTriggerUserId: event.triggeredBy,
+                projectId: event.projectId,
+                entityData: event.currentState,
+              }
+            );
+            if (managerResult) {
+              return {
+                assignedTo: managerResult.employeeId,
+                assignedToName: managerResult.employeeName,
+              };
+            }
+          }
+          return {
+            assignedTo: undefined,
+            assignedToName: undefined,
+          };
+
+        default:
+          return {};
+      }
+    } catch (error) {
+      console.error('Error determining assignee:', error);
+      // Fall back to original behavior on error
+      if (template.assignmentStrategy === 'creator') {
         return {
           assignedTo: event.triggeredBy,
           assignedToName: event.triggeredByName,
         };
-
-      case 'specific_user':
-        return {
-          assignedTo: template.assignToUserId,
-          assignedToName: undefined,
-        };
-
-      case 'specific_role':
-      case 'project_lead':
-        // In a real implementation, this would query the project/team
-        // to find users with the appropriate role
-        return {
-          assignedTo: undefined,
-          assignedToName: undefined,
-        };
-
-      default:
-        return {};
+      }
+      return {};
     }
   }
 

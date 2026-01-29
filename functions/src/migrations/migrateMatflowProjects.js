@@ -7,6 +7,7 @@
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 // Ensure Firebase Admin is initialized
 if (!admin.apps.length) {
@@ -132,7 +133,7 @@ async function migrateSubcollections(sourceProjectId, targetProjectId, orgId, dr
  * Main migration callable function
  */
 const migrateMatflowProjects = onCall({
-  cors: true,
+  cors: ALLOWED_ORIGINS,
   timeoutSeconds: 540, // 9 minutes max
   memory: '1GiB',
 }, async (request) => {

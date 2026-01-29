@@ -28,6 +28,8 @@ import { StrategyCanvas } from '../strategy';
 import type { Project } from '@/shared/types';
 import { BulkImporter } from '../ProjectEstimation/BulkImporter';
 import { runProjectProduction } from '@/shared/services/optimization';
+import { createDesignItemsFromAIAnalysis } from '../../utils/aiConversion';
+import type { ClientDocument } from '../../types/document.types';
 
 type ViewMode = 'kanban' | 'list';
 type ProjectTab = 'items' | 'cutlist' | 'estimate' | 'production' | 'documents';
@@ -479,9 +481,45 @@ export default function ProjectView() {
           projectCode={project.code}
           userId={user?.uid || ''}
           userName={user?.displayName || user?.email || 'Unknown'}
-          onApplyAIToProject={(document) => {
-            // TODO: Convert AI extracted items to design items
-            console.log('Applying AI suggestions to project:', document);
+          onApplyAIToProject={async (document: ClientDocument) => {
+            // Convert AI extracted items to design items
+            if (!document.aiAnalysisResult?.extractedItems?.length) {
+              alert('No items to import from this document.');
+              return;
+            }
+
+            const confirmImport = window.confirm(
+              `Import ${document.aiAnalysisResult.extractedItems.length} design item(s) from AI analysis?\n\n` +
+              `Items will be created in the "Concept" stage.`
+            );
+
+            if (!confirmImport) return;
+
+            try {
+              const result = await createDesignItemsFromAIAnalysis(
+                document,
+                projectId!,
+                project.code,
+                user?.uid || '',
+                {
+                  skipLowConfidence: true,
+                  confidenceThreshold: 0.4,
+                }
+              );
+
+              let message = `Created ${result.created.length} design item(s).`;
+              if (result.skipped.length > 0) {
+                message += `\nSkipped ${result.skipped.length} low-confidence item(s).`;
+              }
+              if (result.errors.length > 0) {
+                message += `\nFailed to create ${result.errors.length} item(s).`;
+              }
+
+              alert(message);
+            } catch (error) {
+              console.error('Error importing AI items:', error);
+              alert('Failed to import items. Please try again.');
+            }
           }}
         />
       )}

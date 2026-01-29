@@ -65,3 +65,11 @@ export {
   type CabinetGroup,
   type SplitResult,
 } from './csvSplitter';
+
+// AI Conversion utilities
+export {
+  convertExtractedToDesignItemData,
+  createDesignItemsFromAIAnalysis,
+  previewAIConversion,
+  validateCategory,
+} from './aiConversion';

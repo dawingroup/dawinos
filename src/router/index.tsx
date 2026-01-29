@@ -137,7 +137,11 @@ const MarketAnalysisPage = lazy(() => import('@/modules/intelligence/pages/Marke
 const MarketInsightsPage = lazy(() => import('@/modules/intelligence/pages/InsightsPage'));
 
 // Intelligence Layer Module Pages
+const IntelligenceLayout = lazy(() => import('@/modules/intelligence-layer/components/IntelligenceLayout'));
 const IntelligenceLayerDashboard = lazy(() => import('@/modules/intelligence-layer/pages/IntelligenceLayerDashboardPage'));
+const IntelligenceAdminPage = lazy(() => import('@/modules/intelligence-layer/pages/IntelligenceAdminPage'));
+const EmployeeTaskInboxPage = lazy(() => import('@/modules/intelligence-layer/pages/EmployeeTaskInboxPage'));
+const ManagerDashboardPage = lazy(() => import('@/modules/intelligence-layer/pages/ManagerDashboardPage'));
 
 // Strategy Module Pages
 const ExecutiveDashboard = lazy(() => import('@/modules/strategy/pages/ExecutiveDashboard').then(m => ({ default: m.ExecutiveDashboard })));
@@ -429,12 +433,24 @@ export const router = createBrowserRouter([
       },
 
       // ========================================
-      // INTELLIGENCE LAYER ROUTES
+      // INTELLIGENCE LAYER ROUTES (with tab navigation)
       // ========================================
       {
         path: 'ai',
+        element: <PageWrapper><IntelligenceLayout /></PageWrapper>,
         children: [
-          { index: true, element: <PageWrapper><IntelligenceLayerDashboard /></PageWrapper> },
+          { index: true, element: <IntelligenceLayerDashboard /> },
+          { path: 'team', element: <ManagerDashboardPage /> },
+          { path: 'admin', element: <IntelligenceAdminPage /> },
+        ],
+      },
+
+      // Employee Task Inbox (direct access for employees, also uses layout)
+      {
+        path: 'my-tasks',
+        element: <PageWrapper><IntelligenceLayout /></PageWrapper>,
+        children: [
+          { index: true, element: <EmployeeTaskInboxPage /> },
         ],
       },
 

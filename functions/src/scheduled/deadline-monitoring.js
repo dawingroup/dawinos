@@ -6,11 +6,13 @@
  * - Overdue variance investigations
  * - Missing monthly reconciliations
  *
- * Triggered by Cloud Scheduler (cron: 0 * * * *)
+ * Using v2 API (firebase-functions v4.x)
  */
 
-const functions = require('firebase-functions');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
@@ -23,14 +25,14 @@ const db = admin.firestore();
  * Hourly deadline monitoring check
  * Runs every hour at minute 0
  */
-exports.hourlyDeadlineCheck = functions
-  .runWith({
+exports.hourlyDeadlineCheck = onSchedule(
+  {
+    schedule: '0 * * * *', // Every hour at minute 0
+    timeZone: 'Africa/Nairobi', // Kenya timezone
     timeoutSeconds: 540, // 9 minutes
-    memory: '512MB',
-  })
-  .pubsub.schedule('0 * * * *') // Every hour at minute 0
-  .timeZone('Africa/Nairobi') // Kenya timezone
-  .onRun(async (context) => {
+    memory: '512MiB',
+  },
+  async (event) => {
     try {
       console.log('[DeadlineMonitoring] Starting hourly deadline check...');
       const startTime = Date.now();
@@ -107,20 +109,21 @@ exports.hourlyDeadlineCheck = functions
 
       throw error;
     }
-  });
+  }
+);
 
 /**
  * Daily summary report
  * Runs at 8:00 AM EAT every day
  */
-exports.dailyDeadlineSummary = functions
-  .runWith({
+exports.dailyDeadlineSummary = onSchedule(
+  {
+    schedule: '0 8 * * *', // 8:00 AM daily
+    timeZone: 'Africa/Nairobi',
     timeoutSeconds: 300, // 5 minutes
-    memory: '256MB',
-  })
-  .pubsub.schedule('0 8 * * *') // 8:00 AM daily
-  .timeZone('Africa/Nairobi')
-  .onRun(async (context) => {
+    memory: '256MiB',
+  },
+  async (event) => {
     try {
       console.log('[DeadlineMonitoring] Generating daily summary...');
 
@@ -168,39 +171,41 @@ exports.dailyDeadlineSummary = functions
 
       throw error;
     }
-  });
+  }
+);
 
 /**
  * Manual trigger for deadline check
  * Callable function for admin to manually trigger deadline check
  */
-exports.triggerDeadlineCheck = functions
-  .runWith({
+exports.triggerDeadlineCheck = onCall(
+  {
     timeoutSeconds: 540,
-    memory: '512MB',
-  })
-  .https.onCall(async (data, context) => {
+    memory: '512MiB',
+    cors: ALLOWED_ORIGINS,
+  },
+  async (request) => {
     // Verify authentication
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
+    if (!request.auth) {
+      throw new HttpsError(
         'unauthenticated',
         'User must be authenticated to trigger deadline check'
       );
     }
 
     // Verify admin role
-    const userDoc = await db.collection('users').doc(context.auth.uid).get();
+    const userDoc = await db.collection('users').doc(request.auth.uid).get();
     const userData = userDoc.data();
 
     if (!userData || !['admin', 'super_admin'].includes(userData.role)) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'permission-denied',
         'Only admins can manually trigger deadline checks'
       );
     }
 
     try {
-      console.log('[DeadlineMonitoring] Manual trigger by:', context.auth.uid);
+      console.log('[DeadlineMonitoring] Manual trigger by:', request.auth.uid);
 
       const actions = [];
       const accountabilityActions = await checkOverdueAccountabilities();
@@ -221,7 +226,7 @@ exports.triggerDeadlineCheck = functions
       await db.collection('deadline_monitoring_logs').add({
         timestamp: admin.firestore.Timestamp.now(),
         type: 'manual_trigger',
-        triggeredBy: context.auth.uid,
+        triggeredBy: request.auth.uid,
         totalChecked: actions.length,
         summary,
         status: 'success',
@@ -238,30 +243,32 @@ exports.triggerDeadlineCheck = functions
     } catch (error) {
       console.error('[DeadlineMonitoring] Error in manual trigger:', error);
 
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'internal',
         'Error running deadline check',
         error.message || String(error)
       );
     }
-  });
+  }
+);
 
 /**
  * Get deadline summary for project
  * Callable function for dashboard
  */
-exports.getProjectDeadlineSummary = functions
-  .https.onCall(async (data, context) => {
+exports.getProjectDeadlineSummary = onCall(
+  { cors: ALLOWED_ORIGINS },
+  async (request) => {
     // Verify authentication
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
+    if (!request.auth) {
+      throw new HttpsError(
         'unauthenticated',
         'User must be authenticated'
       );
     }
 
     try {
-      const summary = await getDeadlineSummary(data.projectId);
+      const summary = await getDeadlineSummary(request.data?.projectId);
 
       return {
         success: true,
@@ -270,13 +277,14 @@ exports.getProjectDeadlineSummary = functions
     } catch (error) {
       console.error('[DeadlineMonitoring] Error getting summary:', error);
 
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         'internal',
         'Error getting deadline summary',
         error.message || String(error)
       );
     }
-  });
+  }
+);
 
 // Helper functions
 
