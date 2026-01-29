@@ -17,8 +17,16 @@ service cloud.firestore {
     }
     
     function isAdmin() {
-      return isAuthenticated() && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.globalRole in ['admin', 'owner'];
+      return isAuthenticated() && (
+        // Super user bypass
+        request.auth.token.email == 'onzimai@dawin.group'
+        // Check root users collection
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.globalRole in ['admin', 'owner'])
+        // Check organization users collection (doc ID = auth UID)
+        || (exists(/databases/$(database)/documents/organizations/default/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/organizations/default/users/$(request.auth.uid)).data.globalRole in ['admin', 'owner'])
+      );
     }
     
     function isProjectMember(projectId) {
@@ -1571,7 +1579,14 @@ service cloud.firestore {
       // Organization users
       match /users/{userId} {
         allow read: if isAuthenticated();
-        allow write: if isAdmin() || request.auth.uid == userId;
+        // Admins can perform all write operations
+        allow create, delete: if isAdmin();
+        // Admins can update any field; non-admins can only update their own profile fields
+        allow update: if isAdmin()
+          || (isAuthenticated()
+              && resource.data.uid == request.auth.uid
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['displayName', 'phone', 'jobTitle', 'department', 'photoUrl', 'lastLoginAt', 'updatedAt']));
       }
       
       // Organization invites

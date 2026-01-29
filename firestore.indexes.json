@@ -482,6 +482,14 @@
       "collectionGroup": "employees",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "employmentStatus", "order": "ASCENDING" },
+        { "fieldPath": "position.reportingTo", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "employees",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "isDeleted", "order": "ASCENDING" },
         { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ]

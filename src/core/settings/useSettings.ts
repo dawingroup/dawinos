@@ -137,6 +137,37 @@ export function useCurrentDawinUser() {
   return { dawinUser, isLoading, error, hasPermission };
 }
 
+export function useUser(userId: string | undefined) {
+  const { user } = useAuth();
+  const [dawinUser, setDawinUser] = useState<DawinUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const orgId = (user as { organizationId?: string })?.organizationId || DEFAULT_ORG_ID;
+
+  useEffect(() => {
+    if (!user || !userId) {
+      setDawinUser(null);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    settingsService
+      .getUser(orgId, userId)
+      .then((data) => {
+        setDawinUser(data);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        setError(err);
+        setIsLoading(false);
+      });
+  }, [orgId, user, userId]);
+
+  return { dawinUser, isLoading, error };
+}
+
 // ============================================================================
 // USER MUTATIONS
 // ============================================================================

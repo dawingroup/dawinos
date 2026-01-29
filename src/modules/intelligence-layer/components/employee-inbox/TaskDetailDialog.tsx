@@ -3,6 +3,7 @@
  * Modal dialog showing full task details with checklist management
  */
 
+import { useNavigate } from 'react-router-dom';
 import {
   ClipboardList,
   Clock,
@@ -15,6 +16,7 @@ import {
   CheckSquare,
   XCircle,
   Building2,
+  ExternalLink,
 } from 'lucide-react';
 
 import { Badge } from '@/core/components/ui/badge';
@@ -29,6 +31,7 @@ import {
 
 import type { EmployeeTask } from '../../hooks/useEmployeeTaskInbox';
 import { getDueDateStatus, formatDueDate } from '../../hooks/useEmployeeTaskInbox';
+import { getEntityRoute, getProjectRoute } from '../../utils/getEntityRoute';
 
 // ============================================
 // Types
@@ -122,9 +125,21 @@ export function TaskDetailDialog({
   onBlock,
   onChecklistItemChange,
 }: TaskDetailDialogProps) {
+  const navigate = useNavigate();
+
   if (!task) return null;
 
   const dueDateStatus = getDueDateStatus(task.dueDate);
+  const entityRoute = getEntityRoute({
+    entityType: task.entityType,
+    entityId: task.entityId,
+    projectId: task.projectId,
+    sourceModule: task.sourceModule,
+  });
+  const projectRoute = getProjectRoute({
+    projectId: task.projectId,
+    sourceModule: task.sourceModule,
+  });
   const hasChecklist = task.checklistItems && task.checklistItems.length > 0;
   const completedItems = task.checklistItems?.filter((i) => i.completed).length || 0;
   const totalItems = task.checklistItems?.length || 0;
@@ -214,7 +229,31 @@ export function TaskDetailDialog({
             {task.projectName && (
               <div>
                 <label className="text-xs text-muted-foreground">Project</label>
-                <p className="font-medium">{task.projectName}</p>
+                {projectRoute ? (
+                  <button
+                    onClick={() => { navigate(projectRoute); onOpenChange(false); }}
+                    className="font-medium text-blue-600 hover:underline flex items-center gap-1.5 cursor-pointer text-left"
+                  >
+                    {task.projectName}
+                    <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                  </button>
+                ) : (
+                  <p className="font-medium">{task.projectName}</p>
+                )}
+              </div>
+            )}
+
+            {/* Source Entity */}
+            {entityRoute && task.entityType !== 'project' && (
+              <div>
+                <label className="text-xs text-muted-foreground">Source Item</label>
+                <button
+                  onClick={() => { navigate(entityRoute); onOpenChange(false); }}
+                  className="font-medium text-blue-600 hover:underline flex items-center gap-1.5 cursor-pointer text-left"
+                >
+                  {task.entityName || task.entityType?.replace(/-/g, ' ')}
+                  <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                </button>
               </div>
             )}
 

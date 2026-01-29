@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Users,
   ClipboardList,
@@ -20,6 +21,10 @@ import {
   BarChart3,
   UserPlus,
   Repeat,
+  ExternalLink,
+  PieChart,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   collection,
@@ -47,6 +52,8 @@ import {
 
 import { MODULE_COLOR } from '../constants';
 import { TaskAssignmentDialog } from '../components/manager/TaskAssignmentDialog';
+import { getEntityRoute, getProjectRoute } from '../utils/getEntityRoute';
+import { useEmployeeDocId } from '../hooks/useEmployeeDocId';
 
 // ============================================
 // Types
@@ -72,12 +79,18 @@ interface TeamMember {
 interface TeamTask {
   id: string;
   title: string;
+  description?: string;
   priority: 'P0' | 'P1' | 'P2' | 'P3';
   status: string;
   assignedTo?: string;
   assignedToName?: string;
   dueDate?: Date;
   sourceModule: string;
+  entityType?: string;
+  entityId?: string;
+  entityName?: string;
+  projectId?: string;
+  projectName?: string;
 }
 
 interface TeamStats {
@@ -96,12 +109,17 @@ interface TeamStats {
 // ============================================
 
 export default function ManagerDashboardPage() {
-  const { userId } = useAuth();
+  const navigate = useNavigate();
+  const { userId: authUid, email: authEmail } = useAuth();
+  const { employeeDocId, loading: resolvingEmployee } = useEmployeeDocId(authUid, authEmail);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [recentTasks, setRecentTasks] = useState<TeamTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<string>('overview');
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+  const [memberTasks, setMemberTasks] = useState<TeamTask[]>([]);
+  const [memberTasksLoading, setMemberTasksLoading] = useState(false);
   const [assignmentDialog, setAssignmentDialog] = useState<{
     open: boolean;
     task: any;
@@ -110,44 +128,73 @@ export default function ManagerDashboardPage() {
 
   // Fetch team data
   const fetchTeamData = useCallback(async () => {
+    // Wait for employee doc ID resolution before fetching
+    if (resolvingEmployee) return;
+
     setLoading(true);
     try {
       // Fetch employees — filter by manager's team if possible
+      // Include both 'active' and 'probation' statuses
       const employeesRef = collection(db, 'employees');
-      const employeeQuery = userId
-        ? query(
-            employeesRef,
-            where('status', '==', 'active'),
-            where('position.reportsTo', '==', userId),
-            limit(50)
-          )
-        : query(
-            employeesRef,
-            where('status', '==', 'active'),
-            limit(50)
-          );
+      const workingStatuses = ['active', 'probation'];
+      const allActiveQuery = query(
+        employeesRef,
+        where('employmentStatus', 'in', workingStatuses),
+        limit(50)
+      );
 
       let employeeSnapshot;
-      try {
-        employeeSnapshot = await getDocs(employeeQuery);
-      } catch {
-        // Fallback: if position.reportsTo field doesn't exist, fetch all active
-        const fallbackQuery = query(
-          employeesRef,
-          where('status', '==', 'active'),
-          limit(50)
-        );
-        employeeSnapshot = await getDocs(fallbackQuery);
+
+      if (employeeDocId) {
+        // Try to fetch direct reports first
+        try {
+          const teamQuery = query(
+            employeesRef,
+            where('employmentStatus', 'in', workingStatuses),
+            where('position.reportingTo', '==', employeeDocId),
+            limit(50)
+          );
+          employeeSnapshot = await getDocs(teamQuery);
+
+          // If no direct reports found, fall back to all active employees
+          if (employeeSnapshot.empty) {
+            employeeSnapshot = await getDocs(allActiveQuery);
+          }
+        } catch {
+          // Fallback: if position.reportingTo index missing or query fails
+          employeeSnapshot = await getDocs(allActiveQuery);
+        }
+      } else {
+        employeeSnapshot = await getDocs(allActiveQuery);
       }
 
       // Batch-fetch tasks for ALL employees using 'in' queries (max 30 per batch)
-      // This replaces N individual queries with ceil(N/30) batched queries
-      const employeeIds = employeeSnapshot.docs.map(d => d.id);
+      // Include both employee doc IDs AND auth UIDs (systemAccess.userId) to catch
+      // tasks assigned before the ID-resolution fix.
+      const allQueryIds: string[] = [];
+      const idToEmployeeDocId = new Map<string, string>(); // maps any ID → canonical employee doc ID
+
+      employeeSnapshot.docs.forEach((empDoc) => {
+        const empData = empDoc.data();
+        const docId = empDoc.id;
+        allQueryIds.push(docId);
+        idToEmployeeDocId.set(docId, docId);
+
+        // Also include the Firebase Auth UID stored on the employee record
+        const authUidOnEmployee = empData.systemAccess?.userId;
+        if (authUidOnEmployee && authUidOnEmployee !== docId) {
+          allQueryIds.push(authUidOnEmployee);
+          idToEmployeeDocId.set(authUidOnEmployee, docId);
+        }
+      });
+
+      // De-duplicate IDs
+      const uniqueQueryIds = [...new Set(allQueryIds)];
       const tasksByEmployee = new Map<string, any[]>();
 
       const tasksRef = collection(db, 'generatedTasks');
-      for (let i = 0; i < employeeIds.length; i += 30) {
-        const batch = employeeIds.slice(i, i + 30);
+      for (let i = 0; i < uniqueQueryIds.length; i += 30) {
+        const batch = uniqueQueryIds.slice(i, i + 30);
         const batchQuery = query(
           tasksRef,
           where('assignedTo', 'in', batch),
@@ -158,10 +205,12 @@ export default function ManagerDashboardPage() {
         batchSnapshot.docs.forEach((taskDoc) => {
           const task = taskDoc.data();
           const assignee = task.assignedTo;
-          if (!tasksByEmployee.has(assignee)) {
-            tasksByEmployee.set(assignee, []);
+          // Map back to the canonical employee doc ID
+          const canonicalId = idToEmployeeDocId.get(assignee) || assignee;
+          if (!tasksByEmployee.has(canonicalId)) {
+            tasksByEmployee.set(canonicalId, []);
           }
-          tasksByEmployee.get(assignee)!.push(task);
+          tasksByEmployee.get(canonicalId)!.push(task);
         });
       }
 
@@ -243,12 +292,18 @@ export default function ManagerDashboardPage() {
         return {
           id: doc.id,
           title: data.title,
+          description: data.description,
           priority: data.priority,
           status: data.status,
           assignedTo: data.assignedTo,
           assignedToName: data.assignedToName,
           dueDate: data.dueDate?.toDate(),
           sourceModule: data.sourceModule,
+          entityType: data.entityType,
+          entityId: data.entityId,
+          entityName: data.entityName,
+          projectId: data.projectId,
+          projectName: data.projectName,
         };
       });
 
@@ -258,11 +313,68 @@ export default function ManagerDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [employeeDocId, resolvingEmployee]);
 
   useEffect(() => {
     fetchTeamData();
   }, [fetchTeamData]);
+
+  // Drill down into a team member's tasks
+  const drillDownMember = useCallback(async (member: TeamMember) => {
+    setSelectedMember(member);
+    setMemberTasksLoading(true);
+
+    try {
+      const tasksRef = collection(db, 'generatedTasks');
+
+      // Find the employee's auth UID too (for dual-ID matching)
+      const empDoc = await getDocs(query(
+        collection(db, 'employees'),
+        where('__name__', '==', member.id),
+        limit(1)
+      ));
+      const empData = empDoc.docs[0]?.data();
+      const authUidOnEmployee = empData?.systemAccess?.userId;
+
+      const assigneeIds = authUidOnEmployee && authUidOnEmployee !== member.id
+        ? [member.id, authUidOnEmployee]
+        : [member.id];
+
+      const memberQuery = query(
+        tasksRef,
+        where('assignedTo', 'in', assigneeIds),
+        orderBy('dueDate', 'asc'),
+        limit(100)
+      );
+      const snapshot = await getDocs(memberQuery);
+
+      const tasks: TeamTask[] = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          title: data.title,
+          description: data.description,
+          priority: data.priority,
+          status: data.status,
+          assignedTo: data.assignedTo,
+          assignedToName: data.assignedToName,
+          dueDate: data.dueDate?.toDate(),
+          sourceModule: data.sourceModule,
+          entityType: data.entityType,
+          entityId: data.entityId,
+          entityName: data.entityName,
+          projectId: data.projectId,
+          projectName: data.projectName,
+        };
+      });
+
+      setMemberTasks(tasks);
+    } catch (err) {
+      console.error('Error fetching member tasks:', err);
+    } finally {
+      setMemberTasksLoading(false);
+    }
+  }, []);
 
   // Calculate team stats
   const teamStats = useMemo((): TeamStats => {
@@ -475,6 +587,10 @@ export default function ManagerDashboardPage() {
             <ClipboardList className="h-4 w-4" />
             Recent Tasks
           </TabsTrigger>
+          <TabsTrigger value="distribution" className="gap-2">
+            <PieChart className="h-4 w-4" />
+            Distribution
+          </TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -498,7 +614,11 @@ export default function ManagerDashboardPage() {
                 ) : (
                   <div className="space-y-4">
                     {filteredMembers.slice(0, 5).map((member) => (
-                      <div key={member.id} className="flex items-center gap-3">
+                      <div
+                        key={member.id}
+                        className="flex items-center gap-3 cursor-pointer hover:bg-muted/50 rounded-lg p-1 -m-1"
+                        onClick={() => { drillDownMember(member); setActiveTab('team'); }}
+                      >
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-medium">
                           {member.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
                         </div>
@@ -538,23 +658,35 @@ export default function ManagerDashboardPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {recentTasks.slice(0, 5).map((task) => (
-                      <div
-                        key={task.id}
-                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50"
-                      >
-                        <div className="flex gap-1">
-                          {getPriorityBadge(task.priority)}
-                          {getStatusBadge(task.status)}
+                    {recentTasks.slice(0, 5).map((task) => {
+                      const entityRoute = getEntityRoute({ entityType: task.entityType, entityId: task.entityId, projectId: task.projectId, sourceModule: task.sourceModule });
+                      return (
+                        <div
+                          key={task.id}
+                          className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50"
+                        >
+                          <div className="flex gap-1">
+                            {getPriorityBadge(task.priority)}
+                            {getStatusBadge(task.status)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{task.title}</p>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>{task.assignedToName || 'Unassigned'}</span>
+                              {task.projectName && entityRoute && (
+                                <button
+                                  onClick={() => navigate(entityRoute)}
+                                  className="text-blue-600 hover:underline flex items-center gap-0.5"
+                                >
+                                  {task.projectName}
+                                  <ExternalLink className="h-2.5 w-2.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{task.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {task.assignedToName || 'Unassigned'}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -564,78 +696,188 @@ export default function ManagerDashboardPage() {
 
         {/* Team Members Tab */}
         <TabsContent value="team" className="mt-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Team Members</CardTitle>
-              {departments.length > 0 && (
-                <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="All Departments" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept} value={dept}>
-                        {dept}
-                      </SelectItem>
+          {selectedMember ? (
+            /* ---- Member Drill-Down View ---- */
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setSelectedMember(null); setMemberTasks([]); }}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Back
+                  </Button>
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-medium">
+                    {selectedMember.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">{selectedMember.name}</CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedMember.role}{selectedMember.role && selectedMember.department ? ' · ' : ''}{selectedMember.department}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="text-amber-600 font-medium">{selectedMember.taskStats.pending} pending</span>
+                  <span className="text-blue-600 font-medium">{selectedMember.taskStats.inProgress} active</span>
+                  <span className="text-red-600 font-medium">{selectedMember.taskStats.overdue} overdue</span>
+                  {getUtilizationBadge(selectedMember.utilization)}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {memberTasksLoading ? (
+                  <div className="space-y-3">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="h-16 bg-muted rounded animate-pulse" />
                     ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="space-y-3">
-                  {[...Array(8)].map((_, i) => (
-                    <div key={i} className="h-16 bg-muted rounded animate-pulse" />
-                  ))}
-                </div>
-              ) : filteredMembers.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>No team members found</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {filteredMembers.map((member) => (
-                    <div
-                      key={member.id}
-                      className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-medium">
-                        {member.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                  </div>
+                ) : memberTasks.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <ClipboardList className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p>No tasks found for {selectedMember.name}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {memberTasks.map((task) => {
+                      const entityRoute = getEntityRoute({ entityType: task.entityType, entityId: task.entityId, projectId: task.projectId, sourceModule: task.sourceModule });
+                      const projRoute = getProjectRoute({ projectId: task.projectId, sourceModule: task.sourceModule });
+                      return (
+                        <div
+                          key={task.id}
+                          className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="flex gap-1.5">
+                            {getPriorityBadge(task.priority)}
+                            {getStatusBadge(task.status)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{task.title}</p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                              {task.dueDate && (
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="h-3 w-3" />
+                                  {task.dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </span>
+                              )}
+                              {task.projectName && projRoute ? (
+                                <button
+                                  onClick={() => navigate(projRoute)}
+                                  className="text-blue-600 hover:underline flex items-center gap-0.5"
+                                >
+                                  {task.projectName}
+                                  <ExternalLink className="h-2.5 w-2.5" />
+                                </button>
+                              ) : task.projectName ? (
+                                <span>{task.projectName}</span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {entityRoute && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => navigate(entityRoute)}
+                                title="View source item"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setAssignmentDialog({ open: true, task, mode: 'reassign' })}
+                            >
+                              <Repeat className="h-3 w-3 mr-1" />
+                              Reassign
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            /* ---- Team Members List ---- */
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">Team Members</CardTitle>
+                {departments.length > 0 && (
+                  <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="All Departments" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Departments</SelectItem>
+                      {departments.map((dept) => (
+                        <SelectItem key={dept} value={dept}>
+                          {dept}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="space-y-3">
+                    {[...Array(8)].map((_, i) => (
+                      <div key={i} className="h-16 bg-muted rounded animate-pulse" />
+                    ))}
+                  </div>
+                ) : filteredMembers.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p>No team members found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredMembers.map((member) => (
+                      <div
+                        key={member.id}
+                        className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
+                        onClick={() => drillDownMember(member)}
+                      >
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-medium">
+                          {member.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{member.name}</span>
+                            {getUtilizationBadge(member.utilization)}
+                          </div>
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground mt-0.5">
+                            {member.role && <span>{member.role}</span>}
+                            {member.department && <span>{member.department}</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <div className="text-center">
+                            <div className="font-semibold text-amber-600">{member.taskStats.pending}</div>
+                            <div className="text-xs text-muted-foreground">Pending</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="font-semibold text-blue-600">{member.taskStats.inProgress}</div>
+                            <div className="text-xs text-muted-foreground">Active</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="font-semibold text-red-600">{member.taskStats.overdue}</div>
+                            <div className="text-xs text-muted-foreground">Overdue</div>
+                          </div>
+                          <Progress value={member.utilization} className="w-20 h-2" />
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{member.name}</span>
-                          {getUtilizationBadge(member.utilization)}
-                        </div>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground mt-0.5">
-                          {member.role && <span>{member.role}</span>}
-                          {member.department && <span>{member.department}</span>}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm">
-                        <div className="text-center">
-                          <div className="font-semibold text-amber-600">{member.taskStats.pending}</div>
-                          <div className="text-xs text-muted-foreground">Pending</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-semibold text-blue-600">{member.taskStats.inProgress}</div>
-                          <div className="text-xs text-muted-foreground">Active</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-semibold text-red-600">{member.taskStats.overdue}</div>
-                          <div className="text-xs text-muted-foreground">Overdue</div>
-                        </div>
-                        <Progress value={member.utilization} className="w-20 h-2" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Tasks Tab */}
@@ -658,71 +900,194 @@ export default function ManagerDashboardPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {recentTasks.map((task) => (
-                    <div
-                      key={task.id}
-                      className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex gap-1.5">
-                        {getPriorityBadge(task.priority)}
-                        {getStatusBadge(task.status)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{task.title}</p>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                          <span className="flex items-center gap-1">
-                            <User className="h-3 w-3" />
-                            {task.assignedToName || 'Unassigned'}
-                          </span>
-                          {task.dueDate && (
+                  {recentTasks.map((task) => {
+                    const entityRoute = getEntityRoute({ entityType: task.entityType, entityId: task.entityId, projectId: task.projectId, sourceModule: task.sourceModule });
+                    const projRoute = getProjectRoute({ projectId: task.projectId, sourceModule: task.sourceModule });
+                    return (
+                      <div
+                        key={task.id}
+                        className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex gap-1.5">
+                          {getPriorityBadge(task.priority)}
+                          {getStatusBadge(task.status)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{task.title}</p>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                             <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {task.dueDate.toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                              })}
+                              <User className="h-3 w-3" />
+                              {task.assignedToName || 'Unassigned'}
                             </span>
+                            {task.dueDate && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {task.dueDate.toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                })}
+                              </span>
+                            )}
+                            {task.projectName && projRoute ? (
+                              <button
+                                onClick={() => navigate(projRoute)}
+                                className="text-blue-600 hover:underline flex items-center gap-0.5"
+                              >
+                                {task.projectName}
+                                <ExternalLink className="h-2.5 w-2.5" />
+                              </button>
+                            ) : (
+                              <span>{task.sourceModule.replace(/_/g, ' ')}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {entityRoute && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => navigate(entityRoute)}
+                              title="View source item"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </Button>
                           )}
-                          <span>{task.sourceModule.replace(/_/g, ' ')}</span>
+                          {!task.assignedTo ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setAssignmentDialog({ open: true, task, mode: 'assign' })}
+                            >
+                              <UserPlus className="h-3 w-3 mr-1" />
+                              Assign
+                            </Button>
+                          ) : (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setAssignmentDialog({ open: true, task, mode: 'reassign' })}
+                              >
+                                <Repeat className="h-3 w-3 mr-1" />
+                                Reassign
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setAssignmentDialog({ open: true, task, mode: 'takeup' })}
+                              >
+                                <User className="h-3 w-3 mr-1" />
+                                Take Up
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {!task.assignedTo ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setAssignmentDialog({ open: true, task, mode: 'assign' })}
-                          >
-                            <UserPlus className="h-3 w-3 mr-1" />
-                            Assign
-                          </Button>
-                        ) : (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setAssignmentDialog({ open: true, task, mode: 'reassign' })}
-                            >
-                              <Repeat className="h-3 w-3 mr-1" />
-                              Reassign
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setAssignmentDialog({ open: true, task, mode: 'takeup' })}
-                            >
-                              <User className="h-3 w-3 mr-1" />
-                              Take Up
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+        {/* Distribution Tab */}
+        <TabsContent value="distribution" className="mt-6">
+          <div className="space-y-6">
+            {/* Distribution Summary */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <PieChart className="h-4 w-4" style={{ color: MODULE_COLOR }} />
+                  Task Distribution Across Team
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="space-y-3">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="h-16 bg-muted rounded animate-pulse" />
+                    ))}
+                  </div>
+                ) : filteredMembers.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p>No team members found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Bar chart style distribution */}
+                    {filteredMembers.map((member) => {
+                      const totalActive = member.taskStats.pending + member.taskStats.inProgress;
+                      const maxActive = Math.max(
+                        ...filteredMembers.map(m => m.taskStats.pending + m.taskStats.inProgress),
+                        1
+                      );
+                      const barWidth = Math.round((totalActive / maxActive) * 100);
+
+                      return (
+                        <div key={member.id} className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-medium">
+                                {member.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                              </div>
+                              <div>
+                                <span className="text-sm font-medium">{member.name}</span>
+                                {member.role && (
+                                  <span className="text-xs text-muted-foreground ml-2">{member.role}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs">
+                              <span className="text-amber-600 font-medium">{member.taskStats.pending} pending</span>
+                              <span className="text-blue-600 font-medium">{member.taskStats.inProgress} active</span>
+                              <span className="text-green-600">{member.taskStats.completed} done</span>
+                              {member.taskStats.overdue > 0 && (
+                                <span className="text-red-600 font-medium">{member.taskStats.overdue} overdue</span>
+                              )}
+                              {member.taskStats.blocked > 0 && (
+                                <span className="text-red-500">{member.taskStats.blocked} blocked</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex h-3 rounded-full overflow-hidden bg-muted">
+                            {member.taskStats.pending > 0 && (
+                              <div
+                                className="bg-amber-400 transition-all"
+                                style={{ width: `${(member.taskStats.pending / maxActive) * 100}%` }}
+                                title={`${member.taskStats.pending} pending`}
+                              />
+                            )}
+                            {member.taskStats.inProgress > 0 && (
+                              <div
+                                className="bg-blue-500 transition-all"
+                                style={{ width: `${(member.taskStats.inProgress / maxActive) * 100}%` }}
+                                title={`${member.taskStats.inProgress} in progress`}
+                              />
+                            )}
+                            {member.taskStats.blocked > 0 && (
+                              <div
+                                className="bg-red-400 transition-all"
+                                style={{ width: `${(member.taskStats.blocked / maxActive) * 100}%` }}
+                                title={`${member.taskStats.blocked} blocked`}
+                              />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Legend */}
+                    <div className="flex items-center gap-4 pt-3 border-t text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400" /> Pending</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-500" /> In Progress</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-400" /> Blocked</span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
 
@@ -734,6 +1099,7 @@ export default function ManagerDashboardPage() {
           onClose={() => setAssignmentDialog(null)}
           onSuccess={() => {
             fetchTeamData();
+            if (selectedMember) drillDownMember(selectedMember);
             setAssignmentDialog(null);
           }}
         />

@@ -83,23 +83,30 @@ exports.semanticSearch = semanticSearch;
 exports.indexCollection = indexCollection;
 
 // DawinOS v2.0 - Auth & Claims Functions
-const { syncEmployeeClaims, setAdminClaims, initializeFirstAdmin, getCurrentClaims } = require('./src/auth/setCustomClaims');
+const { syncEmployeeClaims, setAdminClaims, initializeFirstAdmin, getCurrentClaims, updateUserClaims } = require('./src/auth/setCustomClaims');
 exports.syncEmployeeClaims = syncEmployeeClaims;
 exports.setAdminClaims = setAdminClaims;
 exports.initializeFirstAdmin = initializeFirstAdmin;
 exports.getCurrentClaims = getCurrentClaims;
+exports.updateUserClaims = updateUserClaims;
+
+// DawinOS v2.0 - User Invite Functions
+const { processNewUserInvite } = require('./src/auth/userInvites');
+exports.processNewUserInvite = processNewUserInvite;
 
 // DawinOS v2.0 - Task Generation Functions
 const {
   onBusinessEventCreated,
   processOverdueEscalations,
   sendTaskReminders,
-  retryUnassignedTasks
+  retryUnassignedTasks,
+  assignUnassignedTasks
 } = require('./src/triggers/taskGeneration');
 exports.onBusinessEventCreated = onBusinessEventCreated;
 exports.processOverdueEscalations = processOverdueEscalations;
 exports.sendTaskReminders = sendTaskReminders;
 exports.retryUnassignedTasks = retryUnassignedTasks;
+exports.assignUnassignedTasks = assignUnassignedTasks;
 
 // Customer Sync Functions
 const {
@@ -4699,6 +4706,7 @@ async function handleAuditProduct(req, res) {
 }
 
 // Admin Functions
-const { generateDesignManagerEvents, generateDesignManagerEventsHTTP } = require('./src/admin/generateDesignManagerEvents');
+const { generateDesignManagerEvents, generateDesignManagerEventsHTTP, processPendingEvents } = require('./src/admin/generateDesignManagerEvents');
 exports.generateDesignManagerEvents = generateDesignManagerEvents;
 exports.generateDesignManagerEventsHTTP = generateDesignManagerEventsHTTP;
+exports.processPendingEvents = processPendingEvents;

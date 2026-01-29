@@ -4,7 +4,7 @@
  * DawinOS v2.0 - HR Central
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -24,6 +24,9 @@ import {
   UserCheck,
   AlertCircle,
   Loader2,
+  Shield,
+  UserPlus,
+  ExternalLink,
 } from 'lucide-react';
 
 import { Button } from '@/core/components/ui/button';
@@ -45,6 +48,7 @@ import { useEmployee } from '@/modules/hr-central/hooks/useEmployee';
 import { RoleAssignmentSection } from '@/modules/hr-central/components/employees';
 import { employeeService } from '@/modules/hr-central/services/employee.service';
 import { useAuth } from '@/integration/store';
+import { useCurrentDawinUser, createUser, getUserByUid } from '@/core/settings';
 import {
   EMPLOYMENT_STATUS_LABELS,
   EMPLOYMENT_TYPE_LABELS,
@@ -125,9 +129,33 @@ export function EmployeeDetailPage() {
   const { employeeId } = useParams<{ employeeId: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
-  const { user } = useAuth();
+  const { email: authEmail, userId: authUserId } = useAuth();
+  const { dawinUser: currentDawinUser } = useCurrentDawinUser();
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [createUserResult, setCreateUserResult] = useState<{ success?: string; error?: string } | null>(null);
+  const [hasDawinUser, setHasDawinUser] = useState<boolean | null>(null); // null = loading
 
   const { employee, loading, error } = useEmployee(employeeId || null);
+
+  // Check if employee actually has a DawinUser doc (not just a Firebase Auth UID)
+  useEffect(() => {
+    const uid = employee?.systemAccess?.userId;
+    if (!uid) {
+      setHasDawinUser(false);
+      return;
+    }
+    setHasDawinUser(null); // loading
+    getUserByUid('default', uid)
+      .then((dawinDoc) => setHasDawinUser(!!dawinDoc))
+      .catch(() => setHasDawinUser(false));
+  }, [employee?.systemAccess?.userId]);
+
+  const isAdmin = currentDawinUser
+    ? ['admin', 'owner'].includes(currentDawinUser.globalRole)
+    : false;
+  const SUPER_USER_EMAILS = ['onzimai@dawin.group'];
+  const isSuperUser = authEmail ? SUPER_USER_EMAILS.includes(authEmail) : false;
+  const canCreateUser = isAdmin || isSuperUser;
 
   if (loading) {
     return (
@@ -701,13 +729,136 @@ export function EmployeeDetailPage() {
                   await employeeService.updateEmployeeRoles(
                     empId,
                     accessRoles,
-                    user?.uid || 'system'
+                    authUserId || 'system'
                   );
                 }}
                 isEditable={true}
               />
             </CardContent>
           </Card>
+
+          {/* User Account Management - Admin Only */}
+          {canCreateUser && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <CardTitle className="text-lg">Platform User Account</CardTitle>
+                    <CardDescription>
+                      Create or manage this employee's system login and module access
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {createUserResult?.success && (
+                  <Alert className="mb-4 border-green-200 bg-green-50">
+                    <AlertDescription className="text-green-700">
+                      {createUserResult.success}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {createUserResult?.error && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{createUserResult.error}</AlertDescription>
+                  </Alert>
+                )}
+
+                {hasDawinUser === null ? (
+                  <div className="flex items-center gap-2 py-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Checking user account...</span>
+                  </div>
+                ) : hasDawinUser ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">
+                        User Account Active
+                      </Badge>
+                      {employee.systemAccess?.userId && (
+                        <span className="text-xs text-muted-foreground">
+                          UID: {employee.systemAccess.userId}
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigate('/admin/users');
+                      }}
+                    >
+                      <ExternalLink className="mr-2 h-3 w-3" />
+                      View in User Management
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      {employee.systemAccess?.userId
+                        ? 'This employee has a login but no platform user profile. Create one to manage their access.'
+                        : 'This employee does not have a platform user account. Create one to grant them login access and module permissions.'}
+                    </p>
+                    <Button
+                      onClick={async () => {
+                        if (!employee) return;
+                        setCreatingUser(true);
+                        setCreateUserResult(null);
+                        try {
+                          const fullName = [employee.firstName, employee.middleName, employee.lastName]
+                            .filter(Boolean)
+                            .join(' ');
+                          const userData: Record<string, any> = {
+                            uid: employee.systemAccess?.userId || '',
+                            email: employee.email,
+                            displayName: fullName,
+                            jobTitle: employee.position.title,
+                            department: employee.position.departmentId,
+                            globalRole: 'member',
+                            isActive: true,
+                            subsidiaryAccess: [],
+                          };
+                          if (employee.photoUrl) userData.photoUrl = employee.photoUrl;
+                          const primaryPhone = employee.phoneNumbers?.find(p => p.isPrimary)?.number;
+                          if (primaryPhone) userData.phone = primaryPhone;
+                          const newUserId = await createUser('default', userData as any);
+                          setCreateUserResult({
+                            success: `User account created successfully. You can now configure access.`,
+                          });
+                          // Navigate to the new user's detail page after a short delay
+                          setTimeout(() => {
+                            navigate(`/admin/users/${newUserId}`);
+                          }, 1500);
+                        } catch (err: any) {
+                          console.error('Failed to create user account:', err);
+                          setCreateUserResult({
+                            error: err?.message || 'Failed to create user account. Please try again.',
+                          });
+                        } finally {
+                          setCreatingUser(false);
+                        }
+                      }}
+                      disabled={creatingUser}
+                    >
+                      {creatingUser ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creating Account...
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          Create User Account
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>

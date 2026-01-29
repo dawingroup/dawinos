@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ClipboardList,
   CheckCircle,
@@ -15,6 +16,8 @@ import {
   Play,
   CheckSquare,
   XCircle,
+  ExternalLink,
+  Folder,
 } from 'lucide-react';
 import {
   collection,
@@ -29,6 +32,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/shared/services/firebase/firestore';
 import { INTELLIGENCE_SOURCE_MODULES } from '@/modules/intelligence-layer/constants/shared';
+import { getEntityRoute, getProjectRoute } from '../../utils/getEntityRoute';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/core/components/ui/card';
 import { Button } from '@/core/components/ui/button';
@@ -79,6 +83,9 @@ interface GeneratedTask {
   subsidiary: string;
   entityId?: string;
   entityType?: string;
+  entityName?: string;
+  projectId?: string;
+  projectName?: string;
   createdAt: Timestamp;
   updatedAt?: Timestamp;
   completedAt?: Timestamp;
@@ -93,6 +100,7 @@ type PriorityFilter = 'all' | 'P0' | 'P1' | 'P2' | 'P3';
 // ============================================
 
 export function TaskManagementPanel() {
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<GeneratedTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -563,12 +571,59 @@ export function TaskManagementPanel() {
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground">Source Module</label>
-                  <p className="font-medium capitalize">{selectedTask.sourceModule.replace('_', ' ')}</p>
+                  <p className="font-medium capitalize flex items-center gap-1.5">
+                    <Folder className="h-4 w-4" />
+                    {selectedTask.sourceModule.replace('_', ' ')}
+                  </p>
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground">Created</label>
                   <p className="font-medium">{formatDate(selectedTask.createdAt)}</p>
                 </div>
+
+                {/* Project Link */}
+                {selectedTask.projectName && (() => {
+                  const route = getProjectRoute({ projectId: selectedTask.projectId, sourceModule: selectedTask.sourceModule });
+                  return (
+                    <div>
+                      <label className="text-xs text-muted-foreground">Project</label>
+                      {route ? (
+                        <button
+                          onClick={() => { navigate(route); setIsDetailOpen(false); }}
+                          className="font-medium text-blue-600 hover:underline flex items-center gap-1.5 cursor-pointer text-left"
+                        >
+                          {selectedTask.projectName}
+                          <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                        </button>
+                      ) : (
+                        <p className="font-medium">{selectedTask.projectName}</p>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Source Entity Link */}
+                {(() => {
+                  const route = getEntityRoute({
+                    entityType: selectedTask.entityType,
+                    entityId: selectedTask.entityId,
+                    projectId: selectedTask.projectId,
+                    sourceModule: selectedTask.sourceModule,
+                  });
+                  if (!route || selectedTask.entityType === 'project') return null;
+                  return (
+                    <div>
+                      <label className="text-xs text-muted-foreground">Source Item</label>
+                      <button
+                        onClick={() => { navigate(route); setIsDetailOpen(false); }}
+                        className="font-medium text-blue-600 hover:underline flex items-center gap-1.5 cursor-pointer text-left"
+                      >
+                        {selectedTask.entityName || selectedTask.entityType?.replace(/-/g, ' ')}
+                        <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Checklist */}

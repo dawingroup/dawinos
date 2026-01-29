@@ -14,6 +14,7 @@ import {
 import { db } from '@/shared/services/firebase/firestore';
 import { useAuth } from '@/integration/store';
 import { taskGenerationService } from '../services/taskGenerationService';
+import { useEmployeeDocId } from './useEmployeeDocId';
 
 // ============================================
 // Types
@@ -89,7 +90,8 @@ export interface GroupedTasks {
 // ============================================
 
 export function useEmployeeTaskInbox() {
-  const { user, userId } = useAuth();
+  const { user, userId: authUid, email: authEmail } = useAuth();
+  const { employeeDocId, loading: resolvingEmployee } = useEmployeeDocId(authUid, authEmail);
   const [tasks, setTasks] = useState<EmployeeTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +104,13 @@ export function useEmployeeTaskInbox() {
 
   // Fetch tasks with real-time subscription
   useEffect(() => {
-    if (!userId) {
+    // Keep loading while employee doc ID is still resolving
+    if (resolvingEmployee) {
+      setLoading(true);
+      return;
+    }
+
+    if (!employeeDocId) {
       setLoading(false);
       setTasks([]);
       return;
@@ -111,17 +119,23 @@ export function useEmployeeTaskInbox() {
     setLoading(true);
     setError(null);
 
-    // Build query based on status filter
+    // Build query based on status filter.
+    // Use 'in' to match both employee doc ID and auth UID, because tasks
+    // assigned before the ID-resolution fix stored the auth UID directly.
     const tasksRef = collection(db, 'generatedTasks');
+    const assigneeIds = employeeDocId === authUid
+      ? [employeeDocId]
+      : [employeeDocId, ...(authUid ? [authUid] : [])];
+
     let constraints: any[] = [
-      where('assignedTo', '==', userId),
+      where('assignedTo', 'in', assigneeIds),
       orderBy('dueDate', 'asc'),
     ];
 
     // Only add status filter if not 'all'
     if (filters.status !== 'all') {
       constraints = [
-        where('assignedTo', '==', userId),
+        where('assignedTo', 'in', assigneeIds),
         where('status', '==', filters.status),
         orderBy('dueDate', 'asc'),
       ];
@@ -178,7 +192,7 @@ export function useEmployeeTaskInbox() {
     );
 
     return () => unsubscribe();
-  }, [userId, filters.status]);
+  }, [employeeDocId, authUid, resolvingEmployee, filters.status]);
 
   // Calculate stats from tasks
   const stats = useMemo((): TaskInboxStats => {
@@ -332,15 +346,15 @@ export function useEmployeeTaskInbox() {
 
   const updateChecklistItem = useCallback(
     async (taskId: string, itemId: string, completed: boolean) => {
-      if (!userId) return;
+      if (!employeeDocId) return;
       try {
-        await taskGenerationService.updateChecklistItem(taskId, itemId, completed, userId);
+        await taskGenerationService.updateChecklistItem(taskId, itemId, completed, employeeDocId);
       } catch (err) {
         console.error('Error updating checklist item:', err);
         throw err;
       }
     },
-    [userId]
+    [employeeDocId]
   );
 
   const updateFilters = useCallback((newFilters: Partial<TaskFilters>) => {
@@ -367,7 +381,7 @@ export function useEmployeeTaskInbox() {
     blockTask,
     updateChecklistItem,
     refresh,
-    userId,
+    userId: employeeDocId,
     userName: user?.displayName || user?.email || 'User',
   };
 }

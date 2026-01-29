@@ -1,6 +1,6 @@
 /**
  * RoleGuard Component
- * Protects routes based on user roles
+ * Protects routes based on user roles from the DawinUser profile
  */
 
 import { Navigate } from 'react-router-dom';
@@ -16,10 +16,8 @@ interface RoleGuardProps {
   fallback?: React.ReactNode;
 }
 
-// Admin emails that have full access (temporary until proper role management)
-const ADMIN_EMAILS = [
-  'onzimai@dawin.group',
-];
+// Super user email with unrestricted access to all functions
+const SUPER_USER_EMAILS = ['onzimai@dawin.group'];
 
 export function RoleGuard({ children, roles, fallback }: RoleGuardProps) {
   const { user, loading } = useAuth();
@@ -34,31 +32,32 @@ export function RoleGuard({ children, roles, fallback }: RoleGuardProps) {
     return <Navigate to="/auth/login" replace />;
   }
 
-  // Check if user email is in admin list (fallback for users without DawinUser profile)
-  const isAdminEmail = user.email && ADMIN_EMAILS.includes(user.email);
-  
-  // Check if user has required role in their DawinUser profile
-  let hasRequiredRole = false;
-  if (dawinUser) {
-    hasRequiredRole = roles.some((role) => {
-      // Map role names to actual globalRole values
-      const roleMapping: Record<string, string> = {
-        'admin': 'admin',
-        'super_admin': 'owner', // Map super_admin to owner
-        'owner': 'owner',
-        'manager': 'manager',
-        'member': 'member',
-        'viewer': 'viewer'
-      };
-      return dawinUser.globalRole === roleMapping[role];
-    });
+  // Super user bypasses all role checks
+  if (user.email && SUPER_USER_EMAILS.includes(user.email)) {
+    return <>{children}</>;
   }
 
-  // Allow access if user has required role OR is an admin email
-  if (!hasRequiredRole && !isAdminEmail) {
-    if (fallback) {
-      return <>{fallback}</>;
-    }
+  if (!dawinUser) {
+    if (fallback) return <>{fallback}</>;
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  // Check if user has required role in their DawinUser profile
+  const roleMapping: Record<string, string> = {
+    'admin': 'admin',
+    'super_admin': 'owner',
+    'owner': 'owner',
+    'manager': 'manager',
+    'member': 'member',
+    'viewer': 'viewer',
+  };
+
+  const hasRequiredRole = roles.some(
+    (role) => dawinUser.globalRole === roleMapping[role]
+  );
+
+  if (!hasRequiredRole) {
+    if (fallback) return <>{fallback}</>;
     return <Navigate to="/unauthorized" replace />;
   }
 

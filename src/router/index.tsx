@@ -52,6 +52,7 @@ const MarketIntelLayout = lazy(() => import('@/modules/intelligence/components/M
 // Admin Pages
 const AdminDashboardPage = lazy(() => import('@/pages/admin/AdminDashboardPage'));
 const UserManagementPage = lazy(() => import('@/pages/admin/UserManagementPage'));
+const UserDetailPage = lazy(() => import('@/pages/admin/UserDetailPage'));
 const RoleManagementPage = lazy(() => import('@/pages/admin/RoleManagementPage'));
 const MigrationDashboardPage = lazy(() => import('@/pages/admin/MigrationDashboardPage'));
 const AuditLogPage = lazy(() => import('@/pages/admin/AuditLogPage'));
@@ -316,6 +317,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <PageWrapper><AdminDashboardPage /></PageWrapper> },
           { path: 'users', element: <PageWrapper><UserManagementPage /></PageWrapper> },
+          { path: 'users/:userId', element: <PageWrapper><UserDetailPage /></PageWrapper> },
           { path: 'settings', element: <PageWrapper><SettingsPage /></PageWrapper> },
         ],
       },

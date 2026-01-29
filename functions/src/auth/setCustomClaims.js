@@ -173,9 +173,80 @@ const getCurrentClaims = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
   }
 });
 
+/**
+ * Update user claims from DawinUser profile
+ * Syncs globalRole, modules, and subsidiaries to Firebase Auth custom claims
+ * Only callable by admins/owners
+ */
+const updateUserClaims = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Must be authenticated');
+  }
+
+  // Verify caller is admin or owner
+  const callerSnap = await admin.firestore()
+    .collection('organizations/default/users')
+    .where('uid', '==', request.auth.uid)
+    .limit(1)
+    .get();
+
+  if (callerSnap.empty) {
+    throw new HttpsError('permission-denied', 'Caller not found');
+  }
+
+  const callerRole = callerSnap.docs[0].data().globalRole;
+  if (!['admin', 'owner'].includes(callerRole)) {
+    throw new HttpsError('permission-denied', 'Only admins can update user claims');
+  }
+
+  const { targetUid } = request.data;
+  if (!targetUid) {
+    throw new HttpsError('invalid-argument', 'targetUid is required');
+  }
+
+  // Read target user's DawinUser doc
+  const userSnap = await admin.firestore()
+    .collection('organizations/default/users')
+    .where('uid', '==', targetUid)
+    .limit(1)
+    .get();
+
+  if (userSnap.empty) {
+    throw new HttpsError('not-found', 'Target user not found');
+  }
+
+  const userData = userSnap.docs[0].data();
+  const moduleIds = (userData.subsidiaryAccess || [])
+    .flatMap(sa => (sa.modules || []).filter(m => m.hasAccess).map(m => m.moduleId));
+  const subsidiaryIds = (userData.subsidiaryAccess || [])
+    .filter(sa => sa.hasAccess)
+    .map(sa => sa.subsidiaryId);
+
+  try {
+    await admin.auth().setCustomUserClaims(targetUid, {
+      globalRole: userData.globalRole,
+      modules: moduleIds,
+      subsidiaries: subsidiaryIds,
+      isActive: userData.isActive,
+    });
+
+    logger.info(`Claims updated for user ${targetUid}`, {
+      globalRole: userData.globalRole,
+      modules: moduleIds,
+      subsidiaries: subsidiaryIds,
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Error updating user claims:', error);
+    throw new HttpsError('internal', 'Failed to update claims');
+  }
+});
+
 module.exports = {
   syncEmployeeClaims,
   setAdminClaims,
   initializeFirstAdmin,
   getCurrentClaims,
+  updateUserClaims,
 };

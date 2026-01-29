@@ -4,6 +4,7 @@
  */
 
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
+const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const cors = require('cors')({ origin: true });
 
@@ -380,3 +381,251 @@ exports.generateDesignManagerEventsHTTP = onRequest({
     });
   }
 });
+
+// ============================================
+// Process Pending Events — reuses task generation logic from taskGeneration.js
+// ============================================
+
+/**
+ * Process all pending business events and generate tasks with assignment
+ * This is for backfilling events that were created before the trigger was fixed
+ */
+exports.processPendingEvents = onCall(
+  {
+    region: 'us-central1',
+    timeoutSeconds: 540,
+    memory: '512MiB',
+    invoker: 'public',
+  },
+  async (request) => {
+    const db = admin.firestore();
+    const dryRun = request.data?.dryRun ?? false;
+
+    logger.info('Processing pending business events', { dryRun });
+
+    // Task rules (inline copy to avoid import issues)
+    const TASK_RULES = {
+      design_item_created: [
+        { title: 'Review new design item: {{entityName}}', description: 'A new design item needs initial review.', defaultPriority: 'medium', assignToRole: 'design-manager', checklist: ['Review design brief', 'Verify specifications', 'Set initial RAG status', 'Assign to designer'] },
+      ],
+      design_project_created: [
+        { title: 'Set up new design project: {{entityName}}', description: 'Complete initial project setup.', defaultPriority: 'high', assignToRole: 'project-manager', checklist: ['Review project scope', 'Assign project team', 'Set milestones', 'Create initial design items'] },
+        { title: 'Prepare project brief for: {{entityName}}', description: 'Compile the project brief.', defaultPriority: 'medium', assignToRole: 'designer', checklist: ['Gather client requirements', 'Document preferences', 'Identify constraints', 'Share brief'] },
+      ],
+      project_brief_received: [
+        { title: 'Review project brief: {{entityName}}', description: 'Review requirements and prepare project plan.', defaultPriority: 'high', assignToRole: 'design-manager', checklist: ['Review client brief', 'Assess feasibility', 'Identify deliverables', 'Prepare estimate'] },
+        { title: 'Schedule client consultation: {{entityName}}', description: 'Arrange initial consultation meeting.', defaultPriority: 'medium', assignToRole: 'client-liaison', checklist: ['Contact client', 'Prepare agenda', 'Book meeting', 'Send invite'] },
+        { title: 'Site assessment: {{entityName}}', description: 'Conduct site visit or assessment.', defaultPriority: 'medium', assignToRole: 'space-planner', checklist: ['Schedule visit', 'Take measurements', 'Document conditions', 'Note constraints'] },
+      ],
+      'finishes.client_consultation_scheduled': [
+        { title: 'Prepare for client consultation: {{entityName}}', description: 'Prepare materials and agenda.', defaultPriority: 'high', assignToRole: 'designer', checklist: ['Review client history', 'Prepare design options', 'Gather samples', 'Prepare presentation'] },
+        { title: 'Coordinate consultation logistics: {{entityName}}', description: 'Ensure logistics are in place.', defaultPriority: 'medium', assignToRole: 'client-liaison', checklist: ['Confirm attendance', 'Prepare meeting space', 'Arrange samples', 'Brief team'] },
+      ],
+      'finishes.space_planning_requested': [
+        { title: 'Complete space planning: {{entityName}}', description: 'Conduct analysis and prepare layout options.', defaultPriority: 'high', assignToRole: 'space-planner', checklist: ['Review measurements', 'Create layout options', 'Assess constraints', 'Prepare deliverable'] },
+      ],
+      'finishes.design_concepts_created': [
+        { title: 'Review design concepts: {{entityName}}', description: 'Internal review before client presentation.', defaultPriority: 'high', assignToRole: 'design-manager', checklist: ['Review quality', 'Check brand alignment', 'Verify feasibility', 'Approve for presentation'] },
+      ],
+      'finishes.design_approval_requested': [
+        { title: 'Process design approval: {{entityName}}', description: 'Design requires approval.', defaultPriority: 'high', assignToRole: 'design-manager', checklist: ['Review final design', 'Check compliance', 'Verify costs', 'Provide approval'] },
+      ],
+      'finishes.design_production_ready': [
+        { title: 'Prepare production package: {{entityName}}', description: 'Prepare manufacturing documentation.', defaultPriority: 'critical', assignToRole: 'production-planner', checklist: ['Finalize drawings', 'Generate cutlists', 'Verify materials', 'Schedule production'] },
+        { title: 'Procure materials: {{entityName}}', description: 'Order required materials.', defaultPriority: 'high', assignToRole: 'procurement-coordinator', checklist: ['Review BOM', 'Check stock', 'Place orders', 'Confirm delivery'] },
+      ],
+      'finishes.installation_scheduled': [
+        { title: 'Coordinate installation: {{entityName}}', description: 'Prepare team and logistics.', defaultPriority: 'high', assignToRole: 'installation-coordinator', checklist: ['Confirm date', 'Assign crew', 'Arrange transport', 'Prepare checklist'] },
+      ],
+      'finishes.installation_complete': [
+        { title: 'Post-installation review: {{entityName}}', description: 'Final inspection and project close.', defaultPriority: 'medium', assignToRole: 'quality-inspector', checklist: ['Final inspection', 'Completion photos', 'Client sign-off', 'Close project'] },
+      ],
+      'hr.employee.created': [
+        { title: 'Onboard new employee: {{entityName}}', description: 'Complete onboarding process.', defaultPriority: 'high', assignToRole: 'hr-manager', checklist: ['Prepare workstation', 'Set up access', 'Schedule orientation', 'Assign mentor'] },
+        { title: 'Set up role profile: {{entityName}}', description: 'Configure role and workload settings.', defaultPriority: 'medium', assignToRole: 'hr-manager', checklist: ['Assign role profile', 'Set workload capacity', 'Configure capabilities', 'Add to department'] },
+      ],
+      'hr.employee.updated': [
+        { title: 'Review employee update: {{entityName}}', description: 'Review changes and take action.', defaultPriority: 'low', assignToRole: 'hr-manager', checklist: ['Review changes', 'Verify accuracy', 'Update related records'] },
+      ],
+      'finishes.client_feedback_received': [
+        { title: 'Process client feedback: {{entityName}}', description: 'Review and action client feedback.', defaultPriority: 'high', assignToRole: 'designer', checklist: ['Review comments', 'Identify revisions', 'Update design', 'Schedule follow-up'] },
+      ],
+    };
+
+    function interpolate(template, eventData) {
+      return template
+        .replace(/\{\{entityName\}\}/g, eventData.entityName || eventData.context?.projectName || eventData.payload?.entityName || 'Unknown')
+        .replace(/\{\{projectName\}\}/g, eventData.projectName || eventData.context?.projectName || '')
+        .replace(/\{\{eventType\}\}/g, eventData.eventType || '');
+    }
+
+    const SLA_HOURS = { critical: 4, high: 8, medium: 24, low: 72 };
+    function calcDueDate(priority) {
+      const hours = SLA_HOURS[priority] || 24;
+      const d = new Date();
+      let left = hours;
+      while (left > 0) { d.setHours(d.getHours() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) left--; }
+      return admin.firestore.Timestamp.fromDate(d);
+    }
+
+    // Find best employee for a role
+    async function findEmployee(roleSlug) {
+      if (!roleSlug) return null;
+      try {
+        const snap = await db.collection('employees')
+          .where('employmentStatus', 'in', ['active', 'probation'])
+          .limit(50).get();
+        if (snap.empty) return null;
+
+        const candidates = [];
+        for (const doc of snap.docs) {
+          const d = doc.data();
+          const empRole = d.roleProfileId || d.position?.roleProfileId || '';
+          const accessRoles = d.systemAccess?.accessRoles || [];
+          const accessRoleMatch = accessRoles.includes(roleSlug);
+          const titleMatch = (d.position?.title || '').toLowerCase().replace(/[\s_-]+/g, '-').includes(roleSlug.toLowerCase());
+          if (accessRoleMatch || empRole === roleSlug || titleMatch) {
+            const tasks = d.workload?.activeTaskCount ?? 0;
+            const max = d.workload?.maxConcurrent ?? 40;
+            candidates.push({ id: doc.id, name: `${d.firstName || ''} ${d.lastName || ''}`.trim() || 'Unknown', email: d.email || '', tasks, util: max > 0 ? Math.round((tasks / max) * 100) : 100 });
+          }
+        }
+        if (!candidates.length) return null;
+        candidates.sort((a, b) => a.util - b.util || a.tasks - b.tasks);
+        return candidates[0];
+      } catch { return null; }
+    }
+
+    // Fetch pending events
+    const pendingSnapshot = await db.collection('businessEvents')
+      .where('status', '==', 'pending')
+      .limit(200)
+      .get();
+
+    // Also check events without a processing.status
+    const unprocessedSnapshot = await db.collection('businessEvents')
+      .limit(200)
+      .get();
+
+    // Merge and deduplicate
+    const allEventDocs = new Map();
+    for (const doc of pendingSnapshot.docs) allEventDocs.set(doc.id, doc);
+    for (const doc of unprocessedSnapshot.docs) {
+      const data = doc.data();
+      const procStatus = data.processing?.status;
+      if (!procStatus || procStatus === 'pending') {
+        allEventDocs.set(doc.id, doc);
+      }
+    }
+
+    const stats = { total: allEventDocs.size, processed: 0, skipped: 0, errors: 0, tasksCreated: 0, byEventType: {} };
+    const results = [];
+
+    for (const [eventId, eventDoc] of allEventDocs) {
+      const eventData = { id: eventId, ...eventDoc.data() };
+      const eventType = eventData.eventType;
+      const rules = TASK_RULES[eventType];
+
+      if (!rules || rules.length === 0) {
+        stats.skipped++;
+        continue;
+      }
+
+      stats.byEventType[eventType] = (stats.byEventType[eventType] || 0) + 1;
+
+      if (dryRun) {
+        stats.processed++;
+        results.push({ eventId, eventType, entityName: eventData.entityName || eventData.context?.projectName || 'N/A', tasksToCreate: rules.length, dryRun: true });
+        continue;
+      }
+
+      try {
+        // Idempotency: skip if already processed
+        const procStatus = eventData.processing?.status;
+        if (procStatus === 'processed' || procStatus === 'processing') {
+          stats.skipped++;
+          continue;
+        }
+
+        // Mark as processing
+        await eventDoc.ref.update({
+          'processing.status': 'processing',
+          'processing.processedAt': admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        const generatedTaskIds = [];
+
+        for (const rule of rules) {
+          const assignee = await findEmployee(rule.assignToRole);
+          const priority = rule.defaultPriority || 'medium';
+
+          const taskDoc = await db.collection('generatedTasks').add({
+            title: interpolate(rule.title, eventData),
+            description: rule.description || '',
+            priority,
+            status: 'pending',
+            stage: assignee ? 'assigned' : 'pending_assignment',
+            sourceEventId: eventId,
+            sourceEventType: eventType,
+            sourceModule: eventData.sourceModule || 'unknown',
+            subsidiary: eventData.subsidiary || eventData.context?.subsidiary || 'finishes',
+            entityType: eventData.entityType || 'unknown',
+            entityId: eventData.entityId || eventData.context?.entityId || null,
+            entityName: eventData.entityName || eventData.context?.projectName || null,
+            projectId: eventData.projectId || eventData.context?.projectId || null,
+            projectName: eventData.projectName || eventData.context?.projectName || null,
+            assignedTo: assignee?.id || null,
+            assignedToName: assignee?.name || null,
+            assignment: assignee ? {
+              assigneeId: assignee.id,
+              assigneeRef: { id: assignee.id, name: assignee.name, email: assignee.email },
+              assignedAt: admin.firestore.FieldValue.serverTimestamp(),
+              assignedBy: 'system',
+              assignmentMethod: 'workload_based',
+              assignedRole: rule.assignToRole,
+            } : null,
+            dueDate: calcDueDate(priority),
+            checklistItems: (rule.checklist || []).map(t => ({ text: t, completed: false })),
+            checklistProgress: 0,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          generatedTaskIds.push(taskDoc.id);
+          stats.tasksCreated++;
+        }
+
+        // Mark event as processed
+        await eventDoc.ref.update({
+          'processing.status': 'processed',
+          'processing.tasksGenerated': generatedTaskIds.length,
+          'processing.generatedTaskIds': generatedTaskIds,
+          'processing.completedAt': admin.firestore.FieldValue.serverTimestamp(),
+          status: 'processed',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        stats.processed++;
+        results.push({ eventId, eventType, entityName: eventData.entityName || eventData.context?.projectName || 'N/A', tasksCreated: generatedTaskIds.length, taskIds: generatedTaskIds });
+
+      } catch (error) {
+        stats.errors++;
+        logger.error('Failed to process event', { eventId, error: error.message });
+        await eventDoc.ref.update({
+          'processing.status': 'failed',
+          'processing.errorMessage': error.message,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    const message = dryRun
+      ? `Dry run: would process ${stats.processed} events, creating ~${results.reduce((s, r) => s + (r.tasksToCreate || 0), 0)} tasks`
+      : `Processed ${stats.processed} events, created ${stats.tasksCreated} tasks`;
+
+    logger.info(message, stats);
+
+    return { success: true, dryRun, message, stats, results: results.slice(0, 50) };
+  }
+);

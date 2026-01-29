@@ -11,6 +11,8 @@ import React, {
   ReactNode,
 } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/shared/services/firebase/functions';
 import {
   collection,
   query,
@@ -27,6 +29,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { auth, db } from '@/shared/services/firebase';
+import { createUser as createDawinUser, getUserByUid } from '@/core/settings/settingsService';
 import type {
   GlobalState,
   GlobalAction,
@@ -325,7 +328,48 @@ export const GlobalProvider: React.FC<GlobalProviderProps> = ({ children }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const userDoc = await fetchUserProfile(firebaseUser.uid);
+        let userDoc = await fetchUserProfile(firebaseUser.uid);
+
+        // If no user profile exists, check for a pending invite
+        if (!userDoc) {
+          try {
+            const processInvite = httpsCallable<unknown, { hasInvite: boolean; globalRole?: string }>(
+              functions,
+              'processNewUserInvite'
+            );
+            const result = await processInvite({});
+            if (result.data.hasInvite) {
+              userDoc = await fetchUserProfile(firebaseUser.uid);
+            }
+          } catch (err) {
+            console.error('Error checking invite:', err);
+          }
+        }
+
+        // Auto-provision DawinUser for super users who don't have one yet
+        const SUPER_USER_EMAILS = ['onzimai@dawin.group'];
+        if (!userDoc && firebaseUser.email && SUPER_USER_EMAILS.includes(firebaseUser.email)) {
+          try {
+            // Check if DawinUser doc exists in organizations/default/users
+            const existingDawinUser = await getUserByUid('default', firebaseUser.uid);
+            if (!existingDawinUser) {
+              const superUserData: Record<string, any> = {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email,
+                displayName: firebaseUser.displayName || firebaseUser.email,
+                globalRole: 'owner',
+                isActive: true,
+                subsidiaryAccess: [],
+              };
+              if (firebaseUser.photoURL) superUserData.photoUrl = firebaseUser.photoURL;
+              await createDawinUser('default', superUserData as any);
+              console.log('[GlobalContext] Auto-provisioned DawinUser for super user');
+            }
+            userDoc = await fetchUserProfile(firebaseUser.uid);
+          } catch (err) {
+            console.error('[GlobalContext] Error auto-provisioning super user:', err);
+          }
+        }
 
         dispatch({
           type: 'SET_AUTH',

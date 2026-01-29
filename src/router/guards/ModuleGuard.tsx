@@ -1,12 +1,12 @@
 /**
  * ModuleGuard Component
- * Protects routes based on module access
+ * Protects routes based on module access from the user's DawinUser profile
  */
 
-import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/shared/hooks';
-import { auth } from '@/shared/services/firebase';
+import { useCurrentDawinUser } from '@/core/settings';
+import { FullPageLoader } from '@/shared/components/feedback';
 
 type ModuleType =
   | 'infrastructure_delivery'
@@ -21,64 +21,40 @@ interface ModuleGuardProps {
   module: ModuleType;
 }
 
-// Modules that are open to all authenticated users (during development/setup)
-const OPEN_ACCESS_MODULES: ModuleType[] = [
-  'investment_advisory',
-  'matflow',
-  'infrastructure_delivery',
-  'infrastructure_investment',
-  'market_intelligence',
-  'strategy',
-];
+// Super user email with unrestricted access to all modules
+const SUPER_USER_EMAILS = ['onzimai@dawin.group'];
 
 export function ModuleGuard({ children, module }: ModuleGuardProps) {
   const { user, loading } = useAuth();
-  const [claims, setClaims] = useState<Record<string, any> | null>(null);
-  const [claimsLoading, setClaimsLoading] = useState(true);
+  const { dawinUser, isLoading: userLoading } = useCurrentDawinUser();
 
-  useEffect(() => {
-    async function fetchClaims() {
-      if (user && auth.currentUser) {
-        try {
-          const tokenResult = await auth.currentUser.getIdTokenResult();
-          setClaims(tokenResult.claims || {});
-        } catch (error) {
-          console.error('Error fetching claims:', error);
-          setClaims({});
-        }
-      } else {
-        setClaims(null);
-      }
-      setClaimsLoading(false);
-    }
-    
-    fetchClaims();
-  }, [user]);
-
-  if (loading || claimsLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
-      </div>
-    );
+  if (loading || userLoading) {
+    return <FullPageLoader text="Checking module access..." />;
   }
 
   if (!user) {
     return <Navigate to="/auth/login" replace />;
   }
 
-  // Check if module is open access (all authenticated users allowed)
-  if (OPEN_ACCESS_MODULES.includes(module)) {
+  // Super user bypasses all module checks
+  if (user.email && SUPER_USER_EMAILS.includes(user.email)) {
     return <>{children}</>;
   }
 
-  // Check custom claims for role-based access
-  const userRole = claims?.role || '';
-  const userModules: string[] = claims?.modules || [];
-  
-  // Admin roles have access to all modules
-  const isAdmin = ['platform_admin', 'admin', 'super_admin', 'executive', 'director'].includes(userRole);
-  const hasModuleAccess = userModules.includes(module) || isAdmin;
+  // No DawinUser profile — user needs to be invited first
+  if (!dawinUser) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  // Admins and owners have access to all modules
+  if (['admin', 'owner'].includes(dawinUser.globalRole)) {
+    return <>{children}</>;
+  }
+
+  // Check subsidiaryAccess for module permission
+  const hasModuleAccess = dawinUser.subsidiaryAccess?.some(
+    (sa) => sa.hasAccess && sa.modules?.some((m) => m.moduleId === module && m.hasAccess)
+  );
 
   if (!hasModuleAccess) {
     return <Navigate to="/unauthorized" replace />;

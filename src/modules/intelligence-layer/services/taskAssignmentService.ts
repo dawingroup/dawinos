@@ -77,6 +77,22 @@ async function writeAuditEntry(
 // ============================================
 
 /**
+ * Look up employee name by ID
+ */
+async function getEmployeeName(employeeId: string): Promise<string | null> {
+  try {
+    const empRef = doc(db, 'employees', employeeId);
+    const empSnap = await getDoc(empRef);
+    if (!empSnap.exists()) return null;
+    const data = empSnap.data();
+    const name = `${data.firstName || ''} ${data.lastName || ''}`.trim();
+    return name || data.displayName || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Assign a task to an employee
  */
 export async function assignTask(
@@ -90,13 +106,16 @@ export async function assignTask(
   validateId(assignedBy, 'Assigner ID');
   await assertTaskExists(taskId);
 
+  const assigneeName = await getEmployeeName(assignedTo);
   const taskRef = doc(db, 'generatedTasks', taskId);
 
   await updateDoc(taskRef, {
     assignedTo,
+    assignedToName: assigneeName,
     assignedBy,
     assignedAt: Timestamp.now(),
     assignmentReason: reason || null,
+    stage: 'assigned',
     updatedAt: Timestamp.now(),
   });
 
@@ -122,10 +141,12 @@ export async function reassignTask(
   validateId(reassignedBy, 'Reassigner ID');
   await assertTaskExists(taskId);
 
+  const assigneeName = await getEmployeeName(newAssignee);
   const taskRef = doc(db, 'generatedTasks', taskId);
 
   await updateDoc(taskRef, {
     assignedTo: newAssignee,
+    assignedToName: assigneeName,
     reassignedBy,
     reassignedAt: Timestamp.now(),
     reassignmentReason: reason || null,
@@ -154,14 +175,17 @@ export async function takeUpTask(
   validateId(takenBy, 'Taker ID');
   await assertTaskExists(taskId);
 
+  const assigneeName = await getEmployeeName(newAssignee);
   const taskRef = doc(db, 'generatedTasks', taskId);
 
   await updateDoc(taskRef, {
     assignedTo: newAssignee,
+    assignedToName: assigneeName,
     takenUpBy: takenBy,
     takenUpAt: Timestamp.now(),
     takeUpReason: reason || null,
     status: 'in_progress',
+    stage: 'assigned',
     updatedAt: Timestamp.now(),
   });
 

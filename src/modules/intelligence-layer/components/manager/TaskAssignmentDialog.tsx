@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { X, User, MessageSquare } from 'lucide-react';
 import { assignTask, reassignTask, takeUpTask } from '../../services/taskAssignmentService';
 import { useAuth } from '@/integration/store';
+import { useEmployeeDocId } from '../../hooks/useEmployeeDocId';
 import { db } from '@/shared/services/firebase/firestore';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 
@@ -28,7 +29,8 @@ interface TaskAssignmentDialogProps {
 }
 
 export function TaskAssignmentDialog({ task, mode, onClose, onSuccess }: TaskAssignmentDialogProps) {
-  const { user } = useAuth();
+  const { userId: authUid, email: authEmail } = useAuth();
+  const { employeeDocId: userId } = useEmployeeDocId(authUid, authEmail);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<string>('');
   const [reason, setReason] = useState('');
@@ -44,7 +46,7 @@ export function TaskAssignmentDialog({ task, mode, onClose, onSuccess }: TaskAss
       const employeesRef = collection(db, 'employees');
       const q = query(
         employeesRef,
-        where('employmentStatus', '==', 'active')
+        where('employmentStatus', 'in', ['active', 'probation'])
       );
 
       const snapshot = await getDocs(q);
@@ -66,7 +68,6 @@ export function TaskAssignmentDialog({ task, mode, onClose, onSuccess }: TaskAss
       return;
     }
 
-    const userId = user?.uid || user?.userId;
     if (!userId) {
       setError('User not authenticated');
       return;
@@ -150,7 +151,7 @@ export function TaskAssignmentDialog({ task, mode, onClose, onSuccess }: TaskAss
             >
               <option value="">Select an employee...</option>
               {mode === 'takeup' && (
-                <option value={user?.uid || user?.userId}>Myself</option>
+                <option value={userId}>Myself</option>
               )}
               {employees.map(emp => (
                 <option key={emp.id} value={emp.id}>

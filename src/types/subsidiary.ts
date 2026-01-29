@@ -16,7 +16,7 @@ export interface Subsidiary {
   updatedAt: Date;
 }
 
-export type SubsidiaryModule = 
+export type SubsidiaryModule =
   | 'design-manager'
   | 'clipper'
   | 'asset-registry'
@@ -24,7 +24,13 @@ export type SubsidiaryModule =
   | 'launch-pipeline'
   | 'procurement'
   | 'production'
-  | 'matflow';
+  | 'matflow'
+  | 'investment_advisory'
+  | 'infrastructure_delivery'
+  | 'market_intelligence'
+  | 'strategy'
+  | 'hr'
+  | 'finance';
 
 export interface SubsidiaryStats {
   activeProjects: number;
@@ -54,7 +60,7 @@ export const DEFAULT_SUBSIDIARIES: Subsidiary[] = [
     shortName: 'Advisory',
     color: '#D97706',
     description: 'Construction consulting and project management',
-    modules: ['matflow'],
+    modules: ['matflow', 'investment_advisory', 'infrastructure_delivery'],
     status: 'active',
     createdAt: new Date(),
     updatedAt: new Date(),

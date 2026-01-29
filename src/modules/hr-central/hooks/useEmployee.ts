@@ -7,6 +7,8 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   collection,
   doc,
+  getDocs,
+  limit as firestoreLimit,
   onSnapshot,
   query,
   where,
@@ -694,4 +696,59 @@ export function useOrgChart(
   }, [fetchOrgChart]);
 
   return { rootNode, loading, error, refresh: fetchOrgChart };
+}
+
+// ============================================
+// Employee by System User ID Hook
+// ============================================
+
+interface UseEmployeeByUserIdResult {
+  employee: Employee | null;
+  loading: boolean;
+  error: Error | null;
+}
+
+/**
+ * Hook to find the employee record linked to a Firebase Auth user ID
+ * Queries employees collection where systemAccess.userId matches
+ */
+export function useEmployeeByUserId(userId: string | null): UseEmployeeByUserIdResult {
+  const [employee, setEmployee] = useState<Employee | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!userId) {
+      setEmployee(null);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    const q = query(
+      collection(db, EMPLOYEES_COLLECTION),
+      where('systemAccess.userId', '==', userId),
+      where('isDeleted', '==', false),
+      firestoreLimit(1)
+    );
+
+    getDocs(q)
+      .then((snapshot) => {
+        if (!snapshot.empty) {
+          setEmployee(snapshot.docs[0].data() as Employee);
+        } else {
+          setEmployee(null);
+        }
+        setError(null);
+      })
+      .catch((err) => {
+        console.error('Error fetching employee by userId:', err);
+        setError(err as Error);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [userId]);
+
+  return { employee, loading, error };
 }

@@ -3,6 +3,7 @@
  * Displays an individual task in the Employee Task Inbox
  */
 
+import { useNavigate } from 'react-router-dom';
 import {
   Clock,
   Play,
@@ -12,6 +13,7 @@ import {
   CheckSquare,
   XCircle,
   Folder,
+  ExternalLink,
 } from 'lucide-react';
 
 import { Card } from '@/core/components/ui/card';
@@ -21,6 +23,7 @@ import { Progress } from '@/core/components/ui/progress';
 
 import type { EmployeeTask } from '../../hooks/useEmployeeTaskInbox';
 import { getDueDateStatus, formatDueDate } from '../../hooks/useEmployeeTaskInbox';
+import { getProjectRoute } from '../../utils/getEntityRoute';
 
 // ============================================
 // Types
@@ -103,7 +106,9 @@ function StatusBadge({ status }: { status: string }) {
 // ============================================
 
 export function TaskCard({ task, onStart, onComplete, onViewDetails }: TaskCardProps) {
+  const navigate = useNavigate();
   const dueDateStatus = getDueDateStatus(task.dueDate);
+  const projectRoute = getProjectRoute({ projectId: task.projectId, sourceModule: task.sourceModule });
   const hasChecklist = task.checklistItems && task.checklistItems.length > 0;
   const completedItems = task.checklistItems?.filter((i) => i.completed).length || 0;
   const totalItems = task.checklistItems?.length || 0;
@@ -176,7 +181,17 @@ export function TaskCard({ task, onStart, onComplete, onViewDetails }: TaskCardP
 
             {/* Project Name */}
             {task.projectName && (
-              <span className="truncate max-w-[120px]">{task.projectName}</span>
+              projectRoute ? (
+                <button
+                  onClick={(e) => { e.stopPropagation(); navigate(projectRoute); }}
+                  className="truncate max-w-[120px] text-blue-600 hover:underline flex items-center gap-1"
+                >
+                  {task.projectName}
+                  <ExternalLink className="h-2.5 w-2.5 flex-shrink-0" />
+                </button>
+              ) : (
+                <span className="truncate max-w-[120px]">{task.projectName}</span>
+              )
             )}
           </div>
         </div>

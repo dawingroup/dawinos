@@ -366,15 +366,26 @@ export async function createUser(
   userData: Omit<DawinUser, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
   const usersRef = getUsersRef(orgId);
-  const newDocRef = doc(usersRef);
-  
-  await setDoc(newDocRef, {
-    ...userData,
+  // Use the Firebase Auth UID as the doc ID when available, so Firestore rules can locate the doc
+  const userDocRef = userData.uid
+    ? doc(usersRef, userData.uid)
+    : doc(usersRef);
+
+  // Strip undefined values — Firestore rejects them in setDoc
+  const cleanData: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(userData)) {
+    if (value !== undefined) {
+      cleanData[key] = value;
+    }
+  }
+
+  await setDoc(userDocRef, {
+    ...cleanData,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
-  
-  return newDocRef.id;
+
+  return userDocRef.id;
 }
 
 export async function updateUser(
