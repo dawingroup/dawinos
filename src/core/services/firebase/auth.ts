@@ -3,10 +3,11 @@
  * Authentication service utilities
  */
 
-import { 
-  getAuth, 
-  GoogleAuthProvider, 
-  signInWithPopup, 
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInAnonymously,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   type Auth,
@@ -43,6 +44,19 @@ export async function signInWithGoogle(): Promise<User> {
 export async function signOut(): Promise<void> {
   localStorage.removeItem('googleAccessToken');
   await firebaseSignOut(auth);
+}
+
+/**
+ * Sign in anonymously for public portal access
+ * Used by CD Portal to satisfy Firestore auth requirements without user interaction
+ */
+export async function signInAnonymouslyForPortal(): Promise<User> {
+  // If already signed in (anonymous or otherwise), return current user
+  if (auth.currentUser) {
+    return auth.currentUser;
+  }
+  const result = await signInAnonymously(auth);
+  return result.user;
 }
 
 /**

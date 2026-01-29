@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '@/shared/services/firebase';
+import { useAuth } from '@/shared/hooks';
 import { assetService } from '../services/AssetService';
 import { AssetForm } from '../components/AssetForm';
 import { AssetList } from '../components/AssetList';
@@ -16,6 +17,9 @@ import type { MaintenanceLog } from '../types';
 type ViewMode = 'list' | 'form';
 
 export function AssetRegistry() {
+  // Auth
+  const { user } = useAuth();
+
   // State
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -93,8 +97,7 @@ export function AssetRegistry() {
 
   // Handle form submission
   const handleSubmitAsset = async (assetData: Partial<Asset>) => {
-    // TODO: Get current user ID from auth context
-    const userId = 'current-user';
+    const userId = user?.uid || '';
 
     if (selectedAsset?.id) {
       // Update existing asset
@@ -122,7 +125,7 @@ export function AssetRegistry() {
 
   // Confirm status change without maintenance log
   const confirmStatusChange = async (asset: Asset, newStatus: AssetStatus) => {
-    const userId = 'current-user';
+    const userId = user?.uid || '';
     await assetService.updateStatus(asset.id, newStatus, userId);
   };
 
@@ -130,7 +133,7 @@ export function AssetRegistry() {
   const handleMaintenanceLog = async (logEntry: Omit<MaintenanceLog, 'id' | 'performedAt' | 'assetId'>) => {
     if (!maintenanceModalAsset || !pendingStatusChange) return;
 
-    const userId = 'current-user';
+    const userId = user?.uid || '';
 
     // Log maintenance
     await assetService.logMaintenance(

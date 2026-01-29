@@ -6,6 +6,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 // Use Gemini API key from Firebase secrets
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
@@ -14,8 +15,8 @@ const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
  * Analyzes an image of a workshop jig or setup to identify the design feature it produces
  */
 exports.analyzeFeatureFromAsset = onCall(
-  { 
-    cors: true,
+  {
+    cors: ALLOWED_ORIGINS,
     invoker: 'public',
     secrets: [GEMINI_API_KEY]
   },

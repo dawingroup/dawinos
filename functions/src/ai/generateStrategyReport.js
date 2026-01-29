@@ -2,12 +2,18 @@
  * Strategy Report Generator Cloud Function (Gen 2)
  * Uses Gemini with Google Search grounding to generate design strategy reports
  * that match current trends to available manufacturing features
+ *
+ * Using v2 API (firebase-functions v4.x)
  */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const admin = require('firebase-admin');
+const { ALLOWED_ORIGINS } = require('../config/cors');
+
+// Define secrets
+const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 
 // Initialize admin if not already done
 if (!admin.apps.length) {
@@ -16,8 +22,6 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-// Define secret for Gemini API key
-const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
 /**
  * Generate a strategy report for a design project
@@ -30,11 +34,12 @@ exports.generateStrategyReport = onCall(
   {
     memory: '1GiB',
     timeoutSeconds: 300,
-    secrets: [geminiApiKey],
+    secrets: [GEMINI_API_KEY],
+    cors: ALLOWED_ORIGINS,
   },
   async (request) => {
-    // Get API key from environment/secrets
-    const GEMINI_API_KEY = geminiApiKey.value();
+    // Get API key from secrets
+    const apiKey = GEMINI_API_KEY.value();
 
     const {
       projectName,
@@ -160,7 +165,7 @@ exports.generateStrategyReport = onCall(
       // ============================================
       console.log('Step 2: Generating strategy with AI...');
 
-      const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+      const genAI = new GoogleGenerativeAI(apiKey);
 
       // Try with Google Search grounding first, fallback to non-grounded if it fails
       let model;

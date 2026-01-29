@@ -16,6 +16,7 @@ import {
   limit,
   getDocs,
   onSnapshot,
+  writeBatch,
   Timestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -29,6 +30,9 @@ import type {
   TaskTriggerCondition,
 } from '../types/businessEvents';
 import { ALL_TASK_TEMPLATES } from '../constants/businessEvents';
+import { employeeAssignmentService } from '@/modules/intelligence/services/employeeAssignmentService';
+import { STANDARD_ROLE_PROFILES } from '@/modules/intelligence/config/role-profile.constants';
+import type { RoleProfile } from '@/modules/intelligence/types/role-profile.types';
 
 // ============================================================================
 // COLLECTION REFERENCES
@@ -122,7 +126,7 @@ class TaskGenerationService {
 
   async generateTasksFromEvent(event: BusinessEvent): Promise<GeneratedTask[]> {
     const templates = await this.getTemplatesForEvent(event.eventType);
-    const generatedTasks: GeneratedTask[] = [];
+    const tasksToCreate: Array<{ data: Omit<GeneratedTask, 'id'>; ref: ReturnType<typeof doc> }> = [];
 
     for (const template of templates) {
       // Check if trigger conditions are met
@@ -130,12 +134,53 @@ class TaskGenerationService {
         continue;
       }
 
-      // Generate task from template
-      const task = await this.createTaskFromTemplate(template, event);
-      generatedTasks.push(task);
+      // Deduplication: check if task already exists for this event + template
+      const existingQuery = query(
+        collection(db, GENERATED_TASKS_COLLECTION),
+        where('businessEventId', '==', event.id),
+        where('templateId', '==', template.id),
+        limit(1)
+      );
+      const existing = await getDocs(existingQuery);
+      if (!existing.empty) {
+        // Return existing task instead of creating a duplicate
+        const existingTask = this.mapTaskDocs(existing.docs)[0];
+        tasksToCreate.push({
+          data: existingTask,
+          ref: doc(db, GENERATED_TASKS_COLLECTION, existingTask.id),
+        });
+        continue;
+      }
+
+      // Prepare task data (without writing yet)
+      const taskData = await this.prepareTaskData(template, event);
+      const newRef = doc(collection(db, GENERATED_TASKS_COLLECTION));
+      tasksToCreate.push({ data: taskData, ref: newRef });
     }
 
-    return generatedTasks;
+    // Batch write all new tasks atomically
+    const newTasks = tasksToCreate.filter(
+      (t) => !(t.data as GeneratedTask).id
+    );
+    if (newTasks.length > 0) {
+      const batch = writeBatch(db);
+      for (const { data, ref } of newTasks) {
+        batch.set(ref, {
+          ...data,
+          dueDate: Timestamp.fromDate(data.dueDate),
+          assignedAt: data.assignedAt ? Timestamp.fromDate(data.assignedAt) : null,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+      }
+      await batch.commit();
+    }
+
+    // Return all tasks (existing + newly created)
+    return tasksToCreate.map(({ data, ref }) => ({
+      ...data,
+      id: ref.id,
+    })) as GeneratedTask[];
   }
 
   private checkTriggerConditions(
@@ -196,10 +241,10 @@ class TaskGenerationService {
     }
   }
 
-  private async createTaskFromTemplate(
+  private async prepareTaskData(
     template: TaskTemplate,
     event: BusinessEvent
-  ): Promise<GeneratedTask> {
+  ): Promise<Omit<GeneratedTask, 'id'>> {
     // Calculate due date
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + template.defaultDueDays);
@@ -219,8 +264,7 @@ class TaskGenerationService {
     // Determine assignee
     const { assignedTo, assignedToName } = await this.determineAssignee(template, event);
 
-    // Create task document
-    const taskData: Omit<GeneratedTask, 'id'> = {
+    return {
       businessEventId: event.id,
       templateId: template.id,
       title,
@@ -244,20 +288,6 @@ class TaskGenerationService {
       updatedAt: new Date(),
       createdBy: 'system',
     };
-
-    // Save to Firestore
-    const docRef = await addDoc(collection(db, GENERATED_TASKS_COLLECTION), {
-      ...taskData,
-      dueDate: Timestamp.fromDate(taskData.dueDate),
-      assignedAt: taskData.assignedAt ? Timestamp.fromDate(taskData.assignedAt) : null,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    });
-
-    return {
-      id: docRef.id,
-      ...taskData,
-    };
   }
 
   private substituteVariables(text: string, event: BusinessEvent): string {
@@ -268,34 +298,197 @@ class TaskGenerationService {
       .replace(/\{eventType\}/g, event.eventType);
   }
 
+  /**
+   * Validate that a role profile can handle a specific task type for an event
+   */
+  private validateTaskCapability(
+    roleSlug: string,
+    eventType: string,
+    taskType: string
+  ): { isValid: boolean; reason?: string } {
+    const roleProfile = STANDARD_ROLE_PROFILES[roleSlug] as Partial<RoleProfile> | undefined;
+
+    if (!roleProfile) {
+      return {
+        isValid: false,
+        reason: `Role profile '${roleSlug}' not found`,
+      };
+    }
+
+    // Check if role has task capabilities defined
+    if (!roleProfile.taskCapabilities || roleProfile.taskCapabilities.length === 0) {
+      // No capabilities defined - allow by default for backward compatibility
+      return { isValid: true };
+    }
+
+    // Find matching task capability for this event type
+    const capability = roleProfile.taskCapabilities.find(
+      (cap) => cap.eventType === eventType
+    );
+
+    if (!capability) {
+      return {
+        isValid: false,
+        reason: `Role '${roleProfile.title}' has no capability defined for event '${eventType}'`,
+      };
+    }
+
+    // Check if this task type is in the capability's taskTypes
+    if (!capability.taskTypes.includes(taskType)) {
+      return {
+        isValid: false,
+        reason: `Role '${roleProfile.title}' cannot handle task type '${taskType}' for event '${eventType}'`,
+      };
+    }
+
+    // Check if role can execute this task type
+    if (!capability.canExecute) {
+      return {
+        isValid: false,
+        reason: `Role '${roleProfile.title}' cannot execute tasks for event '${eventType}'`,
+      };
+    }
+
+    return { isValid: true };
+  }
+
   private async determineAssignee(
     template: TaskTemplate,
     event: BusinessEvent
   ): Promise<{ assignedTo?: string; assignedToName?: string }> {
-    switch (template.assignmentStrategy) {
-      case 'creator':
+    try {
+      switch (template.assignmentStrategy) {
+        case 'creator':
+          return {
+            assignedTo: event.triggeredBy,
+            assignedToName: event.triggeredByName,
+          };
+
+        case 'specific_user':
+          if (template.assignToUserId) {
+            const result = await employeeAssignmentService.resolveAssignment(
+              { type: 'user', value: template.assignToUserId },
+              {
+                subsidiaryId: event.subsidiary,
+                departmentId: undefined,
+                eventTriggerUserId: event.triggeredBy,
+                projectId: event.projectId,
+                entityData: event.currentState,
+              }
+            );
+            if (result) {
+              return {
+                assignedTo: result.employeeId,
+                assignedToName: result.employeeName,
+              };
+            }
+          }
+          return {
+            assignedTo: template.assignToUserId,
+            assignedToName: undefined,
+          };
+
+        case 'specific_role':
+          if (template.assignToRole) {
+            // Validate task capability before assignment
+            const validation = this.validateTaskCapability(
+              template.assignToRole,
+              event.eventType,
+              (template as any).taskType || 'general'
+            );
+
+            if (!validation.isValid) {
+              console.warn(
+                `Task capability validation failed: ${validation.reason}. ` +
+                `Proceeding with assignment anyway for backward compatibility.`
+              );
+              // Continue with assignment despite validation failure for now
+              // In future, you may want to skip assignment or use fallback
+            }
+
+            const result = await employeeAssignmentService.resolveAssignment(
+              { type: 'role', value: template.assignToRole },
+              {
+                subsidiaryId: event.subsidiary,
+                departmentId: undefined,
+                eventTriggerUserId: event.triggeredBy,
+                projectId: event.projectId,
+                entityData: event.currentState,
+              },
+              { preferLowerWorkload: true }
+            );
+            if (result) {
+              return {
+                assignedTo: result.employeeId,
+                assignedToName: result.employeeName,
+              };
+            }
+          }
+          return {
+            assignedTo: undefined,
+            assignedToName: undefined,
+          };
+
+        case 'project_lead':
+          // Try to find project lead or manager
+          const projectLeadResult = await employeeAssignmentService.resolveAssignment(
+            { type: 'role', value: 'project-manager' },
+            {
+              subsidiaryId: event.subsidiary,
+              departmentId: undefined,
+              eventTriggerUserId: event.triggeredBy,
+              projectId: event.projectId,
+              entityData: event.currentState,
+            }
+          );
+          if (projectLeadResult) {
+            return {
+              assignedTo: projectLeadResult.employeeId,
+              assignedToName: projectLeadResult.employeeName,
+            };
+          }
+          return {
+            assignedTo: undefined,
+            assignedToName: undefined,
+          };
+
+        case 'manager':
+          if (event.triggeredBy) {
+            const managerResult = await employeeAssignmentService.resolveAssignment(
+              { type: 'manager' },
+              {
+                subsidiaryId: event.subsidiary,
+                departmentId: undefined,
+                eventTriggerUserId: event.triggeredBy,
+                projectId: event.projectId,
+                entityData: event.currentState,
+              }
+            );
+            if (managerResult) {
+              return {
+                assignedTo: managerResult.employeeId,
+                assignedToName: managerResult.employeeName,
+              };
+            }
+          }
+          return {
+            assignedTo: undefined,
+            assignedToName: undefined,
+          };
+
+        default:
+          return {};
+      }
+    } catch (error) {
+      console.error('Error determining assignee:', error);
+      // Fall back to original behavior on error
+      if (template.assignmentStrategy === 'creator') {
         return {
           assignedTo: event.triggeredBy,
           assignedToName: event.triggeredByName,
         };
-
-      case 'specific_user':
-        return {
-          assignedTo: template.assignToUserId,
-          assignedToName: undefined,
-        };
-
-      case 'specific_role':
-      case 'project_lead':
-        // In a real implementation, this would query the project/team
-        // to find users with the appropriate role
-        return {
-          assignedTo: undefined,
-          assignedToName: undefined,
-        };
-
-      default:
-        return {};
+      }
+      return {};
     }
   }
 

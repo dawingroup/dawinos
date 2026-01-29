@@ -5,6 +5,7 @@
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY);
@@ -13,7 +14,7 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || process.en
  * Generate embedding for a single text
  */
 exports.generateEmbedding = onCall({
-  cors: true,
+  cors: ALLOWED_ORIGINS,
   maxInstances: 10,
 }, async (request) => {
   const { text } = request.data;
@@ -38,7 +39,7 @@ exports.generateEmbedding = onCall({
  * Generate embeddings for multiple texts in batch
  */
 exports.generateEmbeddings = onCall({
-  cors: true,
+  cors: ALLOWED_ORIGINS,
   maxInstances: 10,
 }, async (request) => {
   const { texts } = request.data;
@@ -86,7 +87,7 @@ exports.generateEmbeddings = onCall({
  * Performs vector similarity search
  */
 exports.semanticSearch = onCall({
-  cors: true,
+  cors: ALLOWED_ORIGINS,
   maxInstances: 10,
 }, async (request) => {
   const { query, collections, topK = 10, minSimilarity = 0.5 } = request.data;
@@ -161,7 +162,7 @@ function cosineSimilarity(a, b) {
  * Generates embeddings and stores them
  */
 exports.indexCollection = onCall({
-  cors: true,
+  cors: ALLOWED_ORIGINS,
   maxInstances: 5,
   timeoutSeconds: 540, // 9 minutes for large collections
 }, async (request) => {

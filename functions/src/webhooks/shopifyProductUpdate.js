@@ -6,6 +6,7 @@
 const { onRequest } = require('firebase-functions/v2/https');
 const { getFirestore } = require('firebase-admin/firestore');
 const crypto = require('crypto');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 /**
  * Verify Shopify webhook signature
@@ -162,7 +163,7 @@ function getDefaultAuditConfig() {
  */
 exports.shopifyProductUpdate = onRequest(
   {
-    cors: true,
+    cors: ALLOWED_ORIGINS,
   },
   async (req, res) => {
     // Only accept POST requests
@@ -255,7 +256,7 @@ exports.shopifyProductUpdate = onRequest(
  */
 exports.shopifyProductDelete = onRequest(
   {
-    cors: true,
+    cors: ALLOWED_ORIGINS,
   },
   async (req, res) => {
     if (req.method !== 'POST') {

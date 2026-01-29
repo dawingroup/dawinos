@@ -20,6 +20,8 @@ import {
   Loader2,
 } from 'lucide-react';
 
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/shared/services/firebase';
 import { Button } from '@/core/components/ui/button';
 import { Input } from '@/core/components/ui/input';
 import { Badge } from '@/core/components/ui/badge';
@@ -61,6 +63,8 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
   onMinimize,
   initialMode = 'general',
 }) => {
+  const STORAGE_KEY = 'intelligence_assistant_messages';
+
   const [mode, setMode] = useState<AssistantModeId>(initialMode);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [input, setInput] = useState('');
@@ -73,6 +77,28 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
   useEffect(() => {
     scrollToBottom();
+  }, [messages]);
+
+  // Load conversation from sessionStorage on mount
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
+        }
+      }
+    } catch { /* ignore corrupt data */ }
+  }, []);
+
+  // Save conversation to sessionStorage on change
+  useEffect(() => {
+    if (messages.length > 0) {
+      try {
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-50)));
+      } catch { /* storage full — ignore */ }
+    }
   }, [messages]);
 
   // Add welcome message on first open
@@ -104,31 +130,53 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     setInput('');
     setIsTyping(true);
 
-    // Simulate AI response (replace with actual API call)
-    setTimeout(() => {
+    // Call Gemini AI via Cloud Function
+    try {
+      const chatFn = httpsCallable<
+        { message: string; mode: string; conversationHistory: Array<{ role: string; content: string }> },
+        { response: string }
+      >(functions, 'assistantChat');
+
+      const result = await chatFn({
+        message: input.trim(),
+        mode,
+        conversationHistory: messages.slice(-10).map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+      });
+
       const aiMessage: AssistantMessage = {
         id: `ai-${Date.now()}`,
         role: 'assistant',
-        content: generateMockResponse(input.trim(), mode),
+        content: result.data.response,
         timestamp: new Date(),
-        actions: [
-          { label: 'View Details', action: 'view_details' },
-          { label: 'Export', action: 'export' },
-        ],
       };
       setMessages((prev) => [...prev, aiMessage]);
+    } catch (error) {
+      console.error('AI Assistant error:', error);
+      const errorMessage: AssistantMessage = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: 'Sorry, I encountered an error processing your request. Please try again.',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   const handleModeChange = (newMode: AssistantModeId) => {
     setMode(newMode);
     const modeConfig = ASSISTANT_MODES.find(m => m.id === newMode);
-    setMessages([
+    // Append a divider message instead of clearing conversation history
+    setMessages((prev) => [
+      ...prev,
       {
-        id: 'mode-change',
+        id: `mode-change-${Date.now()}`,
         role: 'assistant',
-        content: `Switched to ${modeConfig?.label} mode. ${modeConfig?.description}.`,
+        content: `--- Switched to ${modeConfig?.label} mode. ${modeConfig?.description}. ---`,
         timestamp: new Date(),
       },
     ]);
@@ -339,36 +387,5 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     </div>
   );
 };
-
-// Mock response generator (replace with actual AI)
-function generateMockResponse(input: string, mode: AssistantModeId): string {
-  const responses: Record<AssistantModeId, string[]> = {
-    general: [
-      "I've analyzed your request. Based on the current data in DawinOS, I can help you with that.",
-      "That's an interesting question. Let me look into the available data and provide you with insights.",
-      "I understand what you're looking for. Here's what I found in the system...",
-    ],
-    data_analyst: [
-      "Looking at the metrics, I can see some interesting patterns. The data suggests...",
-      "Based on my analysis of the available data, here are the key trends I've identified...",
-      "I've run the numbers and here's what the data tells us...",
-    ],
-    strategic_advisor: [
-      "From a strategic perspective, I recommend considering the following approach...",
-      "Based on market conditions and your current position, here's my strategic recommendation...",
-      "Looking at this strategically, there are several factors to consider...",
-    ],
-    document_expert: [
-      "I've reviewed the document structure. Here are my recommendations for improvement...",
-      "Based on best practices for this type of document, I suggest...",
-      "The document analysis reveals several key points that should be addressed...",
-    ],
-  };
-
-  const modeResponses = responses[mode];
-  const randomResponse = modeResponses[Math.floor(Math.random() * modeResponses.length)];
-
-  return `${randomResponse}\n\nRegarding "${input.substring(0, 50)}${input.length > 50 ? '...' : ''}", I would recommend exploring the relevant modules in DawinOS for more detailed information.`;
-}
 
 export default AIAssistantPanel;

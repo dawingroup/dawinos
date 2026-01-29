@@ -1,7 +1,14 @@
 /**
  * Cutlist Processor Hooks
  * Custom React hooks for the cutlist processor module
+ *
+ * Re-exports from existing hooks during migration
  */
 
-// Hooks will be exported here after migration
-export {};
+// Cutlist Aggregation hook (from design-manager)
+export { useCutlistAggregation } from '../../design-manager/hooks/useCutlistAggregation';
+
+// Context hooks are re-exported from context/index.ts:
+// - useConfig (from ConfigContext)
+// - useOffcuts (from OffcutContext)
+// - useWorkInstance (from WorkInstanceContext)

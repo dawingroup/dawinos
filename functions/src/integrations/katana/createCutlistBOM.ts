@@ -7,6 +7,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import { validateBOMReadiness } from './validateBOMReadiness';
+const { ALLOWED_ORIGINS } = require('../../config/cors');
 
 const db = admin.firestore();
 const katanaApiKey = defineSecret('KATANA_API_KEY');
@@ -145,7 +146,7 @@ async function saveBOMExportReference(
 export const createCutlistBOM = onCall(
   { 
     secrets: [katanaApiKey],
-    cors: true,
+    cors: ALLOWED_ORIGINS,
   },
   async (request) => {
     const { projectId } = request.data;
@@ -269,7 +270,7 @@ export const createCutlistBOM = onCall(
 // ============================================
 
 export const validateKatanaBOM = onCall(
-  { cors: true },
+  { cors: ALLOWED_ORIGINS },
   async (request) => {
     const { projectId } = request.data;
 

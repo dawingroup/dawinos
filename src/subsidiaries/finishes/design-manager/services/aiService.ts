@@ -12,9 +12,32 @@ import type {
   ProjectScopingResult,
   ExtractedDesignItem,
 } from '../types/document.types';
+import { auth } from '@/shared/services/firebase/auth';
 
 // API endpoint for Darwin Finishes AI functions
 const AI_API_ENDPOINT = 'https://api-okekivpl2a-uc.a.run.app/api/ai';
+
+/**
+ * Get authentication headers for API requests
+ * Returns headers with Bearer token if user is authenticated
+ */
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  const currentUser = auth.currentUser;
+  if (currentUser) {
+    try {
+      const token = await currentUser.getIdToken();
+      headers['Authorization'] = `Bearer ${token}`;
+    } catch (error) {
+      console.warn('Failed to get auth token:', error);
+    }
+  }
+
+  return headers;
+}
 
 /**
  * AI analysis response wrapper
@@ -50,11 +73,10 @@ export async function analyzeDocument(
  */
 export async function analyzeImage(imageUrl: string): Promise<AIAnalysisResponse<ImageAnalysisResult>> {
   try {
+    const headers = await getAuthHeaders();
     const response = await fetch(`${AI_API_ENDPOINT}/analyze-image`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         imageUrl,
         extractItems: true,
@@ -113,11 +135,10 @@ export async function analyzeProjectBrief(
   pdfUrl: string
 ): Promise<AIAnalysisResponse<ProjectScopingResult>> {
   try {
+    const headers = await getAuthHeaders();
     const response = await fetch(`${AI_API_ENDPOINT}/analyze-brief`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         briefUrl: pdfUrl,
         detectMultipliers: true,
@@ -171,11 +192,10 @@ export async function enhanceDesignItem(item: {
   };
 }): Promise<AIAnalysisResponse<any>> {
   try {
+    const headers = await getAuthHeaders();
     const response = await fetch(`${AI_API_ENDPOINT}/enhance-design-item`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         item,
         includeDfM: true,
@@ -331,11 +351,10 @@ export async function pollForAICompletion(
  */
 export async function extractTextFromPDF(pdfUrl: string): Promise<string> {
   try {
+    const headers = await getAuthHeaders();
     const response = await fetch(`${AI_API_ENDPOINT}/extract-pdf-text`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({ pdfUrl }),
     });
 

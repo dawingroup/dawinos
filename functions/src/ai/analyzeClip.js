@@ -14,6 +14,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const admin = require('firebase-admin');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 // Initialize admin if not already done
 if (!admin.apps.length) {
@@ -93,7 +94,7 @@ const analyzeClip = onCall({
   memory: '1GiB',
   timeoutSeconds: 60,
   secrets: [GEMINI_API_KEY],
-  cors: true,
+  cors: ALLOWED_ORIGINS,
 }, async (request) => {
   // 1. Validate authentication
   if (!request.auth) {

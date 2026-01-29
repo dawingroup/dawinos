@@ -186,9 +186,10 @@ export interface TaskTemplate {
   checklistItems: TaskChecklistItem[];
   
   // Assignment
-  assignmentStrategy: 'creator' | 'project_lead' | 'specific_role' | 'specific_user';
+  assignmentStrategy: 'creator' | 'project_lead' | 'specific_role' | 'specific_user' | 'manager' | 'department';
   assignToRole?: string;
   assignToUserId?: string;
+  assignToDepartment?: string;
   
   // Module context
   sourceModule: SourceModuleId;

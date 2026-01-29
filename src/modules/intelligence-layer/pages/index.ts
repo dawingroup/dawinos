@@ -4,3 +4,6 @@
 // ============================================================================
 
 export { default as IntelligenceLayerDashboardPage } from './IntelligenceLayerDashboardPage';
+export { default as IntelligenceAdminPage } from './IntelligenceAdminPage';
+export { default as EmployeeTaskInboxPage } from './EmployeeTaskInboxPage';
+export { default as ManagerDashboardPage } from './ManagerDashboardPage';

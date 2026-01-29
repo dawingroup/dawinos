@@ -6,13 +6,14 @@
  * - Overdue variance investigations
  * - Missing monthly reconciliations
  *
- * Triggered by Cloud Scheduler (cron: 0 * * * *)
+ * Using v2 API (firebase-functions v4.x)
  */
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
@@ -32,7 +33,7 @@ exports.hourlyDeadlineCheck = onSchedule(
     timeoutSeconds: 540, // 9 minutes
     memory: '512MiB',
   },
-  async () => {
+  async (event) => {
     try {
       logger.info('[DeadlineMonitoring] Starting hourly deadline check...');
       const startTime = Date.now();
@@ -121,7 +122,7 @@ exports.dailyDeadlineSummary = onSchedule(
     timeoutSeconds: 300, // 5 minutes
     memory: '256MiB',
   },
-  async () => {
+  async (event) => {
     try {
       logger.info('[DeadlineMonitoring] Generating daily summary...');
 
@@ -178,6 +179,7 @@ exports.triggerDeadlineCheck = onCall(
   {
     timeoutSeconds: 540,
     memory: '512MiB',
+    cors: ALLOWED_ORIGINS,
   },
   async (request) => {
     // Verify authentication
@@ -255,6 +257,7 @@ exports.getProjectDeadlineSummary = onCall(
   {
     timeoutSeconds: 60,
     memory: '256MiB',
+    cors: ALLOWED_ORIGINS,
   },
   async (request) => {
     // Verify authentication

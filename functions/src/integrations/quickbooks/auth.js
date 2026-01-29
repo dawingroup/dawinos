@@ -6,6 +6,7 @@ const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https')
 const admin = require('firebase-admin');
 const fetch = require('node-fetch');
 const functions = require('firebase-functions'); // For accessing config if needed, or process.env
+const { ALLOWED_ORIGINS } = require('../../config/cors');
 
 const QBO_AUTH_URL = 'https://appcenter.intuit.com/connect/oauth2';
 const QBO_TOKEN_URL = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
@@ -36,7 +37,7 @@ function getConfig() {
 /**
  * Generate OAuth authorization URL
  */
-exports.getAuthUrl = onCall({ cors: true }, async (request) => {
+exports.getAuthUrl = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'User must be authenticated');
   }
@@ -179,7 +180,7 @@ exports.refreshTokens = refreshTokens;
 /**
  * Check connection status
  */
-exports.checkConnection = onCall({ cors: true }, async (request) => {
+exports.checkConnection = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'User must be authenticated');
   }

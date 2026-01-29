@@ -9,6 +9,7 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const webpush = require('web-push');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 // Define secrets for VAPID keys
 const vapidPublicKey = defineSecret('VAPID_PUBLIC_KEY');
@@ -139,7 +140,7 @@ async function sendPushToProject(projectId, payload, excludeUserId = null) {
  * POST /sendPushNotification
  */
 exports.sendPushNotification = onCall(
-  { secrets: [vapidPublicKey, vapidPrivateKey] },
+  { secrets: [vapidPublicKey, vapidPrivateKey], cors: ALLOWED_ORIGINS },
   async (request) => {
     // Verify authentication
     if (!request.auth) {

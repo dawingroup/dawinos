@@ -15,3 +15,5 @@ export { StatusChangeDialog } from './StatusChangeDialog';
 export type { StatusChangeEmployee } from './StatusChangeDialog';
 
 export { EmployeeForm } from './EmployeeForm';
+
+export { RoleAssignmentSection } from './RoleAssignmentSection';

@@ -13,7 +13,6 @@ import { ProjectList } from './pages/ProjectList';
 import { ProgramList } from './pages/ProgramList';
 import { ProgramDetail } from './pages/ProgramDetail';
 import { NewProgram } from './pages/NewProgram';
-import { EditProgram } from './pages/EditProgram';
 import { NewProject } from './pages/NewProject';
 import { ApprovalsPage } from './pages/ApprovalsPage';
 import { NewBOQRequisitionPage } from './pages/NewBOQRequisitionPage';
@@ -37,7 +36,6 @@ import { RequisitionDetailPage } from './pages/RequisitionDetailPage';
 import { AccountabilityDetailPage } from './pages/AccountabilityDetailPage';
 import { AccountabilityOverviewPage } from './pages/AccountabilityOverviewPage';
 import { RequisitionTrackerPage } from './pages/RequisitionTrackerPage';
-import { ProjectSettingsPage } from './pages/ProjectSettingsPage';
 
 // Manual Requisition Backlog pages (legacy data migration)
 import { ManualRequisitionListPage } from './pages/ManualRequisitionListPage';
@@ -62,6 +60,9 @@ import { DataMigrationPage } from './pages/DataMigrationPage';
 // Data Recovery utility
 import { DataRecoveryPage } from './pages/DataRecoveryPage';
 
+// Project Settings
+import { ProjectSettingsPage } from './pages/ProjectSettingsPage';
+
 // MatFlow feature imports (integrated) - all use default exports
 import BOQImport from '../matflow/pages/BOQImport';
 import BOQImportReview from '../matflow/pages/BOQImportReview';
@@ -76,9 +77,6 @@ import MatFlowReports from '../matflow/pages/Reports';
 export function DeliveryRoutes() {
   return (
     <Routes>
-      {/* CD Portal - Public route outside DeliveryLayout (token-based access, no auth) */}
-      <Route path="cd-portal" element={<CDPortalPage />} />
-
       <Route element={<DeliveryLayout />}>
         <Route index element={<DeliveryDashboard />} />
 
@@ -86,7 +84,6 @@ export function DeliveryRoutes() {
         <Route path="programs" element={<ProgramList />} />
         <Route path="programs/new" element={<NewProgram />} />
         <Route path="programs/:programId" element={<ProgramDetail />} />
-        <Route path="programs/:programId/edit" element={<EditProgram />} />
 
         {/* Projects List */}
         <Route path="projects" element={<ProjectList />} />
@@ -144,9 +141,6 @@ export function DeliveryRoutes() {
 
         {/* Accountability Overview (module-level) */}
         <Route path="accountability" element={<AccountabilityOverviewPage />} />
-
-        {/* Country Director Dashboard (ADD-FIN-001 consolidated accountability view) */}
-        <Route path="cd-dashboard" element={<CountryDirectorDashboard />} />
 
         {/* Manual Requisition Backlog (legacy data migration) */}
         <Route path="backlog" element={<ManualRequisitionListPage />} />

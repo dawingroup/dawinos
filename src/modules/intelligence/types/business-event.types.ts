@@ -107,7 +107,7 @@ export interface AssignmentRule {
  */
 export interface EventCondition {
   field: string;                  // Path in payload, e.g., 'amount', 'status'
-  operator: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'nin' | 'exists';
+  operator: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'nin' | 'exists' | 'contains';
   value: any;
 }
 
@@ -342,6 +342,115 @@ export interface OpportunityIdentifiedPayload {
 }
 
 // ============================================
+// Dawin Finishes Event Payloads
+// ============================================
+
+// Design Manager Events
+export interface DesignItemCreatedPayload {
+  projectId: string;
+  projectCode?: string;
+  projectName?: string;
+  designItemId: string;
+  itemName: string;
+  itemCode?: string;
+  category: 'casework' | 'furniture' | 'millwork' | 'doors' | 'fixtures' | 'specialty';
+  initialStage?: string;
+  createdBy: string;
+}
+
+export interface DesignStageChangedPayload {
+  projectId: string;
+  projectCode?: string;
+  designItemId: string;
+  itemName: string;
+  itemCode?: string;
+  previousStage: string;
+  newStage: string;
+  changedBy: string;
+  notes?: string;
+}
+
+export interface DesignApprovalRequestedPayload {
+  projectId: string;
+  projectCode?: string;
+  designItemId: string;
+  itemName: string;
+  approvalType: 'internal_review' | 'client_approval' | 'manufacturing_review';
+  requestedBy: string;
+  requestedByName?: string;
+  deadline?: Timestamp;
+  notes?: string;
+}
+
+export interface RAGStatusCriticalPayload {
+  projectId: string;
+  projectCode?: string;
+  designItemId: string;
+  itemName: string;
+  category: 'designCompleteness' | 'manufacturingReadiness' | 'qualityGates';
+  aspect: string;
+  previousStatus: string;
+  newStatus: string;
+  notes?: string;
+  changedBy: string;
+}
+
+export interface DesignProductionReadyPayload {
+  projectId: string;
+  projectCode?: string;
+  designItemId: string;
+  itemName: string;
+  itemCode: string;
+  category?: string;
+  overallReadiness?: number;
+  approvedBy: string;
+  approvedByName?: string;
+}
+
+// Launch Pipeline Events
+export interface ProductAddedToPipelinePayload {
+  productId: string;
+  productName: string;
+  category: string;
+  priority?: string;
+  targetLaunchDate?: Timestamp;
+  createdBy: string;
+}
+
+export interface ProductReadyForShopifyPayload {
+  productId: string;
+  productName: string;
+  handle?: string;
+  category?: string;
+  readinessScore?: number;
+  approvedBy?: string;
+}
+
+// Cutlist Events
+export interface CutlistOptimizationCompletePayload {
+  workInstanceId: string;
+  projectId: string;
+  projectCode?: string;
+  totalSheets: number;
+  totalPanels: number;
+  averageUtilization: number;
+  totalCost?: number;
+  createdBy: string;
+}
+
+// Asset Events
+export interface AssetMaintenanceRequiredPayload {
+  assetId: string;
+  assetName: string;
+  assetCategory?: string;
+  maintenanceType: 'scheduled' | 'corrective' | 'preventive';
+  hoursAtMaintenance?: number;
+  previousStatus?: string;
+  reportedBy?: string;
+  issueDescription?: string;
+}
+
+// ============================================
 // Event Builder Types
 // ============================================
 
@@ -350,22 +459,39 @@ export type EventPayloadMap = {
   'customer.inquiry_received': CustomerInquiryPayload;
   'customer.quote_requested': QuoteRequestedPayload;
   'customer.order_placed': OrderPlacedPayload;
-  
+
   // Financial
   'financial.payment_received': PaymentReceivedPayload;
   'financial.invoice_overdue': InvoiceOverduePayload;
   'financial.budget_exceeded': BudgetExceededPayload;
-  
+
   // HR
   'hr.leave_requested': LeaveRequestedPayload;
   'hr.contract_expiring': ContractExpiringPayload;
   'hr.performance_review_due': PerformanceReviewDuePayload;
-  
+
   // Production
   'production.job_started': JobStartedPayload;
   'production.milestone_reached': MilestoneReachedPayload;
   'production.quality_issue': QualityIssuePayload;
-  
+
+  // Dawin Finishes - Design Manager
+  'finishes.design_item_created': DesignItemCreatedPayload;
+  'finishes.design_stage_changed': DesignStageChangedPayload;
+  'finishes.design_approval_requested': DesignApprovalRequestedPayload;
+  'finishes.rag_status_critical': RAGStatusCriticalPayload;
+  'finishes.design_production_ready': DesignProductionReadyPayload;
+
+  // Dawin Finishes - Launch Pipeline
+  'finishes.product_added_to_pipeline': ProductAddedToPipelinePayload;
+  'finishes.product_ready_for_shopify': ProductReadyForShopifyPayload;
+
+  // Dawin Finishes - Cutlist
+  'finishes.cutlist_optimization_complete': CutlistOptimizationCompletePayload;
+
+  // Dawin Finishes - Assets
+  'finishes.asset_maintenance_required': AssetMaintenanceRequiredPayload;
+
   // Strategic
   'strategic.market_change': MarketChangePayload;
   'strategic.opportunity_identified': OpportunityIdentifiedPayload;

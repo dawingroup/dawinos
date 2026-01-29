@@ -9,6 +9,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const admin = require('firebase-admin');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 // Initialize if not already done
 if (!admin.apps.length) {
@@ -20,15 +21,15 @@ const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
 
 /**
  * Generate Product Names
- * 
+ *
  * @param {Object} request.data
  * @param {Object} request.data.context - Naming context (category, materials, features, etc.)
  * @param {string} request.data.namingStrategy - Strategy guide for naming
  * @param {string[]} request.data.existingNames - Existing names to avoid duplicates
  */
 const generateProductNames = onCall(
-  { 
-    cors: true,
+  {
+    cors: ALLOWED_ORIGINS,
     invoker: 'public',
     secrets: [GEMINI_API_KEY], 
     memory: '1GiB', 

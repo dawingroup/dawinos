@@ -1000,6 +1000,98 @@ export async function transferEmployee(
 }
 
 // ============================================
+// Role Assignment
+// ============================================
+
+/**
+ * Update employee role assignments
+ * Assigns role profiles for task routing via Intelligence Layer
+ */
+export async function updateEmployeeRoles(
+  employeeId: EmployeeId,
+  accessRoles: string[],
+  updatedBy: string
+): Promise<Employee> {
+  const employee = await getEmployee(employeeId);
+  if (!employee) {
+    throw new Error(`Employee ${employeeId} not found`);
+  }
+
+  const now = Timestamp.now();
+  const oldRoles = employee.systemAccess?.accessRoles || [];
+
+  // Ensure systemAccess object exists
+  const systemAccess = employee.systemAccess || {
+    userId: employee.id,
+    email: employee.email,
+    isActive: true,
+    mfaEnabled: false,
+    permissions: [],
+    accessRoles: [],
+  };
+
+  // Build update object
+  const updates: Partial<Employee> = {
+    systemAccess: {
+      ...systemAccess,
+      accessRoles,
+    },
+    updatedBy,
+    updatedAt: now,
+  };
+
+  // Update Firestore
+  const employeeRef = doc(employeesRef, employeeId);
+  await updateDoc(employeeRef, updates);
+
+  // Add audit entry
+  const rolesAdded = accessRoles.filter(r => !oldRoles.includes(r));
+  const rolesRemoved = oldRoles.filter(r => !accessRoles.includes(r));
+
+  await addAuditEntry(employeeId, {
+    action: 'updated',
+    field: 'systemAccess.accessRoles',
+    oldValue: oldRoles,
+    newValue: accessRoles,
+    changedBy: updatedBy,
+    changedAt: now,
+    reason: `Roles added: [${rolesAdded.join(', ')}], Roles removed: [${rolesRemoved.join(', ')}]`,
+  });
+
+  // Emit business event
+  await emitBusinessEvent({
+    eventType: 'hr.employee.roles_updated',
+    eventCategory: 'hr',
+    source: {
+      type: 'module',
+      id: 'hr-central',
+      name: 'HR Central',
+    },
+    trigger: {
+      type: 'user',
+      id: updatedBy,
+    },
+    payload: {
+      employeeId,
+      employeeNumber: employee.employeeNumber,
+      employeeName: employee.fullName,
+      oldRoles,
+      newRoles: accessRoles,
+      rolesAdded,
+      rolesRemoved,
+    },
+    metadata: {
+      subsidiaryId: employee.subsidiaryId,
+      departmentId: employee.position.departmentId,
+      priority: 'medium',
+      isInternal: true,
+    },
+  });
+
+  return { ...employee, ...updates } as Employee;
+}
+
+// ============================================
 // Query Operations
 // ============================================
 
@@ -1505,7 +1597,10 @@ export const employeeService = {
   getDirectReports,
   getExpiringProbations,
   getExpiringContracts,
-  
+
   // Stats
   getEmployeeStats,
+
+  // Role Assignment
+  updateEmployeeRoles,
 };

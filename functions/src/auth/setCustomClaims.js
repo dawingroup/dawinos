@@ -7,6 +7,7 @@ const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 /**
  * Map job level to security role
@@ -77,7 +78,7 @@ const syncEmployeeClaims = onDocumentWritten(
  * Manually set admin claims
  * Callable function for platform setup
  */
-const setAdminClaims = onCall(async (request) => {
+const setAdminClaims = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
   // Only existing admins can create new admins
   if (!request.auth?.token?.role || request.auth.token.role !== 'platform_admin') {
     throw new HttpsError(
@@ -116,7 +117,7 @@ const setAdminClaims = onCall(async (request) => {
  * Initialize first admin user
  * This should only be called once during initial setup
  */
-const initializeFirstAdmin = onCall(async (request) => {
+const initializeFirstAdmin = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
   // Check if any admin exists
   const existingAdmins = await admin.auth().listUsers(1);
   const hasAdmin = existingAdmins.users.some(
@@ -151,7 +152,7 @@ const initializeFirstAdmin = onCall(async (request) => {
  * Get current user's claims
  * Callable function for debugging and UI
  */
-const getCurrentClaims = onCall(async (request) => {
+const getCurrentClaims = onCall({ cors: ALLOWED_ORIGINS }, async (request) => {
   if (!request.auth) {
     throw new HttpsError(
       'unauthenticated',

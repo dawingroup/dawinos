@@ -6,6 +6,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 // Use Gemini API key from Firebase secrets
 const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
@@ -15,8 +16,8 @@ const GEMINI_API_KEY = defineSecret('GEMINI_API_KEY');
  * using Gemini with Google Search grounding
  */
 exports.enrichAssetData = onCall(
-  { 
-    cors: true,
+  {
+    cors: ALLOWED_ORIGINS,
     invoker: 'public',
     secrets: [GEMINI_API_KEY]
   },

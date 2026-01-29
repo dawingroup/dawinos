@@ -40,6 +40,7 @@ import {
   updateRAGAspect as updateRAGAspectUtil,
 } from '../utils/rag-calculations';
 import { formatItemCode } from '../utils/formatting';
+import { intelligenceIntegrationService } from '@/modules/intelligence-layer/services/intelligenceIntegrationService';
 
 // Collection names
 const PROJECTS_COLLECTION = 'designProjects';
@@ -239,7 +240,14 @@ export async function createDesignItem(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
-  
+
+  // Trigger intelligence event for design item creation
+  try {
+    await intelligenceIntegrationService.onDesignItemCreated(
+      projectId, docRef.id, itemData.name, { ...itemData, id: docRef.id }, userId
+    );
+  } catch (e) { console.warn('Intelligence event failed (design_item_created):', e); }
+
   return docRef.id;
 }
 
@@ -396,6 +404,17 @@ export async function updateRAGAspect(
     ragStatus: updatedRagStatus,
     overallReadiness: newReadiness,
   }, userId);
+
+  // Trigger intelligence event for critical RAG status changes
+  try {
+    if (value.status === 'red') {
+      await intelligenceIntegrationService.triggerEvent(
+        'design_manager', 'design_item_rag_updated', 'designItems',
+        itemId, item.name,
+        { projectId, currentState: { aspectPath, ragStatus: value.status, overallReadiness: newReadiness }, triggeredBy: userId }
+      );
+    }
+  } catch (e) { console.warn('Intelligence event failed (design_item_rag_updated):', e); }
 }
 
 // ============================================
@@ -428,6 +447,14 @@ export async function transitionStage(
     currentStage: targetStage,
     stageHistory: [...item.stageHistory, transition],
   }, userId);
+
+  // Trigger intelligence event for stage change
+  try {
+    await intelligenceIntegrationService.onDesignItemStageChange(
+      projectId, itemId, item.name,
+      item.currentStage, targetStage, userId
+    );
+  } catch (e) { console.warn('Intelligence event failed (design_item_stage_changed):', e); }
 }
 
 // ============================================
@@ -513,7 +540,7 @@ export async function createApproval(
   };
   
   const docRef = await addDoc(approvalsRef, approval);
-  
+
   // Also update the design item's approvals array for quick access
   const itemRef = getItemDoc(projectId, itemId);
   const itemSnap = await getDoc(itemRef);
@@ -525,7 +552,15 @@ export async function createApproval(
       updatedBy: userId,
     });
   }
-  
+
+  // Trigger intelligence event for approval request
+  try {
+    const itemName = itemSnap?.data()?.name || 'Unknown';
+    await intelligenceIntegrationService.onDesignItemApprovalRequested(
+      projectId, itemId, itemName, data.type, userId
+    );
+  } catch (e) { console.warn('Intelligence event failed (design_item_approval_requested):', e); }
+
   return docRef.id;
 }
 
@@ -554,8 +589,8 @@ export async function respondToApproval(
   const itemSnap = await getDoc(itemRef);
   if (itemSnap.exists()) {
     const currentApprovals = itemSnap.data().approvals || [];
-    const updatedApprovals = currentApprovals.map((a: Approval) => 
-      a.id === approvalId 
+    const updatedApprovals = currentApprovals.map((a: Approval) =>
+      a.id === approvalId
         ? { ...a, status, decision, decidedAt: new Date(), respondedBy: userId }
         : a
     );
@@ -565,6 +600,20 @@ export async function respondToApproval(
       updatedBy: userId,
     });
   }
+
+  // Trigger intelligence event for approval response
+  try {
+    const eventType = status === 'approved' ? 'design_item_approved'
+      : status === 'rejected' ? 'design_item_rejected' : null;
+    if (eventType) {
+      const itemName = itemSnap?.data()?.name || 'Unknown';
+      await intelligenceIntegrationService.triggerEvent(
+        'design_manager', eventType, 'designItems',
+        itemId, itemName,
+        { projectId, currentState: { approvalId, status, decision }, triggeredBy: userId }
+      );
+    }
+  } catch (e) { console.warn('Intelligence event failed (approval_response):', e); }
 }
 
 /**

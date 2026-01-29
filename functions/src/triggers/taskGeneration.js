@@ -28,7 +28,104 @@ const DEFAULT_ENGINE_CONFIG = {
     low: 48,
   },
   reminderBeforeDeadline: [24, 4, 1],
+  slaHours: {
+    critical: 4,
+    high: 8,
+    medium: 24,
+    low: 72,
+  },
 };
+
+// ============================================
+// Design Manager Task Rules
+// Maps event types to task generation rules
+// ============================================
+
+const EVENT_TASK_RULES = {
+  design_item_created: [
+    {
+      title: 'Review new design item: {{entityName}}',
+      description: 'A new design item has been created and needs initial review.',
+      defaultPriority: 'medium',
+      checklist: ['Review design brief', 'Verify category and specifications', 'Set initial RAG status', 'Assign to designer'],
+    },
+  ],
+  design_item_stage_changed: [
+    {
+      title: 'Process stage transition for: {{entityName}}',
+      description: 'Design item has moved to a new stage. Review stage gate requirements.',
+      defaultPriority: 'high',
+      checklist: ['Verify previous stage deliverables', 'Review stage gate criteria', 'Update documentation', 'Notify stakeholders'],
+    },
+  ],
+  design_item_approval_requested: [
+    {
+      title: 'Approval required: {{entityName}}',
+      description: 'A design item requires approval to proceed.',
+      defaultPriority: 'high',
+      checklist: ['Review design documentation', 'Check quality standards', 'Verify completeness', 'Provide approval decision'],
+    },
+  ],
+  design_item_approved: [
+    {
+      title: 'Process approved design: {{entityName}}',
+      description: 'Design item has been approved. Proceed with next steps.',
+      defaultPriority: 'medium',
+      checklist: ['Update project status', 'Initiate next phase', 'Notify team'],
+    },
+  ],
+  design_item_rejected: [
+    {
+      title: 'Address rejection for: {{entityName}}',
+      description: 'Design item was rejected and needs revision.',
+      defaultPriority: 'high',
+      checklist: ['Review rejection feedback', 'Identify required changes', 'Update design', 'Resubmit for approval'],
+    },
+  ],
+  design_item_rag_updated: [
+    {
+      title: 'Critical RAG status: {{entityName}}',
+      description: 'A design item has a critical (red) RAG status that needs attention.',
+      defaultPriority: 'critical',
+      checklist: ['Identify root cause', 'Develop mitigation plan', 'Update stakeholders', 'Resolve blockers'],
+    },
+  ],
+};
+
+/**
+ * Get task rules for a given event type
+ */
+function getTaskRulesForEvent(eventType) {
+  return EVENT_TASK_RULES[eventType] || [];
+}
+
+/**
+ * Interpolate template variables in task title
+ */
+function interpolateTitle(template, eventData) {
+  return template
+    .replace('{{entityName}}', eventData.entityName || eventData.payload?.entityName || 'Unknown')
+    .replace('{{projectName}}', eventData.projectName || eventData.payload?.projectName || '')
+    .replace('{{eventType}}', eventData.eventType || '');
+}
+
+/**
+ * Calculate due date based on priority
+ */
+function calculateDueDate(priority) {
+  const hours = DEFAULT_ENGINE_CONFIG.slaHours[priority] || 24;
+  const dueDate = new Date();
+  // Add hours, skipping weekends
+  let hoursLeft = hours;
+  while (hoursLeft > 0) {
+    dueDate.setHours(dueDate.getHours() + 1);
+    const day = dueDate.getDay();
+    if (day !== 0 && day !== 6) { // Skip weekends
+      hoursLeft--;
+    }
+  }
+  return admin.firestore.Timestamp.fromDate(dueDate);
+}
 
 /**
  * Trigger: Process new business events
@@ -54,22 +151,78 @@ const onBusinessEventCreated = onDocumentCreated(
     });
 
     try {
-      // Mark event as processing
+      // Idempotency check: use transaction to atomically claim this event
+      const eventRef = snapshot.ref;
+      const shouldProcess = await db.runTransaction(async (transaction) => {
+        const freshDoc = await transaction.get(eventRef);
+        const freshData = freshDoc.data();
+        const currentStatus = freshData?.processing?.status;
+
+        if (currentStatus === 'processing' || currentStatus === 'processed') {
+          logger.info('Event already processed or in progress, skipping', {
+            eventId: eventData.id,
+            status: currentStatus,
+          });
+          return false;
+        }
+
+        transaction.update(eventRef, {
+          'processing.status': 'processing',
+          'processing.processedAt': admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return true;
+      });
+
+      if (!shouldProcess) return null;
+
+      // Generate tasks from event
+      const eventType = eventData.eventType;
+      const taskRules = getTaskRulesForEvent(eventType);
+      const generatedTaskIds = [];
+
+      for (const rule of taskRules) {
+        const taskDoc = await db.collection(COLLECTIONS.SMART_TASKS).add({
+          title: interpolateTitle(rule.title, eventData),
+          description: rule.description || '',
+          priority: eventData.metadata?.priority || rule.defaultPriority || 'medium',
+          status: 'pending',
+          stage: 'pending_assignment',
+          sourceEventId: eventData.id,
+          sourceEventType: eventType,
+          sourceModule: eventData.sourceModule || 'unknown',
+          subsidiary: eventData.subsidiary || 'finishes',
+          entityType: eventData.entityType || 'unknown',
+          entityId: eventData.entityId || null,
+          entityName: eventData.entityName || null,
+          projectId: eventData.projectId || eventData.payload?.projectId || null,
+          dueDate: calculateDueDate(rule.defaultPriority || 'medium'),
+          checklistItems: (rule.checklist || []).map((text) => ({
+            text,
+            completed: false,
+          })),
+          checklistProgress: 0,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        generatedTaskIds.push(taskDoc.id);
+      }
+
+      // Mark event as processed with generated task IDs
       await snapshot.ref.update({
-        'processing.status': 'processing',
-        'processing.processedAt': admin.firestore.FieldValue.serverTimestamp(),
+        'processing.status': 'processed',
+        'processing.tasksGenerated': generatedTaskIds.length,
+        'processing.generatedTaskIds': generatedTaskIds,
+        'processing.completedAt': admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // Note: Full task generation logic is in the client-side service
-      // This trigger just marks the event for processing and can be extended
-      // to call the task generation service via Cloud Functions callable
-
-      logger.info('Event marked for processing', {
+      logger.info('Event processed and tasks generated', {
         eventId: eventData.id,
+        tasksGenerated: generatedTaskIds.length,
       });
 
-      return { eventId: eventData.id, status: 'processing' };
+      return { eventId: eventData.id, status: 'processed', tasksGenerated: generatedTaskIds.length };
     } catch (error) {
       logger.error('Event processing failed', {
         eventId: eventData.id,
@@ -121,6 +274,9 @@ const processOverdueEscalations = onSchedule(
     for (const doc of overdueSnapshot.docs) {
       const task = doc.data();
 
+      // Idempotency guard: skip already-escalated tasks
+      if (task.escalatedAt) continue;
+
       // Check escalation threshold based on priority
       const overdueHours =
         (now.toMillis() - task.dueDate.toMillis()) / (1000 * 60 * 60);
@@ -128,10 +284,11 @@ const processOverdueEscalations = onSchedule(
         DEFAULT_ENGINE_CONFIG.overdueEscalationHours[task.priority] || 12;
 
       if (overdueHours >= threshold) {
-        // Mark for escalation
+        // Mark for escalation with idempotency timestamp
         batch.update(doc.ref, {
           stage: 'escalated',
           priority: escalatePriority(task.priority),
+          escalatedAt: now,
           escalations: admin.firestore.FieldValue.arrayUnion({
             escalatedAt: now,
             escalatedBy: 'system',
@@ -198,9 +355,12 @@ const sendTaskReminders = onSchedule(
         const reminderKey = `reminder_${window.hours}h`;
         if (task[reminderKey]) continue;
 
-        // Send reminder notification
+        // Send reminder notification + mark as sent atomically
         if (task.assignment?.assigneeId) {
-          await db.collection(COLLECTIONS.USER_NOTIFICATIONS).add({
+          const reminderBatch = db.batch();
+
+          const notifRef = db.collection(COLLECTIONS.USER_NOTIFICATIONS).doc();
+          reminderBatch.set(notifRef, {
             type: 'task_reminder',
             recipientId: task.assignment.assigneeId,
             title: 'Task Due Soon',
@@ -216,13 +376,13 @@ const sendTaskReminders = onSchedule(
             read: false,
           });
 
-          // Mark reminder as sent
-          await doc.ref.update({
+          reminderBatch.update(doc.ref, {
             [reminderKey]: now,
             lastReminderAt: now,
             updatedAt: now,
           });
 
+          await reminderBatch.commit();
           remindersSent++;
         }
       }

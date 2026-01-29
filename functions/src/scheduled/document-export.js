@@ -5,13 +5,14 @@
  * - SharePoint
  * - Google Drive
  *
- * Triggered by Cloud Scheduler (configurable frequency)
+ * Using v2 API (firebase-functions v4.x)
  */
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
+const { ALLOWED_ORIGINS } = require('../config/cors');
 
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
@@ -31,7 +32,7 @@ exports.dailyDocumentExport = onSchedule(
     timeoutSeconds: 540, // 9 minutes
     memory: '1GiB',
   },
-  async () => {
+  async (event) => {
     try {
       logger.info('[DocumentExport] Starting daily export...');
       const startTime = Date.now();
@@ -120,6 +121,7 @@ exports.triggerDocumentExport = onCall(
   {
     timeoutSeconds: 540,
     memory: '1GiB',
+    cors: ALLOWED_ORIGINS,
   },
   async (request) => {
     // Verify authentication
@@ -190,6 +192,7 @@ exports.retryFailedExports = onCall(
   {
     timeoutSeconds: 540,
     memory: '1GiB',
+    cors: ALLOWED_ORIGINS,
   },
   async (request) => {
     // Verify authentication
@@ -246,6 +249,7 @@ exports.getExportJobStatus = onCall(
   {
     timeoutSeconds: 60,
     memory: '256MiB',
+    cors: ALLOWED_ORIGINS,
   },
   async (request) => {
     // Verify authentication

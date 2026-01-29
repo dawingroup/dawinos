@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, LayoutGrid, List, RefreshCw, Store, Sparkles, Activity } from 'lucide-react';
+import { useAuth } from '@/shared/hooks';
 import { PipelineBoard } from '../components/pipeline/PipelineBoard';
 import { ProductForm } from '../components/product/ProductForm';
 import { ShopifySettings } from '../components/shopify/ShopifySettings';
@@ -34,8 +35,9 @@ export default function LaunchPipelinePage() {
   const [selectedProductForAI, setSelectedProductForAI] = useState<LaunchProduct | null>(null);
   const navigate = useNavigate();
 
-  // TODO: Get from auth context
-  const currentUserId = 'user_1';
+  // Auth context
+  const { user } = useAuth();
+  const currentUserId = user?.uid || '';
 
   const handleCreateProduct = async (data: Partial<LaunchProduct>) => {
     await createProduct(data);

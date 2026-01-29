@@ -1,6 +1,8 @@
 /**
  * Katana Customer Sync Function (Gen 2)
  * Syncs customer data to Katana MRP when customers are created or updated
+ *
+ * Using v2 API (firebase-functions v4.x)
  */
 
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
@@ -59,13 +61,12 @@ exports.onCustomerCreated = onDocumentCreated(
     memory: '256MiB',
   },
   async (event) => {
+    const customerId = event.params.customerId;
     const snapshot = event.data;
     if (!snapshot) {
       logger.warn('No data associated with the event');
       return;
     }
-
-    const customerId = event.params.customerId;
     const customer = snapshot.data();
 
     logger.info(`Syncing new customer ${customerId} to Katana`);
@@ -116,15 +117,14 @@ exports.onCustomerUpdated = onDocumentUpdated(
     memory: '256MiB',
   },
   async (event) => {
-    const change = event.data;
-    if (!change) {
-      logger.warn('No data associated with the event');
+    const customerId = event.params.customerId;
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+
+    if (!before || !after) {
+      logger.warn('No data in document update');
       return;
     }
-
-    const customerId = event.params.customerId;
-    const before = change.before.data();
-    const after = change.after.data();
 
     // Skip if only sync status changed (avoid infinite loop)
     const relevantFields = ['name', 'email', 'phone', 'billingAddress'];
@@ -177,8 +177,11 @@ exports.syncCustomerToKatana = onCall(
     timeoutSeconds: 60,
   },
   async (request) => {
-    const { customerId } = request.data;
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    }
 
+    const { customerId } = request.data || {};
     if (!customerId) {
       throw new HttpsError('invalid-argument', 'customerId is required');
     }
@@ -187,7 +190,6 @@ exports.syncCustomerToKatana = onCall(
 
     try {
       const customerDoc = await db.collection('customers').doc(customerId).get();
-
       if (!customerDoc.exists) {
         throw new HttpsError('not-found', `Customer ${customerId} not found`);
       }
