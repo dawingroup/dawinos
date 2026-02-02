@@ -33,6 +33,7 @@ import {
 import { MODULE_COLOR } from '../constants';
 import { TaskCard } from '../components/employee-inbox/TaskCard';
 import { TaskDetailDialog } from '../components/employee-inbox/TaskDetailDialog';
+import { SnapshotStrip } from '../components/employee-inbox/SnapshotStrip';
 import {
   useEmployeeTaskInbox,
   type EmployeeTask,
@@ -78,6 +79,9 @@ export default function EmployeeTaskInboxPage() {
     tasks,
     groupedTasks,
     stats,
+    snapshotStats,
+    snapshotFilter,
+    setSnapshotFilter,
     loading,
     error,
     filters,
@@ -188,6 +192,13 @@ export default function EmployeeTaskInboxPage() {
           Refresh
         </Button>
       </div>
+
+      {/* Snapshot Strip */}
+      <SnapshotStrip
+        stats={snapshotStats}
+        activeFilter={snapshotFilter}
+        onFilterChange={setSnapshotFilter}
+      />
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

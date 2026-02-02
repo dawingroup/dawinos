@@ -3,7 +3,7 @@
  * Project detail page with design items, cutlist, estimates, and client quotes
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, LayoutGrid, List, FolderOpen, Calendar, User, Clock,
@@ -34,9 +34,13 @@ import { ProjectPartsLibrary } from './ProjectPartsLibrary';
 import { runProjectProduction } from '@/shared/services/optimization';
 import QuoteManagement from '../client-portal/QuoteManagement';
 import ClientPortalManager from '../client-portal/ClientPortalManager';
+import { ProjectDocuments } from './ProjectDocuments';
+import { createDesignItem } from '../../services/firestore';
+import { markAIAsApplied } from '../../services/documentUpload';
+import type { ClientDocument } from '../../types/document.types';
 
 type ViewMode = 'kanban' | 'list';
-type ProjectTab = 'items' | 'cutlist' | 'estimate' | 'production' | 'quotes' | 'portal';
+type ProjectTab = 'items' | 'cutlist' | 'estimate' | 'production' | 'quotes' | 'portal' | 'files';
 
 export default function ProjectView() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -56,6 +60,26 @@ export default function ProjectView() {
     stage: stageFilter === 'all' ? undefined : stageFilter,
     category: categoryFilter === 'all' ? undefined : categoryFilter,
   });
+
+  const handleApplyAIToProject = useCallback(async (document: ClientDocument) => {
+    if (!projectId || !project || !document.aiAnalysisResult?.extractedItems?.length) return;
+
+    const userId = user?.email || '';
+    const extractedItems = document.aiAnalysisResult.extractedItems;
+
+    for (const item of extractedItems) {
+      await createDesignItem(projectId, {
+        name: item.name,
+        category: (item.category as any) || 'casework',
+        description: item.description || '',
+        projectId,
+        projectCode: project.code,
+      }, userId);
+    }
+
+    await markAIAsApplied(projectId, document.id);
+    setActiveTab('items');
+  }, [projectId, project, user?.email]);
 
   if (projectLoading) {
     return (
@@ -116,6 +140,7 @@ export default function ProjectView() {
     { id: 'estimate' as ProjectTab, label: 'Estimate', icon: Calculator },
     { id: 'production' as ProjectTab, label: 'Production', icon: Scissors },
     { id: 'quotes' as ProjectTab, label: 'Quotes', icon: FileText },
+    { id: 'files' as ProjectTab, label: 'Files', icon: FolderOpen },
     { id: 'portal' as ProjectTab, label: 'Portal', icon: Package },
   ];
 
@@ -167,6 +192,13 @@ export default function ProjectView() {
             <Sparkles className="w-4 h-4" />
             <span className="hidden sm:inline">AI Strategy</span>
           </button>
+          <Link
+            to={`/design/project/${projectId}/pricing`}
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+          >
+            <Calculator className="w-4 h-4" />
+            <span className="hidden sm:inline">Pricing</span>
+          </Link>
           <button
             onClick={() => setShowBulkImport(true)}
             className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
@@ -486,6 +518,16 @@ export default function ProjectView() {
           projectName={project.name}
           clientName={project.customerName}
           clientEmail={(project as any).customerEmail}
+        />
+      )}
+
+      {activeTab === 'files' && projectId && (
+        <ProjectDocuments
+          projectId={projectId}
+          projectCode={project.code}
+          userId={user?.email || ''}
+          userName={user?.displayName || user?.email || ''}
+          onApplyAIToProject={handleApplyAIToProject}
         />
       )}
 

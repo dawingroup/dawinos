@@ -22,11 +22,13 @@ import { AIAssistantPanel } from './AIAssistantPanel';
 interface AIAssistantFABProps {
   notificationCount?: number;
   defaultOpen?: boolean;
+  context?: Record<string, any>;
 }
 
 export const AIAssistantFAB: React.FC<AIAssistantFABProps> = ({
   notificationCount = 0,
   defaultOpen = false,
+  context,
 }) => {
   const [open, setOpen] = useState(defaultOpen);
   const [minimized, setMinimized] = useState(false);
@@ -78,6 +80,7 @@ export const AIAssistantFAB: React.FC<AIAssistantFABProps> = ({
         open={open && !minimized}
         onClose={handleClose}
         onMinimize={handleMinimize}
+        context={context}
       />
     </>
   );

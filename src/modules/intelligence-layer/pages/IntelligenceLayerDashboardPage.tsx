@@ -4,7 +4,7 @@
 // Main dashboard for AI intelligence features
 // ============================================================================
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   Brain,
   Lightbulb,
@@ -35,6 +35,7 @@ import { SuggestionCard } from '../components/shared/SuggestionCard';
 import { AnomalyAlert } from '../components/shared/AnomalyAlert';
 import { PredictionCard } from '../components/predictions/PredictionCard';
 import { AIAssistantFAB } from '../components/assistant/AIAssistantFAB';
+import { naturalLanguageQueryService } from '../services/naturalLanguageQueryService';
 
 type TabView = 'overview' | 'suggestions' | 'anomalies' | 'predictions';
 
@@ -49,6 +50,25 @@ const IntelligenceLayerDashboardPage: React.FC = () => {
 
   const loading = overviewLoading || suggestionsLoading || anomaliesLoading || predictionsLoading || insightsLoading;
 
+  // Build context for AI Assistant from current page state
+  const assistantContext = useMemo(() => ({
+    currentModule: 'intelligence_layer' as const,
+    currentTab: activeTab,
+    activeSuggestions: suggestions.filter((s) => s.status === 'pending').length,
+    activeAnomalies: anomalies.filter((a) => a.status === 'new' || a.status === 'investigating').length,
+    activePredictions: predictions.filter((p) => p.status === 'active').length,
+    activeInsights: insights.filter((i) => i.status === 'new').length,
+    summary: {
+      suggestions: suggestions.slice(0, 3).map((s) => s.title),
+      anomalies: anomalies.slice(0, 3).map((a) => `${a.severity}: ${a.title}`),
+      predictions: predictions.slice(0, 3).map((p) => `${p.title} (${Math.round(p.confidence * 100)}% confidence)`),
+    },
+  }), [activeTab, suggestions, anomalies, predictions, insights]);
+
+  const handleNLQuery = useCallback(async (queryText: string) => {
+    return naturalLanguageQueryService.processQuery(queryText);
+  }, []);
+
   const handleRefresh = () => {
     refreshOverview();
   };
@@ -58,7 +78,15 @@ const IntelligenceLayerDashboardPage: React.FC = () => {
       {/* Natural Language Search - Full Width */}
       <div className="lg:col-span-3">
         <NaturalLanguageSearch
-          recentQueries={['What was revenue last month?', 'Show pending approvals']}
+          onQuery={handleNLQuery}
+          recentQueries={['Show my pending tasks', 'What tasks are overdue?', 'Show recent events']}
+          suggestedQueries={[
+            'How many tasks do I have?',
+            'Which tasks are blocked?',
+            'Show recent business events',
+            'What is the inventory status?',
+            'Show task analytics',
+          ]}
         />
       </div>
 
@@ -329,7 +357,7 @@ const IntelligenceLayerDashboardPage: React.FC = () => {
       </Tabs>
 
       {/* AI Assistant FAB */}
-      <AIAssistantFAB />
+      <AIAssistantFAB context={assistantContext} />
     </div>
   );
 };

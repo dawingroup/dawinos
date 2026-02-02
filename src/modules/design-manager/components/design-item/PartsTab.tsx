@@ -1,7 +1,7 @@
 /**
  * PartsTab Component
  * Display and manage parts within a design item
- * Includes: Sheet parts, Standard parts (from Katana), and Special parts (approved for luxury)
+ * Includes: Sheet parts, Standard parts (from inventory), and Special parts (approved for luxury)
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -13,8 +13,7 @@ import { PartForm } from './PartForm';
 import { PartsImportDialog } from './PartsImportDialog';
 import { ProjectPartsPicker } from './ProjectPartsPicker';
 import { updateDesignItem } from '../../services/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/firebase/config';
+import { useInventory } from '@/modules/inventory/hooks/useInventory';
 
 interface PartsTabProps {
   item: DesignItem;
@@ -32,15 +31,14 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
   const [selectedParts, setSelectedParts] = useState<Set<string>>(new Set());
   const [activeSection, setActiveSection] = useState<PartsSection>('sheet');
   
-  // Standard parts state (hinges, screws, edging from Katana)
+  // Standard parts state (hinges, screws, edging from inventory)
   const manufacturing = (item as any).manufacturing || {};
   const [standardParts, setStandardParts] = useState<StandardPartEntry[]>(manufacturing.standardParts || []);
   const [newStandardPart, setNewStandardPart] = useState({ name: '', category: 'hinge', quantity: 1, katanaSku: '' });
-  
-  // Katana inventory state
-  const [katanaInventory, setKatanaInventory] = useState<Array<{ id: string; name: string; sku: string; category: string; unitCost: number }>>([]);
-  const [loadingKatana, setLoadingKatana] = useState(false);
-  const [katanaSearch, setKatanaSearch] = useState('');
+
+  // Inventory module state (replaces Katana)
+  const { items: inventoryItems, loading: loadingInventory, search: searchInventory, searchResults, isSearching, clearSearch } = useInventory({ tier: 'global', status: 'active' });
+  const [inventorySearch, setInventorySearch] = useState('');
   
   // Exchange rates for special parts
   const EXCHANGE_RATES: Record<string, number> = {

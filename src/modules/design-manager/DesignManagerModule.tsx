@@ -14,6 +14,7 @@ const ItemDetailRouter = lazy(() => import('./components/design-item/ItemDetailR
 const MaterialsPage = lazy(() => import('./pages/MaterialsPage'));
 const FeatureLibraryPage = lazy(() => import('./components/feature-library/FeatureLibraryPage'));
 const StrategyCanvasPage = lazy(() => import('./pages/StrategyCanvasPage'));
+const BottomUpPricingPage = lazy(() => import('./components/bottom-up-pricing/BottomUpPricingPage'));
 
 /**
  * Loading fallback
@@ -40,6 +41,7 @@ export default function DesignManagerModule() {
         <Route path="shopify" element={<Navigate to="/design" replace />} />
         <Route path="project/:projectId" element={<ProjectView />} />
         <Route path="project/:projectId/strategy" element={<StrategyCanvasPage />} />
+        <Route path="project/:projectId/pricing" element={<BottomUpPricingPage />} />
         <Route path="project/:projectId/item/:itemId" element={<ItemDetailRouter />} />
       </Routes>
     </Suspense>

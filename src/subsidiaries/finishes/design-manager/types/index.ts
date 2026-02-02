@@ -197,15 +197,17 @@ export interface ProcurementPricing {
 }
 
 /**
- * Standard part entry (hinges, screws, edging, etc. from Katana)
+ * Standard part entry (hinges, screws, edging, etc. from inventory)
  */
 export interface StandardPartEntry {
   id: string;
-  katanaSku?: string;             // Katana SKU reference
+  inventoryItemId?: string;       // Reference to inventory module item
+  katanaSku?: string;             // Legacy Katana SKU reference
   name: string;                   // e.g., "Soft-close hinge 110°"
   category: 'hinge' | 'slide' | 'screw' | 'cam' | 'dowel' | 'edging' | 'handle' | 'knob' | 'other';
   quantity: number;
   unitCost: number;
+  currency?: string;              // Defaults to 'UGX'
   totalCost: number;
   notes?: string;
 }

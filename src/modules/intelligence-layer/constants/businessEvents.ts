@@ -803,6 +803,133 @@ export const ADVISORY_TASK_TEMPLATES: TaskTemplate[] = [
 ];
 
 // ============================================================================
+// INVENTORY TASK TEMPLATES
+// ============================================================================
+
+export const INVENTORY_TASK_TEMPLATES: TaskTemplate[] = [
+  {
+    id: 'inv_stock_low_reorder',
+    name: 'Low Stock Reorder Process',
+    description: 'Tasks when stock falls below reorder point',
+    category: 'reorder',
+    triggerEvents: ['stock_low', 'stock_reorder_required'],
+    defaultTitle: 'Reorder Stock: {entityName}',
+    defaultDescription: 'Stock level is low. Initiate reorder process.',
+    defaultPriority: 'high',
+    defaultDueDays: 3,
+    checklistItems: [
+      createChecklistItem('1', 'Verify Current Stock Level', 'Confirm actual stock matches system records', true, 1, 'Physical count matches system'),
+      createChecklistItem('2', 'Check Pending Orders', 'Verify no pending orders already placed', true, 2, 'No duplicate orders'),
+      createChecklistItem('3', 'Get Supplier Quotes', 'Request quotes from approved suppliers', true, 3, 'Minimum 2 quotes obtained'),
+      createChecklistItem('4', 'Create Purchase Order', 'Raise PO for the reorder quantity', true, 4, 'PO number assigned'),
+      createChecklistItem('5', 'Confirm Lead Time', 'Verify delivery timeline with supplier', true, 5, 'Expected delivery date recorded'),
+      createChecklistItem('6', 'Notify Production', 'Alert production team of potential delay if critical', false, 6, 'Production team informed'),
+    ],
+    assignmentStrategy: 'specific_role',
+    assignToRole: 'procurement_officer',
+    sourceModule: 'inventory',
+    subsidiary: 'finishes',
+    isActive: true,
+    version: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    createdBy: 'system',
+  },
+  {
+    id: 'inv_material_received',
+    name: 'Material Receiving Process',
+    description: 'Tasks when material is received into stock',
+    category: 'receiving',
+    triggerEvents: ['material_received'],
+    defaultTitle: 'Process Received Material: {entityName}',
+    defaultDescription: 'New stock received. Complete receiving process.',
+    defaultPriority: 'medium',
+    defaultDueDays: 1,
+    checklistItems: [
+      createChecklistItem('1', 'Verify Delivery Against PO', 'Check quantities match purchase order', true, 1, 'Quantities verified'),
+      createChecklistItem('2', 'Inspect Quality', 'Inspect materials for damage or defects', true, 2, 'Quality inspection passed'),
+      createChecklistItem('3', 'Update Stock Levels', 'Record received quantities in inventory system', true, 3, 'System updated'),
+      createChecklistItem('4', 'Store Materials', 'Place materials in designated warehouse location', true, 4, 'Location recorded'),
+      createChecklistItem('5', 'Update Cost Records', 'Record actual costs and update average cost', false, 5, 'Cost records updated'),
+    ],
+    assignmentStrategy: 'specific_role',
+    assignToRole: 'warehouse_manager',
+    sourceModule: 'inventory',
+    subsidiary: 'finishes',
+    isActive: true,
+    version: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    createdBy: 'system',
+  },
+];
+
+// ============================================================================
+// LAUNCH PIPELINE TASK TEMPLATES
+// ============================================================================
+
+export const LAUNCH_PIPELINE_TASK_TEMPLATES: TaskTemplate[] = [
+  {
+    id: 'lp_product_launch_prep',
+    name: 'Product Launch Preparation',
+    description: 'Tasks when product reaches ready-to-launch stage',
+    category: 'launch',
+    triggerEvents: ['product_stage_changed'],
+    triggerConditions: [
+      { field: 'currentState.stage', operator: 'equals', value: 'ready_to_launch' },
+    ],
+    defaultTitle: 'Prepare Launch: {entityName}',
+    defaultDescription: 'Product is ready for launch. Complete launch checklist.',
+    defaultPriority: 'high',
+    defaultDueDays: 5,
+    checklistItems: [
+      createChecklistItem('1', 'Final Product Photography', 'Ensure all product images are shot and edited', true, 1, 'Images uploaded to DAM'),
+      createChecklistItem('2', 'Product Description Copy', 'Write and approve product descriptions', true, 2, 'Copy approved by marketing'),
+      createChecklistItem('3', 'Pricing Finalized', 'Confirm retail and wholesale pricing', true, 3, 'Pricing sheet signed off'),
+      createChecklistItem('4', 'Inventory Stocked', 'Verify launch inventory is in warehouse', true, 4, 'Stock count confirmed'),
+      createChecklistItem('5', 'Shopify Listing Prepared', 'Create or update Shopify product listing', true, 5, 'Listing in draft state'),
+      createChecklistItem('6', 'Marketing Assets Ready', 'Social media and email assets prepared', false, 6, 'Assets reviewed'),
+      createChecklistItem('7', 'Launch Date Confirmed', 'Set and communicate launch date', true, 7, 'Date communicated to team'),
+    ],
+    assignmentStrategy: 'specific_role',
+    assignToRole: 'product_manager',
+    sourceModule: 'launch_pipeline',
+    subsidiary: 'finishes',
+    isActive: true,
+    version: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    createdBy: 'system',
+  },
+  {
+    id: 'lp_product_pricing_review',
+    name: 'Product Pricing Review',
+    description: 'Tasks when product pricing is significantly updated',
+    category: 'pricing',
+    triggerEvents: ['product_pricing_updated'],
+    defaultTitle: 'Review Pricing Update: {entityName}',
+    defaultDescription: 'Product pricing has been updated. Review and ensure consistency.',
+    defaultPriority: 'medium',
+    defaultDueDays: 3,
+    checklistItems: [
+      createChecklistItem('1', 'Verify Margin Analysis', 'Check that margins meet minimum thresholds', true, 1, 'Margins above target'),
+      createChecklistItem('2', 'Update Sales Channels', 'Sync pricing to all sales channels', true, 2, 'All channels updated'),
+      createChecklistItem('3', 'Notify Sales Team', 'Inform sales team of pricing change', true, 3, 'Team notified'),
+      createChecklistItem('4', 'Update Marketing Materials', 'Revise any materials showing old pricing', false, 4, 'Materials updated'),
+    ],
+    assignmentStrategy: 'specific_role',
+    assignToRole: 'product_manager',
+    sourceModule: 'launch_pipeline',
+    subsidiary: 'finishes',
+    isActive: true,
+    version: 1,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    createdBy: 'system',
+  },
+];
+
+// ============================================================================
 // ALL TASK TEMPLATES
 // ============================================================================
 
@@ -810,6 +937,8 @@ export const ALL_TASK_TEMPLATES: TaskTemplate[] = [
   ...DESIGN_MANAGER_TASK_TEMPLATES,
   ...INTERIOR_DESIGN_TASK_TEMPLATES,
   ...ADVISORY_TASK_TEMPLATES,
+  ...INVENTORY_TASK_TEMPLATES,
+  ...LAUNCH_PIPELINE_TASK_TEMPLATES,
 ];
 
 // ============================================================================

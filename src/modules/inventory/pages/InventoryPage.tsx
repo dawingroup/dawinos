@@ -1,6 +1,6 @@
 /**
  * InventoryPage Component
- * Main page for unified inventory management
+ * Main page for unified inventory management with tabbed navigation
  */
 
 import { useState, useCallback } from 'react';
@@ -8,22 +8,27 @@ import { useAuth } from '@/contexts/AuthContext';
 import { InventoryList } from '../components/InventoryList';
 import { InventoryItemModal } from '../components/InventoryItemModal';
 import { InventoryItemDetail } from '../components/InventoryItemDetail';
+import StockLevelsByLocation from '../components/StockLevelsByLocation';
+import WarehouseManager from '../components/WarehouseManager';
 import type { InventoryListItem } from '../types';
 import { db } from '@/firebase/config';
 import { collection, addDoc, onSnapshot, serverTimestamp, doc } from 'firebase/firestore';
 
+type InventoryTab = 'items' | 'stock-levels' | 'warehouses';
+
+const TABS: { id: InventoryTab; label: string }[] = [
+  { id: 'items', label: 'Items' },
+  { id: 'stock-levels', label: 'Stock Levels' },
+  { id: 'warehouses', label: 'Warehouses' },
+];
+
 export function InventoryPage() {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<InventoryTab>('items');
   const [modalOpen, setModalOpen] = useState(false);
   const [editItemId, setEditItemId] = useState<string | undefined>();
   const [detailItem, setDetailItem] = useState<InventoryListItem | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-
-  // All hooks must be called before any early returns
-  const handleEditItem = useCallback((item: InventoryListItem) => {
-    setEditItemId(item.id);
-    setModalOpen(true);
-  }, []);
 
   const handleViewItem = useCallback((item: InventoryListItem) => {
     setDetailItem(item);
@@ -40,7 +45,7 @@ export function InventoryPage() {
 
   const handleSyncKatana = async () => {
     if (!user) return;
-    
+
     try {
       // Create a sync request document - Firestore trigger will process it
       const syncRequestsRef = collection(db, 'syncRequests');
@@ -51,18 +56,18 @@ export function InventoryPage() {
         requestedByEmail: user.email,
         requestedAt: serverTimestamp(),
       });
-      
+
       // Wait for the sync to complete by listening to the document
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
           unsubscribe();
           reject(new Error('Sync timed out after 120 seconds'));
         }, 120000);
-        
+
         const unsubscribe = onSnapshot(doc(db, 'syncRequests', requestDoc.id), (snapshot) => {
           const data = snapshot.data();
           if (!data) return;
-          
+
           if (data.status === 'completed') {
             clearTimeout(timeout);
             unsubscribe();
@@ -78,7 +83,7 @@ export function InventoryPage() {
           }
         });
       });
-      
+
     } catch (error: any) {
       alert(`Failed to sync: ${error?.message || 'Unknown error'}`);
       console.error(error);
@@ -121,28 +126,60 @@ export function InventoryPage() {
         </p>
       </div>
 
-      <InventoryList
-        key={refreshKey}
-        onSyncKatana={handleSyncKatana}
-        onAddItem={handleAddItem}
-        onItemClick={handleViewItem}
-        showActions={true}
-      />
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200 mb-6">
+        <nav className="-mb-px flex space-x-8">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
 
-      <InventoryItemModal
-        isOpen={modalOpen}
-        onClose={handleModalClose}
-        onSaved={handleModalSaved}
-        itemId={editItemId}
-        userId={user.uid}
-      />
+      {/* Tab Content */}
+      {activeTab === 'items' && (
+        <>
+          <InventoryList
+            key={refreshKey}
+            onSyncKatana={handleSyncKatana}
+            onAddItem={handleAddItem}
+            onItemClick={handleViewItem}
+            showActions={true}
+          />
 
-      {detailItem && (
-        <InventoryItemDetail
-          itemId={detailItem.id}
-          onClose={handleDetailClose}
-          onEdit={handleDetailEdit}
-        />
+          <InventoryItemModal
+            isOpen={modalOpen}
+            onClose={handleModalClose}
+            onSaved={handleModalSaved}
+            itemId={editItemId}
+            userId={user.uid}
+          />
+
+          {detailItem && (
+            <InventoryItemDetail
+              itemId={detailItem.id}
+              onClose={handleDetailClose}
+              onEdit={handleDetailEdit}
+            />
+          )}
+        </>
+      )}
+
+      {activeTab === 'stock-levels' && (
+        <StockLevelsByLocation />
+      )}
+
+      {activeTab === 'warehouses' && (
+        <WarehouseManager />
       )}
     </div>
   );

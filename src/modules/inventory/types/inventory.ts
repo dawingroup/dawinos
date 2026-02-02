@@ -53,6 +53,11 @@ export type GrainPattern = 'none' | 'lengthwise' | 'crosswise' | 'random';
 export type InventoryStatus = 'active' | 'discontinued' | 'out-of-stock';
 
 /**
+ * Classification: raw material vs finished product
+ */
+export type InventoryClassification = 'material' | 'product';
+
+/**
  * Price history entry for tracking changes
  */
 export interface PriceHistoryEntry {
@@ -112,11 +117,18 @@ export interface InventoryItem {
   displayName?: string; // Override for UI display
   description?: string;
 
-  // === CATEGORIZATION ===
+  // === CLASSIFICATION & CATEGORIZATION ===
+  classification?: InventoryClassification;
   category: InventoryCategory;
   subcategory?: string; // MDF, Plywood, Melamine, etc.
   tags: string[]; // Searchable tags
   aliases?: string[]; // Alternative names for matching
+
+  // === SUPPLIER & SHOPIFY ===
+  preferredSupplierId?: string;
+  preferredSupplierName?: string;
+  shopifyProductId?: string;
+  shopifyVariantId?: string;
 
   // === SOURCE TRACKING ===
   source: InventorySource;
@@ -158,8 +170,13 @@ export interface InventoryItemFormData {
   name: string;
   displayName?: string;
   description?: string;
+  classification?: InventoryClassification;
   category: InventoryCategory;
   subcategory?: string;
+  preferredSupplierId?: string;
+  preferredSupplierName?: string;
+  shopifyProductId?: string;
+  shopifyVariantId?: string;
   tags?: string[];
   dimensions?: InventoryDimensions;
   grainPattern?: GrainPattern;

@@ -1135,3 +1135,12 @@ export * from './clientPortal';
 
 // Re-export deliverable types
 export * from './deliverables';
+
+// Re-export strategy types
+export * from './strategy';
+
+// Re-export strategy report types
+export * from './strategyReport';
+
+// Re-export bottom-up pricing types
+export * from './bottomUpPricing';

@@ -62,6 +62,7 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
   onClose,
   onMinimize,
   initialMode = 'general',
+  context,
 }) => {
   const STORAGE_KEY = 'intelligence_assistant_messages';
 
@@ -133,13 +134,14 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     // Call Gemini AI via Cloud Function
     try {
       const chatFn = httpsCallable<
-        { message: string; mode: string; conversationHistory: Array<{ role: string; content: string }> },
+        { message: string; mode: string; context?: Record<string, any>; conversationHistory: Array<{ role: string; content: string }> },
         { response: string }
       >(functions, 'assistantChat');
 
       const result = await chatFn({
         message: input.trim(),
         mode,
+        context: context || undefined,
         conversationHistory: messages.slice(-10).map((m) => ({
           role: m.role,
           content: m.content,

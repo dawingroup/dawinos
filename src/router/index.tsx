@@ -70,6 +70,7 @@ const AssetRegistryPage = lazy(() => import('@/modules/assets').then(module => (
 const ClipperPage = lazy(() => import('@/app/pages/ClipperPage'));
 const InventoryPage = lazy(() => import('@/modules/inventory/pages/InventoryPage'));
 const FeatureLibraryPage = lazy(() => import('@/modules/design-manager/components/feature-library/FeatureLibraryPage'));
+const ManufacturingModule = lazy(() => import('@/modules/manufacturing/ManufacturingModule'));
 
 // Client Portal (Public)
 const ClientPortalPage = lazy(() => import('@/modules/design-manager/components/client-portal/ClientPortalPage'));
@@ -247,6 +248,10 @@ export const router = createBrowserRouter([
       {
         path: 'features',
         element: <PageWrapper><FeatureLibraryPage /></PageWrapper>,
+      },
+      {
+        path: 'manufacturing/*',
+        element: <PageWrapper><ManufacturingModule /></PageWrapper>,
       },
 
       // ========================================
