@@ -224,6 +224,82 @@ export async function uploadSubsidiaryLogo(
   }
 
 /**
+ * Delete subsidiary logo from Firebase Storage
+ */
+export async function deleteSubsidiaryLogo(
+  subsidiaryId: string,
+  type: 'primary' | 'light' | 'favicon' = 'primary',
+  orgId: string = DEFAULT_ORG_ID
+): Promise<void> {
+  const fieldMap = {
+    primary: 'logoUrl',
+    light: 'logoLightUrl',
+    favicon: 'faviconUrl',
+  };
+  const fieldKey = fieldMap[type] as 'logoUrl' | 'logoLightUrl' | 'faviconUrl';
+
+  // Get current settings to find the URL
+  const settings = await getOrganizationSettings(orgId);
+  const currentBranding = settings?.branding;
+
+  if (!currentBranding?.subsidiaries) {
+    console.warn('No branding subsidiaries found');
+    return;
+  }
+
+  const subsidiaryBranding = currentBranding.subsidiaries[subsidiaryId as keyof typeof currentBranding.subsidiaries];
+  const currentUrl = subsidiaryBranding?.[fieldKey];
+
+  if (currentUrl) {
+    try {
+      // Try to delete the file from storage using the URL
+      // The storage path follows: organizations/{orgId}/branding/{subsidiaryId}/{type}-logo.{ext}
+      const storagePath = `organizations/${orgId}/branding/${subsidiaryId}/${type}-logo`;
+
+      // Try common extensions
+      const extensions = ['png', 'jpg', 'jpeg', 'svg', 'webp'];
+      let deleted = false;
+
+      for (const ext of extensions) {
+        try {
+          const storageRef = ref(storage, `${storagePath}.${ext}`);
+          await deleteObject(storageRef);
+          deleted = true;
+          console.log(`✅ Deleted logo: ${storagePath}.${ext}`);
+          break;
+        } catch {
+          // Try next extension
+        }
+      }
+
+      if (!deleted) {
+        console.warn('Logo file not found in storage, clearing URL only');
+      }
+    } catch (error) {
+      console.warn('Error deleting logo file:', error);
+    }
+  }
+
+  // Clear the URL in settings
+  const updatedBranding = {
+    ...currentBranding,
+    subsidiaries: {
+      ...currentBranding.subsidiaries,
+      [subsidiaryId]: {
+        ...currentBranding.subsidiaries[subsidiaryId as keyof typeof currentBranding.subsidiaries],
+        [fieldKey]: null,
+      },
+    },
+  };
+
+  await updateOrganizationSettings(orgId, {
+    branding: updatedBranding,
+  });
+
+  console.log(`✅ Cleared ${type} logo URL for ${subsidiaryId}`);
+}
+
+/**
  * Upload organization logo to Firebase Storage (legacy)
  */
 export async function uploadOrganizationLogo(
