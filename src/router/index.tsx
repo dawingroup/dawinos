@@ -71,7 +71,6 @@ const ClipperPage = lazy(() => import('@/app/pages/ClipperPage'));
 const InventoryPage = lazy(() => import('@/modules/inventory/pages/InventoryPage'));
 const ManufacturingModule = lazy(() => import('@/modules/manufacturing/ManufacturingModule'));
 const FeatureLibraryPage = lazy(() => import('@/modules/design-manager/components/feature-library/FeatureLibraryPage'));
-const ManufacturingModule = lazy(() => import('@/modules/manufacturing/ManufacturingModule'));
 
 // WhatsApp Communication
 const WhatsAppInboxPage = lazy(() => import('@/modules/whatsapp/pages/WhatsAppInboxPage'));
