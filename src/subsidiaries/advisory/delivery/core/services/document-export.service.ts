@@ -452,41 +452,234 @@ export class DocumentExportService {
   }
 
   /**
-   * Get Google Drive access token using service account
+   * Get Google Drive access token using service account JWT authentication
    */
   private async getGoogleDriveAccessToken(settings: GoogleDriveSettings): Promise<string> {
-    // TODO: Implement JWT-based service account authentication
-    // This requires signing a JWT with the private key and exchanging for access token
-    // For now, return placeholder
-    throw new Error('Google Drive service account authentication not yet implemented');
+    const now = Math.floor(Date.now() / 1000);
+    const expiry = now + 3600; // 1 hour
+
+    const header = {
+      alg: 'RS256',
+      typ: 'JWT',
+    };
+
+    const claimSet = {
+      iss: settings.serviceAccountEmail,
+      scope: 'https://www.googleapis.com/auth/drive',
+      aud: 'https://oauth2.googleapis.com/token',
+      exp: expiry,
+      iat: now,
+    };
+
+    // Base64url encode header and claim set
+    const encodedHeader = this.base64UrlEncode(JSON.stringify(header));
+    const encodedClaimSet = this.base64UrlEncode(JSON.stringify(claimSet));
+
+    const signatureInput = `${encodedHeader}.${encodedClaimSet}`;
+
+    // Sign with private key using Web Crypto API
+    const signature = await this.signJWT(signatureInput, settings.privateKey);
+
+    const jwt = `${signatureInput}.${signature}`;
+
+    // Exchange JWT for access token
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: jwt,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to get Google Drive access token: ${error}`);
+    }
+
+    const data = await response.json();
+    return data.access_token;
   }
 
   /**
-   * Ensure SharePoint folder exists
+   * Base64url encode a string
+   */
+  private base64UrlEncode(str: string): string {
+    const base64 = btoa(unescape(encodeURIComponent(str)));
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  /**
+   * Sign JWT using RSA-SHA256 with Web Crypto API
+   */
+  private async signJWT(input: string, privateKeyPem: string): Promise<string> {
+    // Convert PEM to ArrayBuffer
+    const pemContents = privateKeyPem
+      .replace(/-----BEGIN PRIVATE KEY-----/, '')
+      .replace(/-----END PRIVATE KEY-----/, '')
+      .replace(/-----BEGIN RSA PRIVATE KEY-----/, '')
+      .replace(/-----END RSA PRIVATE KEY-----/, '')
+      .replace(/\\n/g, '')
+      .replace(/\n/g, '')
+      .replace(/\s/g, '')
+      .trim();
+
+    const binaryDer = atob(pemContents);
+    const keyData = new Uint8Array(binaryDer.length);
+    for (let i = 0; i < binaryDer.length; i++) {
+      keyData[i] = binaryDer.charCodeAt(i);
+    }
+
+    // Import the key using Web Crypto API
+    const cryptoKey = await crypto.subtle.importKey(
+      'pkcs8',
+      keyData.buffer,
+      {
+        name: 'RSASSA-PKCS1-v1_5',
+        hash: 'SHA-256',
+      },
+      false,
+      ['sign']
+    );
+
+    // Sign the input
+    const encoder = new TextEncoder();
+    const data = encoder.encode(input);
+    const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', cryptoKey, data);
+
+    // Convert signature to base64url
+    const signatureArray = new Uint8Array(signature);
+    let signatureBase64 = '';
+    for (let i = 0; i < signatureArray.length; i++) {
+      signatureBase64 += String.fromCharCode(signatureArray[i]);
+    }
+    return btoa(signatureBase64).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  /**
+   * Ensure SharePoint folder exists, creating if necessary
    */
   private async ensureSharePointFolder(
     path: string,
     settings: SharePointSettings,
     accessToken: string
   ): Promise<string> {
-    // TODO: Implement folder creation logic
-    // Split path and create folders recursively
-    // For now, return placeholder
-    return `/Shared Documents/${path}`;
+    const folderNames = path.split('/').filter(name => name.trim());
+
+    // Start from Shared Documents or configured root
+    let currentPath = settings.rootFolderId || '/Shared Documents';
+
+    for (const folderName of folderNames) {
+      const targetPath = `${currentPath}/${folderName}`;
+
+      // Try to get the folder
+      const checkUrl = `${settings.siteUrl}/_api/web/GetFolderByServerRelativeUrl('${encodeURIComponent(targetPath)}')?$select=Exists,ServerRelativeUrl`;
+
+      try {
+        const checkResponse = await fetch(checkUrl, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Accept': 'application/json;odata=verbose',
+          },
+        });
+
+        if (checkResponse.ok) {
+          // Folder exists
+          currentPath = targetPath;
+          continue;
+        }
+      } catch {
+        // Folder doesn't exist, will create it
+      }
+
+      // Create folder using Graph API
+      const createUrl = `${settings.siteUrl}/_api/web/folders`;
+      const createResponse = await fetch(createUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/json;odata=verbose',
+          'Content-Type': 'application/json;odata=verbose',
+        },
+        body: JSON.stringify({
+          '__metadata': { 'type': 'SP.Folder' },
+          'ServerRelativeUrl': targetPath,
+        }),
+      });
+
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text();
+        // Check if it's a "folder already exists" error (can happen with concurrent requests)
+        if (!errorText.toLowerCase().includes('already exists')) {
+          throw new Error(`Failed to create SharePoint folder: ${errorText}`);
+        }
+      }
+
+      currentPath = targetPath;
+    }
+
+    return currentPath;
   }
 
   /**
-   * Ensure Google Drive folder exists
+   * Ensure Google Drive folder exists, creating if necessary
    */
   private async ensureGoogleDriveFolder(
     path: string,
     settings: GoogleDriveSettings,
     accessToken: string
   ): Promise<string> {
-    // TODO: Implement folder creation logic
-    // Split path and create folders recursively
-    // For now, return root folder ID
-    return settings.rootFolderId;
+    const folderNames = path.split('/').filter(name => name.trim());
+
+    let parentId = settings.rootFolderId;
+
+    for (const folderName of folderNames) {
+      // Search for existing folder
+      const searchQuery = `name='${folderName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+      const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(searchQuery)}&fields=files(id,name)`;
+
+      const searchResponse = await fetch(searchUrl, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!searchResponse.ok) {
+        throw new Error(`Failed to search for folder: ${await searchResponse.text()}`);
+      }
+
+      const searchResult = await searchResponse.json();
+
+      if (searchResult.files && searchResult.files.length > 0) {
+        // Folder exists
+        parentId = searchResult.files[0].id;
+      } else {
+        // Create folder
+        const createResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: folderName,
+            mimeType: 'application/vnd.google-apps.folder',
+            parents: [parentId],
+          }),
+        });
+
+        if (!createResponse.ok) {
+          throw new Error(`Failed to create folder: ${await createResponse.text()}`);
+        }
+
+        const createResult = await createResponse.json();
+        parentId = createResult.id;
+      }
+    }
+
+    return parentId;
   }
 
   /**
