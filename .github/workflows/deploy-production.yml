@@ -22,6 +22,11 @@ env:
   NODE_VERSION: '20'
   FIREBASE_PROJECT: dawinos
 
+# Required for Workload Identity Federation
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   # ===========================================================================
   # BUILD AND TEST
@@ -30,7 +35,7 @@ jobs:
     name: Build and Test
     runs-on: ubuntu-latest
     if: github.event.inputs.skip_tests != 'true'
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -80,7 +85,7 @@ jobs:
     environment:
       name: production
       url: https://dawinos.web.app
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -96,23 +101,33 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      # Authenticate using Workload Identity Federation (keyless)
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.FIREBASE_PROJECT }}
+
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
       - name: Deploy Firestore rules
         run: firebase deploy --only firestore:rules --project ${{ env.FIREBASE_PROJECT }}
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
       - name: Deploy Firestore indexes
         run: firebase deploy --only firestore:indexes --project ${{ env.FIREBASE_PROJECT }}
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Deploy Storage rules
+        run: firebase deploy --only storage --project ${{ env.FIREBASE_PROJECT }}
 
       - name: Deploy hosting
         run: firebase deploy --only hosting --project ${{ env.FIREBASE_PROJECT }}
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
   # ===========================================================================
   # POST-DEPLOYMENT VERIFICATION
@@ -121,7 +136,7 @@ jobs:
     name: Verify Deployment
     runs-on: ubuntu-latest
     needs: deploy
-    
+
     steps:
       - name: Health check
         run: |
