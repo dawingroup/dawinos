@@ -900,16 +900,6 @@
     },
 
     {
-      "collectionGroup": "notifications",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "userId", "order": "ASCENDING" },
-        { "fieldPath": "organizationId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-
-    {
       "collectionGroup": "system_settings",
       "queryScope": "COLLECTION",
       "fields": [
@@ -2443,49 +2433,25 @@
     },
 
     {
-      "collectionGroup": "manufacturingOrders",
+      "collectionGroup": "purchaseOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subsidiaryId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "purchaseOrders",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "subsidiaryId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "manufacturingOrders",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "projectId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "manufacturingOrders",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "currentStage", "order": "ASCENDING" },
-        { "fieldPath": "updatedAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "manufacturingOrders",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "manufacturingOrders",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "designItemId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
 
     {
-      "collectionGroup": "purchaseOrders",
+      "collectionGroup": "manufacturingOrders",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "subsidiaryId", "order": "ASCENDING" },
@@ -2494,37 +2460,70 @@
       ]
     },
     {
-      "collectionGroup": "purchaseOrders",
+      "collectionGroup": "manufacturingOrders",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "supplierName", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "purchaseOrders",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "linkedProjectId", "order": "ASCENDING" },
+        { "fieldPath": "subsidiaryId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
 
     {
-      "collectionGroup": "warehouses",
+      "collectionGroup": "procurementRequirements",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "subsidiaryId", "order": "ASCENDING" },
-        { "fieldPath": "isActive", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
     {
-      "collectionGroup": "warehouses",
+      "collectionGroup": "procurementRequirements",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "subsidiaryId", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procurementRequirements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "supplierId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procurementRequirements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "moId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procurementRequirements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "poId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "clientDocuments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "uploadedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "clientDocuments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "aiAnalysisStatus", "order": "ASCENDING" },
+        { "fieldPath": "uploadedAt", "order": "DESCENDING" }
       ]
     },
 
@@ -2537,20 +2536,20 @@
       ]
     },
     {
-      "collectionGroup": "stockLevels",
+      "collectionGroup": "warehouses",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "warehouseId", "order": "ASCENDING" },
-        { "fieldPath": "quantityAvailable", "order": "ASCENDING" }
+        { "fieldPath": "subsidiaryId", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
       ]
     },
-
     {
-      "collectionGroup": "costHistory",
+      "collectionGroup": "warehouses",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "inventoryItemId", "order": "ASCENDING" },
-        { "fieldPath": "recordedAt", "order": "DESCENDING" }
+        { "fieldPath": "subsidiaryId", "order": "ASCENDING" },
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
       ]
     }
   ],

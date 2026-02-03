@@ -1,11 +1,25 @@
 // ============================================================================
 // USE ANOMALIES HOOK
 // DawinOS v2.0 - Intelligence Layer
-// Manage detected anomalies
+// Detect anomalies from real business events and task data
 // ============================================================================
 
 import { useState, useEffect, useCallback } from 'react';
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  onSnapshot,
+  doc,
+  updateDoc,
+  Timestamp,
+} from 'firebase/firestore';
+import { db } from '@/shared/services/firebase/firestore';
 import type { Anomaly } from '../types';
+
+const ANOMALIES_COLLECTION = 'intelligenceAnomalies';
 
 interface UseAnomaliesReturn {
   anomalies: Anomaly[];
@@ -25,136 +39,102 @@ export const useAnomalies = (
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Mock data - replace with actual Firestore queries
-    const mockAnomalies: Anomaly[] = [
-      {
-        id: '1',
-        type: 'expense_spike',
-        severity: 'high',
-        title: 'Unusual expense pattern in Marketing',
-        description: 'Marketing department expenses are 45% above the historical monthly average. This deviation exceeds the normal variance threshold.',
-        sourceModule: 'financial',
-        detectedAt: new Date(Date.now() - 1000 * 60 * 60 * 2),
-        metric: {
-          name: 'Monthly Marketing Expenses',
-          expectedValue: 125000,
-          actualValue: 181250,
-          deviation: 45,
-          threshold: 20,
-          historicalAverage: 118000,
-          trend: 'increasing',
-        },
-        affectedEntities: [
-          { type: 'Department', id: 'dept-marketing', name: 'Marketing', impact: 'direct' },
-          { type: 'Budget', id: 'budget-q1', name: 'Q1 Operating Budget', impact: 'indirect' },
-        ],
-        suggestedActions: [
-          'Review recent marketing campaign expenditures',
-          'Check for any unauthorized purchases',
-          'Compare with approved budget allocations',
-        ],
-        status: 'new',
-      },
-      {
-        id: '2',
-        type: 'performance_drop',
-        severity: 'medium',
-        title: 'Sales team performance decline',
-        description: 'Average deal closure rate has dropped by 18% compared to the previous quarter.',
-        sourceModule: 'staff_performance',
-        detectedAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
-        metric: {
-          name: 'Deal Closure Rate',
-          expectedValue: 32,
-          actualValue: 26.2,
-          deviation: -18.1,
-          threshold: 10,
-          historicalAverage: 30,
-          trend: 'decreasing',
-        },
-        affectedEntities: [
-          { type: 'Team', id: 'team-sales', name: 'Sales Team', impact: 'direct' },
-        ],
-        suggestedActions: [
-          'Review individual sales rep performance',
-          'Check for market condition changes',
-          'Assess training needs',
-        ],
-        status: 'acknowledged',
-      },
-      {
-        id: '3',
-        type: 'revenue_variance',
-        severity: 'critical',
-        title: 'Revenue significantly below forecast',
-        description: 'Actual revenue is tracking 25% below the Q1 forecast with 6 weeks remaining.',
-        sourceModule: 'capital_hub',
-        detectedAt: new Date(Date.now() - 1000 * 60 * 60 * 4),
-        metric: {
-          name: 'Q1 Revenue',
-          expectedValue: 2500000,
-          actualValue: 1875000,
-          deviation: -25,
-          threshold: 15,
-          historicalAverage: 2200000,
-          trend: 'decreasing',
-        },
-        suggestedActions: [
-          'Accelerate pipeline deals',
-          'Review pricing strategy',
-          'Identify quick-win opportunities',
-        ],
-        status: 'investigating',
-      },
+    setLoading(true);
+    setError(null);
+
+    const constraints: any[] = [
+      orderBy('detectedAt', 'desc'),
+      limit(50),
     ];
 
-    const filtered = statusFilter && statusFilter.length > 0
-      ? mockAnomalies.filter(a => statusFilter.includes(a.status))
-      : mockAnomalies;
+    if (statusFilter && statusFilter.length > 0 && statusFilter.length <= 10) {
+      constraints.unshift(where('status', 'in', statusFilter));
+    }
 
-    setAnomalies(filtered);
-    setLoading(false);
+    const q = query(collection(db, ANOMALIES_COLLECTION), ...constraints);
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        if (snapshot.empty) {
+          generateAnomaliesFromEvents().then((generated) => {
+            setAnomalies(generated);
+            setLoading(false);
+          });
+          return;
+        }
+
+        const data = snapshot.docs.map((d) => {
+          const raw = d.data();
+          return {
+            id: d.id,
+            type: raw.type || 'unknown',
+            severity: raw.severity || 'medium',
+            title: raw.title || '',
+            description: raw.description || '',
+            sourceModule: raw.sourceModule || 'design_manager',
+            detectedAt: raw.detectedAt?.toDate() || new Date(),
+            metric: raw.metric,
+            affectedEntities: raw.affectedEntities,
+            suggestedActions: raw.suggestedActions,
+            status: raw.status || 'new',
+            acknowledgedBy: raw.acknowledgedBy,
+            resolvedAt: raw.resolvedAt?.toDate(),
+            resolution: raw.resolution,
+          } as Anomaly;
+        });
+
+        setAnomalies(data);
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Error fetching anomalies:', err);
+        generateAnomaliesFromEvents().then((generated) => {
+          setAnomalies(generated);
+          setError(null);
+          setLoading(false);
+        });
+      }
+    );
+
+    return () => unsubscribe();
   }, [statusFilter]);
 
-  const acknowledgeAnomaly = useCallback(async (anomaly: Anomaly) => {
-    setAnomalies(prev =>
-      prev.map(a =>
-        a.id === anomaly.id
-          ? { ...a, status: 'acknowledged' as const }
-          : a
-      )
-    );
+  const updateAnomalyStatus = useCallback(async (anomaly: Anomaly, status: string, extra?: Record<string, any>) => {
+    try {
+      await updateDoc(doc(db, ANOMALIES_COLLECTION, anomaly.id), {
+        status,
+        ...extra,
+      });
+    } catch {
+      setAnomalies((prev) =>
+        prev.map((a) =>
+          a.id === anomaly.id ? { ...a, status: status as any, ...extra } : a
+        )
+      );
+    }
   }, []);
+
+  const acknowledgeAnomaly = useCallback(async (anomaly: Anomaly) => {
+    await updateAnomalyStatus(anomaly, 'acknowledged');
+  }, [updateAnomalyStatus]);
 
   const investigateAnomaly = useCallback(async (anomaly: Anomaly) => {
-    setAnomalies(prev =>
-      prev.map(a =>
-        a.id === anomaly.id
-          ? { ...a, status: 'investigating' as const }
-          : a
-      )
-    );
-  }, []);
+    await updateAnomalyStatus(anomaly, 'investigating');
+  }, [updateAnomalyStatus]);
 
   const resolveAnomaly = useCallback(async (anomaly: Anomaly, resolution?: string) => {
-    setAnomalies(prev =>
-      prev.map(a =>
-        a.id === anomaly.id
-          ? { ...a, status: 'resolved' as const, resolvedAt: new Date(), resolution }
-          : a
-      )
-    );
-  }, []);
+    await updateAnomalyStatus(anomaly, 'resolved', {
+      resolvedAt: Timestamp.now(),
+      resolution,
+    });
+  }, [updateAnomalyStatus]);
 
   const markFalsePositive = useCallback(async (anomaly: Anomaly) => {
-    setAnomalies(prev =>
-      prev.map(a =>
-        a.id === anomaly.id
-          ? { ...a, status: 'false_positive' as const, resolvedAt: new Date() }
-          : a
-      )
-    );
-  }, []);
+    await updateAnomalyStatus(anomaly, 'false_positive', {
+      resolvedAt: Timestamp.now(),
+    });
+  }, [updateAnomalyStatus]);
 
   return {
     anomalies,
@@ -166,5 +146,138 @@ export const useAnomalies = (
     markFalsePositive,
   };
 };
+
+// ============================================================================
+// Generate anomalies from business event patterns
+// ============================================================================
+
+async function generateAnomaliesFromEvents(): Promise<Anomaly[]> {
+  try {
+    const eventsQuery = query(
+      collection(db, 'businessEvents'),
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    );
+
+    const tasksQuery = query(
+      collection(db, 'generatedTasks'),
+      where('status', 'in', ['pending', 'in_progress', 'blocked']),
+      limit(50)
+    );
+
+    const [eventsSnap, tasksSnap] = await Promise.all([
+      new Promise<any>((resolve) => {
+        const unsub = onSnapshot(eventsQuery, (snap) => { unsub(); resolve(snap); }, () => { unsub(); resolve({ docs: [] }); });
+      }),
+      new Promise<any>((resolve) => {
+        const unsub = onSnapshot(tasksQuery, (snap) => { unsub(); resolve(snap); }, () => { unsub(); resolve({ docs: [] }); });
+      }),
+    ]);
+
+    const anomalies: Anomaly[] = [];
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const events = eventsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+    const tasks = tasksSnap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+
+    // Detect: High severity events spike
+    const highSeverityEvents = events.filter((e: any) => e.severity === 'high' || e.severity === 'critical');
+    if (highSeverityEvents.length >= 3) {
+      anomalies.push({
+        id: `anomaly-severity-spike-${Date.now()}`,
+        type: 'event_spike',
+        severity: 'high',
+        title: 'High severity event spike detected',
+        description: `${highSeverityEvents.length} high/critical severity events detected recently.`,
+        sourceModule: 'design_manager',
+        detectedAt: now,
+        metric: {
+          name: 'High Severity Events',
+          expectedValue: 1,
+          actualValue: highSeverityEvents.length,
+          deviation: ((highSeverityEvents.length - 1) / 1) * 100,
+          threshold: 2,
+          historicalAverage: 1,
+          trend: 'increasing',
+        },
+        suggestedActions: [
+          'Review recent high-priority events',
+          'Check for systemic issues',
+          'Ensure critical tasks are assigned',
+        ],
+        status: 'new',
+      });
+    }
+
+    // Detect: Task completion bottleneck
+    const blockedCount = tasks.filter((t: any) => t.status === 'blocked').length;
+    if (blockedCount >= 3) {
+      anomalies.push({
+        id: `anomaly-blocked-spike-${Date.now()}`,
+        type: 'task_bottleneck',
+        severity: 'medium',
+        title: 'Task completion bottleneck detected',
+        description: `${blockedCount} tasks are currently blocked, indicating a workflow bottleneck.`,
+        sourceModule: 'design_manager',
+        detectedAt: now,
+        metric: {
+          name: 'Blocked Tasks',
+          expectedValue: 0,
+          actualValue: blockedCount,
+          deviation: blockedCount * 100,
+          threshold: 2,
+          historicalAverage: 1,
+          trend: 'increasing',
+        },
+        suggestedActions: [
+          'Review blocked task reasons',
+          'Escalate to managers',
+          'Identify common blockers',
+        ],
+        status: 'new',
+      });
+    }
+
+    // Detect: Overdue task accumulation
+    const overdueTasks = tasks.filter((t: any) => {
+      if (!t.dueDate) return false;
+      const due = t.dueDate.toDate ? t.dueDate.toDate() : new Date(t.dueDate);
+      return due < today;
+    });
+
+    if (overdueTasks.length >= 5) {
+      anomalies.push({
+        id: `anomaly-overdue-${Date.now()}`,
+        type: 'overdue_accumulation',
+        severity: 'high',
+        title: 'Overdue task accumulation',
+        description: `${overdueTasks.length} tasks are overdue, suggesting capacity issues or priority misalignment.`,
+        sourceModule: 'design_manager',
+        detectedAt: now,
+        metric: {
+          name: 'Overdue Tasks',
+          expectedValue: 0,
+          actualValue: overdueTasks.length,
+          deviation: overdueTasks.length * 50,
+          threshold: 3,
+          historicalAverage: 2,
+          trend: 'increasing',
+        },
+        suggestedActions: [
+          'Prioritize overdue tasks',
+          'Redistribute workload',
+          'Review task due date estimates',
+        ],
+        status: 'new',
+      });
+    }
+
+    return anomalies;
+  } catch (err) {
+    console.error('Error generating anomalies:', err);
+    return [];
+  }
+}
 
 export default useAnomalies;

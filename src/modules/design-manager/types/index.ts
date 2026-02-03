@@ -299,17 +299,15 @@ export interface ArchitecturalPricing {
 export type ArchitecturalDrawingType = ArchitecturalDiscipline;
 
 /**
- * Standard part entry (hinges, screws, edging, etc. from inventory)
+ * Standard part entry (hinges, screws, edging, etc. from Katana)
  */
 export interface StandardPartEntry {
   id: string;
-  inventoryItemId?: string;       // Reference to inventory module item
-  katanaSku?: string;             // Legacy Katana SKU reference
+  katanaSku?: string;             // Katana SKU reference
   name: string;                   // e.g., "Soft-close hinge 110°"
   category: 'hinge' | 'slide' | 'screw' | 'cam' | 'dowel' | 'edging' | 'handle' | 'knob' | 'other';
   quantity: number;
   unitCost: number;
-  currency?: string;              // Defaults to 'UGX'
   totalCost: number;
   notes?: string;
 }
@@ -466,7 +464,7 @@ export interface ManufacturingCost {
  */
 export interface DesignItem {
   id: string;
-
+  
   // Identification
   itemCode: string;
   name: string;
@@ -490,36 +488,26 @@ export interface DesignItem {
   // Project relationship
   projectId: string;
   projectCode: string;
-
+  
   // Status
   currentStage: DesignStage;
   stageEnteredAt?: Timestamp; // When the current stage was entered (for delay tracking)
   ragStatus: RAGStatus;
   overallReadiness: number; // 0-100 percentage
-
+  
   // History
   stageHistory: StageTransition[];
   approvals: ApprovalRecord[];
-
+  
   // Files
   files: DesignFile[];
-
-  // Strategy context (NEW - links item to strategy canvas)
-  strategyContext?: import('./strategy').DesignItemStrategyContext;
-
-  // Budget tracking (NEW - tracks allocated vs. actual costs)
-  budgetTracking?: import('./strategy').DesignItemBudgetTracking;
-
+  
   // Metadata
   createdAt: Timestamp;
   createdBy: string;
   updatedAt: Timestamp;
   updatedBy: string;
-
-  // Manufacturing handover
-  manufacturingOrderId?: string;    // Link to ManufacturingOrder once handed over
-  handoverStatus?: 'not-ready' | 'ready' | 'handed-over';
-
+  
   // Optional fields
   requiredQuantity?: number;  // Number of units needed (e.g., 4 kitchen cabinets)
   estimatedHours?: number;
@@ -528,7 +516,6 @@ export interface DesignItem {
   priority?: 'low' | 'medium' | 'high' | 'urgent';
   tags?: string[];
   notes?: string;
-  sortOrder?: number;  // User-defined display order (lower = first)
 }
 
 // ============================================
@@ -1151,3 +1138,9 @@ export * from './deliverables';
 
 // Re-export strategy types
 export * from './strategy';
+
+// Re-export strategy report types
+export * from './strategyReport';
+
+// Re-export bottom-up pricing types
+export * from './bottomUpPricing';

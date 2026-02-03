@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Plus, Upload, Trash2, Edit2, Package, AlertCircle, Wrench, Sparkles, Save, Check, Library, Loader2, Search, DollarSign, RefreshCw } from 'lucide-react';
+import { Plus, Upload, Trash2, Edit2, Package, AlertCircle, Wrench, Sparkles, Save, Check, Library, Loader2, Search, DollarSign } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useParts } from '../../hooks/useParts';
 import type { DesignItem, PartEntry, StandardPartEntry, SpecialPartEntry } from '../../types';

@@ -5,15 +5,17 @@
  * Employee-facing page for viewing and managing assigned tasks
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   ClipboardList,
+  Clock,
+  Play,
   AlertCircle,
+  Calendar,
   RefreshCw,
   Search,
   Filter,
   Inbox,
-  X,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/core/components/ui/card';
@@ -41,6 +43,34 @@ import {
 } from '../hooks/useEmployeeTaskInbox';
 
 // ============================================
+// Stats Card Component
+// ============================================
+
+interface StatCardProps {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  color: string;
+  bgColor: string;
+}
+
+function StatCard({ label, value, icon, color, bgColor }: StatCardProps) {
+  return (
+    <Card className="p-4">
+      <div className="flex items-center gap-3">
+        <div className={`p-2 rounded-lg ${bgColor}`}>
+          <div className={color}>{icon}</div>
+        </div>
+        <div>
+          <div className="text-2xl font-bold">{value}</div>
+          <div className="text-xs text-muted-foreground">{label}</div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// ============================================
 // Main Page Component
 // ============================================
 
@@ -66,16 +96,6 @@ export default function EmployeeTaskInboxPage() {
 
   const [selectedTask, setSelectedTask] = useState<EmployeeTask | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-
-  // Keep selectedTask in sync with real-time task updates (e.g., AI enrichment arriving)
-  useEffect(() => {
-    if (selectedTask && isDetailOpen) {
-      const updated = tasks.find((t) => t.id === selectedTask.id);
-      if (updated && updated !== selectedTask) {
-        setSelectedTask(updated);
-      }
-    }
-  }, [tasks, selectedTask, isDetailOpen]);
 
   const handleViewDetails = (task: EmployeeTask) => {
     setSelectedTask(task);
@@ -180,23 +200,37 @@ export default function EmployeeTaskInboxPage() {
         onFilterChange={setSnapshotFilter}
       />
 
-      {/* Active snapshot filter indicator */}
-      {snapshotFilter && (
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="text-sm px-3 py-1">
-            Showing: {snapshotFilter === 'burning' ? 'Burning' : snapshotFilter === 'nextUp' ? 'Next Up' : snapshotFilter === 'stuck' ? 'Stuck' : 'Recently Moved'}
-          </Badge>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSnapshotFilter(null)}
-            className="h-7 px-2"
-          >
-            <X className="h-3 w-3" />
-            Clear
-          </Button>
-        </div>
-      )}
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard
+          label="Pending"
+          value={stats.pending}
+          icon={<Clock className="h-5 w-5" />}
+          color="text-amber-600"
+          bgColor="bg-amber-100"
+        />
+        <StatCard
+          label="In Progress"
+          value={stats.inProgress}
+          icon={<Play className="h-5 w-5" />}
+          color="text-blue-600"
+          bgColor="bg-blue-100"
+        />
+        <StatCard
+          label="Overdue"
+          value={stats.overdue}
+          icon={<AlertCircle className="h-5 w-5" />}
+          color="text-red-600"
+          bgColor="bg-red-100"
+        />
+        <StatCard
+          label="Due Today"
+          value={stats.dueToday}
+          icon={<Calendar className="h-5 w-5" />}
+          color="text-orange-600"
+          bgColor="bg-orange-100"
+        />
+      </div>
 
       {/* Filters */}
       <Card>

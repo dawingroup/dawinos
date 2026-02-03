@@ -1,38 +1,34 @@
 /**
  * InventoryPage Component
- * Main page for unified inventory management
- * Enhanced with multi-location stock, warehouse management, and cost history tabs
+ * Main page for unified inventory management with tabbed navigation
  */
 
 import { useState, useCallback } from 'react';
-import { Box, Tabs, Tab } from '@mui/material';
 import { useAuth } from '@/contexts/AuthContext';
 import { InventoryList } from '../components/InventoryList';
 import { InventoryItemModal } from '../components/InventoryItemModal';
 import { InventoryItemDetail } from '../components/InventoryItemDetail';
 import StockLevelsByLocation from '../components/StockLevelsByLocation';
-import StockMovementHistory from '../components/StockMovementHistory';
-import CostHistoryChart from '../components/CostHistoryChart';
 import WarehouseManager from '../components/WarehouseManager';
 import type { InventoryListItem } from '../types';
 import { db } from '@/firebase/config';
 import { collection, addDoc, onSnapshot, serverTimestamp, doc } from 'firebase/firestore';
 
+type InventoryTab = 'items' | 'stock-levels' | 'warehouses';
+
+const TABS: { id: InventoryTab; label: string }[] = [
+  { id: 'items', label: 'Items' },
+  { id: 'stock-levels', label: 'Stock Levels' },
+  { id: 'warehouses', label: 'Warehouses' },
+];
+
 export function InventoryPage() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState<InventoryTab>('items');
   const [modalOpen, setModalOpen] = useState(false);
   const [editItemId, setEditItemId] = useState<string | undefined>();
   const [detailItem, setDetailItem] = useState<InventoryListItem | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [selectedStockLevelId, setSelectedStockLevelId] = useState<string | null>(null);
-  const [selectedCostItemId, setSelectedCostItemId] = useState<string | null>(null);
-
-  // All hooks must be called before any early returns
-  const handleEditItem = useCallback((item: InventoryListItem) => {
-    setEditItemId(item.id);
-    setModalOpen(true);
-  }, []);
 
   const handleViewItem = useCallback((item: InventoryListItem) => {
     setDetailItem(item);
@@ -131,17 +127,26 @@ export function InventoryPage() {
       </div>
 
       {/* Tab Navigation */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
-          <Tab label="Items" />
-          <Tab label="Stock Levels" />
-          <Tab label="Cost History" />
-          <Tab label="Warehouses" />
-        </Tabs>
-      </Box>
+      <div className="border-b border-gray-200 mb-6">
+        <nav className="-mb-px flex space-x-8">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
 
-      {/* Tab: Items (original view) */}
-      {activeTab === 0 && (
+      {/* Tab Content */}
+      {activeTab === 'items' && (
         <>
           <InventoryList
             key={refreshKey}
@@ -169,41 +174,11 @@ export function InventoryPage() {
         </>
       )}
 
-      {/* Tab: Stock Levels by Location */}
-      {activeTab === 1 && (
-        <Box>
-          <StockLevelsByLocation
-            onItemClick={(sl) => setSelectedStockLevelId(sl.id)}
-          />
-          {selectedStockLevelId && (
-            <Box sx={{ mt: 3 }}>
-              <StockMovementHistory
-                stockLevelId={selectedStockLevelId}
-                title="Movement History"
-              />
-            </Box>
-          )}
-        </Box>
+      {activeTab === 'stock-levels' && (
+        <StockLevelsByLocation />
       )}
 
-      {/* Tab: Cost History */}
-      {activeTab === 2 && (
-        <Box>
-          <Box sx={{ mb: 2 }}>
-            <input
-              type="text"
-              placeholder="Enter inventory item ID to view cost history..."
-              className="w-full px-3 py-2 border rounded-md text-sm"
-              value={selectedCostItemId || ''}
-              onChange={(e) => setSelectedCostItemId(e.target.value || null)}
-            />
-          </Box>
-          <CostHistoryChart inventoryItemId={selectedCostItemId} />
-        </Box>
-      )}
-
-      {/* Tab: Warehouse Manager */}
-      {activeTab === 3 && (
+      {activeTab === 'warehouses' && (
         <WarehouseManager />
       )}
     </div>

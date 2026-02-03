@@ -14,6 +14,7 @@ import {
 import type {
   InventoryItem,
   InventoryCategory,
+  InventoryClassification,
   InventoryUnit,
   InventoryStatus,
   GrainPattern,
@@ -23,6 +24,7 @@ import {
   INVENTORY_UNITS,
   COMMON_THICKNESSES,
 } from '../types';
+import { SupplierPicker } from '@/modules/manufacturing/components/po/SupplierPicker';
 
 interface InventoryItemModalProps {
   isOpen: boolean;
@@ -50,8 +52,12 @@ export function InventoryItemModal({
   const [name, setName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [description, setDescription] = useState('');
+  const [classification, setClassification] = useState<InventoryClassification>('material');
   const [category, setCategory] = useState<InventoryCategory>('sheet-goods');
   const [subcategory, setSubcategory] = useState('');
+  const [supplierValue, setSupplierValue] = useState<{ supplierId: string; supplierName: string } | null>(null);
+  const [shopifyProductId, setShopifyProductId] = useState('');
+  const [shopifyVariantId, setShopifyVariantId] = useState('');
   const [tags, setTags] = useState('');
   const [costPerUnit, setCostPerUnit] = useState<number>(0);
   const [currency, setCurrency] = useState('UGX');
@@ -84,8 +90,16 @@ export function InventoryItemModal({
         setName(item.name);
         setDisplayName(item.displayName || '');
         setDescription(item.description || '');
+        setClassification(item.classification || 'material');
         setCategory(item.category);
         setSubcategory(item.subcategory || '');
+        setSupplierValue(
+          item.preferredSupplierId
+            ? { supplierId: item.preferredSupplierId, supplierName: item.preferredSupplierName || '' }
+            : null,
+        );
+        setShopifyProductId(item.shopifyProductId || '');
+        setShopifyVariantId(item.shopifyVariantId || '');
         setTags(item.tags?.join(', ') || '');
         setCostPerUnit(item.pricing?.costPerUnit || 0);
         setCurrency(item.pricing?.currency || 'UGX');
@@ -109,8 +123,12 @@ export function InventoryItemModal({
     setName('');
     setDisplayName('');
     setDescription('');
+    setClassification('material');
     setCategory('sheet-goods');
     setSubcategory('');
+    setSupplierValue(null);
+    setShopifyProductId('');
+    setShopifyVariantId('');
     setTags('');
     setCostPerUnit(0);
     setCurrency('UGX');
@@ -152,8 +170,13 @@ export function InventoryItemModal({
         name: name.trim(),
         displayName: displayName.trim() || undefined,
         description: description.trim() || undefined,
+        classification,
         category,
         subcategory: subcategory.trim() || undefined,
+        preferredSupplierId: supplierValue?.supplierId || undefined,
+        preferredSupplierName: supplierValue?.supplierName || undefined,
+        shopifyProductId: classification === 'product' && shopifyProductId.trim() ? shopifyProductId.trim() : undefined,
+        shopifyVariantId: classification === 'product' && shopifyVariantId.trim() ? shopifyVariantId.trim() : undefined,
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),
         pricing: {
           costPerUnit,
@@ -354,6 +377,69 @@ export function InventoryItemModal({
                     placeholder="e.g., standard, premium, imported"
                   />
                 </div>
+              </div>
+
+              {/* Classification & Supplier */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-gray-700 uppercase tracking-wide">
+                  Classification & Supplier
+                </h3>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Classification *
+                    </label>
+                    <select
+                      value={classification}
+                      onChange={(e) => setClassification(e.target.value as InventoryClassification)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="material">Material (Raw / Component)</option>
+                      <option value="product">Product (Finished / Sellable)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Preferred Supplier
+                    </label>
+                    <SupplierPicker
+                      value={supplierValue}
+                      onChange={setSupplierValue}
+                      label=""
+                      size="small"
+                    />
+                  </div>
+                </div>
+
+                {classification === 'product' && (
+                  <div className="grid grid-cols-2 gap-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">
+                        Shopify Product ID
+                      </label>
+                      <input
+                        type="text"
+                        value={shopifyProductId}
+                        onChange={(e) => setShopifyProductId(e.target.value)}
+                        className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-1 focus:ring-blue-500"
+                        placeholder="gid://shopify/Product/..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-blue-800 mb-1">
+                        Shopify Variant ID
+                      </label>
+                      <input
+                        type="text"
+                        value={shopifyVariantId}
+                        onChange={(e) => setShopifyVariantId(e.target.value)}
+                        className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-1 focus:ring-blue-500"
+                        placeholder="gid://shopify/ProductVariant/..."
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Pricing */}

@@ -189,6 +189,19 @@ function computeUrgencyScore(task: {
 }
 
 // ============================================
+// Snapshot Types
+// ============================================
+
+export type SnapshotFilter = 'burning' | 'nextUp' | 'stuck' | 'moved' | null;
+
+export interface SnapshotStats {
+  burning: { count: number; topTask?: string };
+  nextUp: { count: number; nearestDue?: string };
+  stuck: { count: number; oldestTask?: string };
+  moved: { count: number };
+}
+
+// ============================================
 // Hook Implementation
 // ============================================
 
@@ -381,86 +394,76 @@ export function useEmployeeTaskInbox() {
     };
   }, [tasks]);
 
-  // Snapshot stats for birds-eye view
+  // Compute snapshot stats from tasks
   const snapshotStats = useMemo((): SnapshotStats => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const threeDaysFromNow = new Date(today);
     threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
-    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const activeTasks = tasks.filter(
-      (t) => t.status !== 'completed' && t.status !== 'cancelled'
-    );
-
-    // Burning: overdue OR high priority (P0/P1)
-    const burningTasks = activeTasks.filter((t) => {
-      const isOverdue =
-        t.dueDate &&
-        new Date(t.dueDate.getFullYear(), t.dueDate.getMonth(), t.dueDate.getDate()) < today;
-      const isHighPriority = t.priority === 'P0' || t.priority === 'P1';
-      return isOverdue || isHighPriority;
+    // Burning: overdue or P0/P1 tasks that are not completed/cancelled
+    const burningTasks = tasks.filter((t) => {
+      if (t.status === 'completed' || t.status === 'cancelled') return false;
+      if (t.priority === 'P0' || t.priority === 'P1') return true;
+      if (t.dueDate && new Date(t.dueDate) < today) return true;
+      return false;
     });
 
-    // Next Up: due within 3 days, unblocked, NOT already in burning
+    // Next Up: pending tasks with upcoming due dates (not overdue, not burning)
     const burningIds = new Set(burningTasks.map((t) => t.id));
-    const nextUpTasks = activeTasks.filter((t) => {
+    const nextUpTasks = tasks.filter((t) => {
       if (burningIds.has(t.id)) return false;
       if (t.status === 'blocked') return false;
-      if (!t.dueDate) return false;
-      const dueDateOnly = new Date(
-        t.dueDate.getFullYear(),
-        t.dueDate.getMonth(),
-        t.dueDate.getDate()
-      );
-      return dueDateOnly >= today && dueDateOnly <= threeDaysFromNow;
+      if (t.status !== 'pending') return false;
+      if (t.dueDate) {
+        const d = new Date(t.dueDate);
+        return d >= today && d <= threeDaysFromNow;
+      }
+      return true;
     });
+    const nearestDueTask = nextUpTasks
+      .filter((t) => t.dueDate)
+      .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())[0];
 
-    // Stuck: blocked
-    const stuckTasks = tasks.filter((t) => t.status === 'blocked');
+    // Stuck: blocked tasks or in_progress for > 3 days with no checklist progress
+    const stuckTasks = tasks.filter((t) => {
+      if (t.status === 'blocked') return true;
+      if (t.status === 'in_progress' && t.startedAt) {
+        const started = new Date(t.startedAt);
+        const daysSinceStart = (now.getTime() - started.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSinceStart > 3 && t.checklistProgress < 50) return true;
+      }
+      return false;
+    });
+    const oldestStuck = stuckTasks.sort((a, b) => {
+      const aDate = a.startedAt || a.createdAt;
+      const bDate = b.startedAt || b.createdAt;
+      return new Date(aDate).getTime() - new Date(bDate).getTime();
+    })[0];
 
-    // Moved: updated in last 24 hours
-    const movedTasks = tasks.filter(
-      (t) => t.updatedAt && t.updatedAt >= twentyFourHoursAgo
-    );
-
-    // Find nearest due in nextUp
-    let nearestDue: string | undefined;
-    if (nextUpTasks.length > 0) {
-      const sorted = [...nextUpTasks].sort(
-        (a, b) => (a.dueDate?.getTime() || 0) - (b.dueDate?.getTime() || 0)
-      );
-      nearestDue = formatDueDate(sorted[0].dueDate);
-    }
-
-    // Find oldest blocked task
-    let oldestTask: string | undefined;
-    if (stuckTasks.length > 0) {
-      const sorted = [...stuckTasks].sort(
-        (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
-      );
-      oldestTask = sorted[0].title.length > 40
-        ? sorted[0].title.slice(0, 37) + '...'
-        : sorted[0].title;
-    }
+    // Moved: tasks that transitioned status in the last 24 hours
+    const movedTasks = tasks.filter((t) => {
+      if (t.completedAt && new Date(t.completedAt) >= twentyFourHoursAgo) return true;
+      if (t.startedAt && new Date(t.startedAt) >= twentyFourHoursAgo) return true;
+      if (t.updatedAt && new Date(t.updatedAt) >= twentyFourHoursAgo && t.status !== 'pending') return true;
+      return false;
+    });
 
     return {
       burning: {
         count: burningTasks.length,
-        topTask:
-          burningTasks.length > 0
-            ? burningTasks[0].title.length > 40
-              ? burningTasks[0].title.slice(0, 37) + '...'
-              : burningTasks[0].title
-            : undefined,
+        topTask: burningTasks[0]?.title,
       },
       nextUp: {
         count: nextUpTasks.length,
-        nearestDue,
+        nearestDue: nearestDueTask?.dueDate
+          ? formatDueDate(nearestDueTask.dueDate)
+          : undefined,
       },
       stuck: {
         count: stuckTasks.length,
-        oldestTask,
+        oldestTask: oldestStuck?.title,
       },
       moved: {
         count: movedTasks.length,
@@ -491,25 +494,33 @@ export function useEmployeeTaskInbox() {
             break;
           }
           case 'nextUp': {
-            if (!isActive || task.status === 'blocked' || !task.dueDate) return false;
-            const dueDateOnly = new Date(
-              task.dueDate.getFullYear(),
-              task.dueDate.getMonth(),
-              task.dueDate.getDate()
-            );
-            // Exclude burning tasks (overdue or P0/P1)
-            const isOverdue = dueDateOnly < today;
-            const isHighPriority = task.priority === 'P0' || task.priority === 'P1';
-            if (isOverdue || isHighPriority) return false;
-            if (dueDateOnly > threeDaysFromNow) return false;
+            if (!isActive || task.status === 'blocked') return false;
+            if (task.dueDate) {
+              const dueDateOnly = new Date(
+                task.dueDate.getFullYear(),
+                task.dueDate.getMonth(),
+                task.dueDate.getDate()
+              );
+              // Exclude burning tasks (overdue or P0/P1)
+              const isOverdue = dueDateOnly < today;
+              const isHighPriority = task.priority === 'P0' || task.priority === 'P1';
+              if (isOverdue || isHighPriority) return false;
+              if (dueDateOnly > threeDaysFromNow) return false;
+            }
             break;
           }
           case 'stuck':
-            if (task.status !== 'blocked') return false;
-            break;
+            if (task.status === 'blocked') break;
+            if (task.status === 'in_progress' && task.startedAt) {
+              const daysSinceStart = (now.getTime() - new Date(task.startedAt).getTime()) / (1000 * 60 * 60 * 24);
+              if (daysSinceStart > 3 && task.checklistProgress < 50) break;
+            }
+            return false;
           case 'moved':
-            if (!task.updatedAt || task.updatedAt < twentyFourHoursAgo) return false;
-            break;
+            if (task.completedAt && new Date(task.completedAt) >= twentyFourHoursAgo) break;
+            else if (task.startedAt && new Date(task.startedAt) >= twentyFourHoursAgo) break;
+            else if (task.updatedAt && new Date(task.updatedAt) >= twentyFourHoursAgo && task.status !== 'pending') break;
+            else return false;
         }
       }
 

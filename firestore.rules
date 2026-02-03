@@ -217,6 +217,14 @@ service cloud.firestore {
         }
       }
       
+      // Client Documents (uploaded files with AI analysis)
+      match /clientDocuments/{documentId} {
+        allow read: if isAuthenticated();
+        allow create: if isProjectMember(projectId);
+        allow update: if isProjectMember(projectId);
+        allow delete: if isProjectMember(projectId);
+      }
+
       // AI Analyses (project-level)
       match /aiAnalyses/{analysisId} {
         allow read: if isAuthenticated();
@@ -2002,6 +2010,50 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create, update: if isExecutive() || hasAnyRole(['strategy_manager', 'system']); // System-generated
       allow delete: if isAdmin() || hasPlatformRole('super_admin');
+    }
+
+    // ============================================
+    // Manufacturing Module
+    // ============================================
+
+    match /manufacturingOrders/{moId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    match /purchaseOrders/{poId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    match /warehouses/{warehouseId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    match /stockLevels/{stockLevelId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+
+      match /movements/{movementId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+      }
+    }
+
+    match /costHistory/{entryId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+    }
+
+    match /procurementRequirements/{reqId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
     }
   }
 }

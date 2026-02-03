@@ -6,11 +6,6 @@
 import { Timestamp } from 'firebase/firestore';
 
 /**
- * Classification: material (raw/component) vs product (finished/sellable)
- */
-export type InventoryClassification = 'material' | 'product';
-
-/**
  * Inventory item categories
  */
 export type InventoryCategory =
@@ -56,6 +51,11 @@ export type GrainPattern = 'none' | 'lengthwise' | 'crosswise' | 'random';
  * Item status
  */
 export type InventoryStatus = 'active' | 'discontinued' | 'out-of-stock';
+
+/**
+ * Classification: raw material vs finished product
+ */
+export type InventoryClassification = 'material' | 'product';
 
 /**
  * Price history entry for tracking changes
@@ -117,23 +117,18 @@ export interface InventoryItem {
   displayName?: string; // Override for UI display
   description?: string;
 
-  // === CLASSIFICATION ===
-  classification: InventoryClassification;
-
-  // === CATEGORIZATION ===
+  // === CLASSIFICATION & CATEGORIZATION ===
+  classification?: InventoryClassification;
   category: InventoryCategory;
   subcategory?: string; // MDF, Plywood, Melamine, etc.
   tags: string[]; // Searchable tags
   aliases?: string[]; // Alternative names for matching
 
-  // === SUPPLIER ===
+  // === SUPPLIER & SHOPIFY ===
   preferredSupplierId?: string;
   preferredSupplierName?: string;
-
-  // === SHOPIFY (products only) ===
   shopifyProductId?: string;
   shopifyVariantId?: string;
-  shopifyLinkedAt?: Timestamp;
 
   // === SOURCE TRACKING ===
   source: InventorySource;
@@ -175,7 +170,7 @@ export interface InventoryItemFormData {
   name: string;
   displayName?: string;
   description?: string;
-  classification: InventoryClassification;
+  classification?: InventoryClassification;
   category: InventoryCategory;
   subcategory?: string;
   preferredSupplierId?: string;
@@ -201,11 +196,8 @@ export interface InventoryListItem {
   sku: string;
   name: string;
   displayName?: string;
-  classification?: InventoryClassification;
   category: InventoryCategory;
   subcategory?: string;
-  preferredSupplierName?: string;
-  shopifyProductId?: string;
   tier: InventoryTier;
   source: InventorySource;
   thickness?: number;

@@ -6,3 +6,4 @@
 export { businessEventService } from './businessEventService';
 export { taskGenerationService } from './taskGenerationService';
 export { intelligenceIntegrationService } from './intelligenceIntegrationService';
+export { naturalLanguageQueryService } from './naturalLanguageQueryService';
