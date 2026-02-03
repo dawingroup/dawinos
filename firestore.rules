@@ -151,8 +151,9 @@ service cloud.firestore {
     match /customers/{customerId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      // Allow update from authenticated users OR service accounts (for Cloud Functions)
-      allow update, delete: if isAuthenticated() || request.auth == null;
+      // Only allow update/delete for authenticated users
+      // Cloud Functions use Firebase Admin SDK which bypasses rules
+      allow update, delete: if isAuthenticated();
       
       // Customer-specific materials
       match /materials/{materialId} {
@@ -174,9 +175,11 @@ service cloud.firestore {
     match /designProjects/{projectId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      // Allow any authenticated user to update (for optimization, palette, etc.)
+      // Allow authenticated users to update for workflow flexibility
+      // Managers need access to understand job context
+      // Fine-grained access control is handled at application layer
       allow update: if isAuthenticated();
-      allow delete: if isProjectMember(projectId);
+      allow delete: if isProjectMember(projectId) || isAdmin();
       
       // Project-specific materials
       match /materials/{materialId} {
@@ -338,14 +341,19 @@ service cloud.firestore {
     }
     
     // Rate Limiting (managed by Cloud Functions)
+    // Only allow authenticated reads for rate limit checks
+    // Cloud Functions use Admin SDK which bypasses rules
     match /rateLimits/{userId} {
-      allow read, write: if true; // Cloud Functions manage this
+      allow read: if isAuthenticated();
+      allow write: if false; // Only Cloud Functions (Admin SDK) can write
     }
-    
+
     // System Config (Feature Library cache, etc.)
+    // Only admins can write system config from client
+    // Cloud Functions use Admin SDK which bypasses rules
     match /systemConfig/{configId} {
       allow read: if isAuthenticated();
-      allow write: if true; // Cloud Functions manage this
+      allow write: if isAdmin();
     }
     
     // ============================================
@@ -387,10 +395,13 @@ service cloud.firestore {
     }
     
     // Public access for client portal (via access token)
-    // Note: Security is handled by the service layer checking the token
-    // This rule allows public reads when accessToken matches
+    // Note: list access is denied - only get with valid document ID allowed
+    // Security requires the client to know both the quoteId AND the accessToken
     match /clientQuotes/{quoteId} {
-      allow read: if resource.data.accessToken != null;
+      // Deny list operation - user must know specific quoteId
+      // Allow get only - requires knowing the exact document ID
+      allow get: if resource.data.accessToken != null;
+      // list is not allowed for unauthenticated users
     }
     
     // Client Portal Messages
@@ -1526,10 +1537,11 @@ service cloud.firestore {
     }
 
     // Manual Requisitions (for manual entry without BOQ)
-    // Note: Read access is public to support CD Portal (unauthenticated token-based access)
-    // Data is filtered by programId in the portal service
+    // Note: Public get (not list) for CD Portal token-based access
+    // Security requires knowing exact document ID
     match /manual_requisitions/{requisitionId} {
-      allow read: if true;
+      allow get: if true;  // Get only - no list for unauthenticated
+      allow list: if isAuthenticated();  // List requires auth
       allow create: if isAuthenticated();
       allow update: if isAuthenticated();
       allow delete: if isAdmin();
@@ -1541,11 +1553,14 @@ service cloud.firestore {
     // ----------------------------------------
 
     // Portal Access Tokens
-    // Note: Read access is public to allow unauthenticated token validation
-    // Security is provided by the 32-char cryptographic token itself
+    // Security: get only (no list) - requires knowing exact token ID
+    // Token ID itself is the cryptographic secret (32 chars)
     match /portal_access_tokens/{tokenId} {
-      // Allow unauthenticated read for portal token validation
-      allow read: if true;
+      // Allow get only - user must know exact token ID
+      // list is not allowed for unauthenticated users
+      allow get: if true;
+      // Authenticated users can list/read all tokens for management
+      allow list: if isAuthenticated();
       // Only authenticated users can create tokens
       allow create: if isAuthenticated();
       // Only authenticated users can update tokens (activate/deactivate)
@@ -1566,9 +1581,11 @@ service cloud.firestore {
     }
 
     // Funds Acknowledgement Documents
-    // Note: Read access is public to support CD Portal (unauthenticated token-based access)
+    // Note: Public get (not list) for CD Portal token-based access
+    // Security requires knowing exact document ID
     match /funds_acknowledgements/{docId} {
-      allow read: if true;
+      allow get: if true;  // Get only - no list for unauthenticated
+      allow list: if isAuthenticated();  // List requires auth
       allow create: if isAuthenticated();
       allow update: if isAuthenticated();
       allow delete: if isAdmin();
@@ -1627,11 +1644,12 @@ service cloud.firestore {
     match /organizations/{orgId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
-      
+
       // Organization settings (branding, etc.)
+      // Only admins or org members can write settings
       match /settings/{settingId} {
         allow read: if isAuthenticated();
-        allow write: if isAuthenticated();
+        allow write: if isAdmin() || isOrgMember(orgId);
       }
       
       // Organization users
