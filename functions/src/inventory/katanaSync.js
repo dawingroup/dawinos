@@ -441,16 +441,37 @@ const pushToKatana = onDocumentUpdated({
  */
 const { onRequest } = require('firebase-functions/v2/https');
 
+// Define a secret for the internal sync API key
+const KATANA_SYNC_SECRET = defineSecret('KATANA_SYNC_SECRET');
+
 const triggerKatanaSync = onRequest({
   memory: '512MiB',
   timeoutSeconds: 300,
   cors: ALLOWED_ORIGINS,
-  secrets: [KATANA_API_KEY],
+  secrets: [KATANA_API_KEY, KATANA_SYNC_SECRET],
 }, async (req, res) => {
-  // Verify authorization (simple API key check)
-  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-  if (apiKey !== 'dawin-internal-sync-key') {
-    res.status(401).json({ error: 'Unauthorized' });
+  // Verify authorization using Firebase secret or Firebase Auth token
+  const apiKey = req.headers['x-api-key'];
+  const authHeader = req.headers.authorization;
+
+  // Option 1: Check API key from secret
+  const expectedKey = KATANA_SYNC_SECRET.value();
+  const apiKeyValid = expectedKey && apiKey === expectedKey;
+
+  // Option 2: Check Firebase Auth token
+  let tokenValid = false;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const idToken = authHeader.substring(7);
+      await admin.auth().verifyIdToken(idToken);
+      tokenValid = true;
+    } catch (error) {
+      console.warn('Token verification failed:', error.message);
+    }
+  }
+
+  if (!apiKeyValid && !tokenValid) {
+    res.status(401).json({ error: 'Unauthorized: Invalid credentials' });
     return;
   }
 

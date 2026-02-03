@@ -23,18 +23,26 @@ export const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('https://www.googleapis.com/auth/drive');
 googleProvider.addScope('https://www.googleapis.com/auth/documents');
 
+// In-memory storage for Google access token (more secure than localStorage)
+// This token will be cleared on page refresh, which is acceptable for Drive API usage
+let googleAccessTokenCache: { token: string; expiry: number } | null = null;
+
 /**
  * Sign in with Google popup
  */
 export async function signInWithGoogle(): Promise<User> {
   const result = await signInWithPopup(auth, googleProvider);
-  
-  // Store Google access token for Drive API
+
+  // Store Google access token in memory (not localStorage to prevent XSS exfiltration)
   const credential = GoogleAuthProvider.credentialFromResult(result);
   if (credential?.accessToken) {
-    localStorage.setItem('googleAccessToken', credential.accessToken);
+    // Google OAuth tokens typically expire in 1 hour
+    googleAccessTokenCache = {
+      token: credential.accessToken,
+      expiry: Date.now() + 3600 * 1000, // 1 hour
+    };
   }
-  
+
   return result.user;
 }
 
@@ -42,7 +50,8 @@ export async function signInWithGoogle(): Promise<User> {
  * Sign out current user
  */
 export async function signOut(): Promise<void> {
-  localStorage.removeItem('googleAccessToken');
+  // Clear in-memory token cache
+  googleAccessTokenCache = null;
   await firebaseSignOut(auth);
 }
 
@@ -61,9 +70,28 @@ export async function signInAnonymouslyForPortal(): Promise<User> {
 
 /**
  * Get Google access token for Drive API
+ * Returns null if token is expired or not available
+ * For extended sessions, re-authentication may be needed
  */
 export function getGoogleAccessToken(): string | null {
-  return localStorage.getItem('googleAccessToken');
+  if (!googleAccessTokenCache) {
+    return null;
+  }
+
+  // Check if token is expired
+  if (Date.now() >= googleAccessTokenCache.expiry) {
+    googleAccessTokenCache = null;
+    return null;
+  }
+
+  return googleAccessTokenCache.token;
+}
+
+/**
+ * Check if Google access token is available and valid
+ */
+export function hasValidGoogleToken(): boolean {
+  return getGoogleAccessToken() !== null;
 }
 
 /**

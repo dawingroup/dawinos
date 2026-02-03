@@ -170,9 +170,10 @@ service firebase.storage {
     // ORGANIZATION BRANDING & ASSETS
     // ============================================
 
+    // Organization assets are only accessible to org members or admins
     match /organizations/{orgId}/{path=**} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isValidSize();
+      allow read: if isAuthenticated() && (isAdmin() || belongsToSubsidiary(orgId) || orgId == 'default');
+      allow write: if isAuthenticated() && isValidSize() && (isAdmin() || belongsToSubsidiary(orgId) || orgId == 'default');
     }
 
     // ============================================
