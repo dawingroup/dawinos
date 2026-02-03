@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from '@/core/components/ui/alert';
 import { Input } from '@/core/components/ui/input';
 import { Label } from '@/core/components/ui/label';
 import { Textarea } from '@/core/components/ui/textarea';
-import { uploadSubsidiaryLogo } from '@/core/settings';
+import { uploadSubsidiaryLogo, deleteSubsidiaryLogo } from '@/core/settings';
 import { useOrganizationSettings } from '@/core/settings';
 import { cn } from '@/shared/lib/utils';
 
@@ -64,14 +64,14 @@ function SubsidiaryBrandingTab({
 
   const handleDeleteLogo = async () => {
     if (!confirm('Are you sure you want to delete the logo?')) return;
-    
+
     setUploading(true);
     try {
-      // TODO: Implement deleteSubsidiaryLogo function
-      // await deleteSubsidiaryLogo(subsidiaryId, 'primary');
+      await deleteSubsidiaryLogo(subsidiaryId, 'primary');
       onBrandingUpdate(subsidiaryId, { logoUrl: undefined });
     } catch (error) {
       console.error('Failed to delete logo:', error);
+      setUploadError(error instanceof Error ? error.message : 'Failed to delete logo');
     } finally {
       setUploading(false);
     }
