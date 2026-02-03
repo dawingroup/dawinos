@@ -20,6 +20,12 @@ env:
   NODE_VERSION: '20'
   FIREBASE_PROJECT: dawinos
 
+# Required for Workload Identity Federation
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
 jobs:
   # ===========================================================================
   # BUILD AND TEST
@@ -27,7 +33,7 @@ jobs:
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -75,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-test
     if: github.event_name == 'pull_request'
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -91,6 +97,19 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      # Authenticate using Workload Identity Federation (keyless)
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.FIREBASE_PROJECT }}
+
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
@@ -101,8 +120,6 @@ jobs:
           firebase hosting:channel:deploy $CHANNEL_ID --project ${{ env.FIREBASE_PROJECT }} --expires 7d --json > deploy-output.json
           PREVIEW_URL=$(cat deploy-output.json | jq -r '.result["dawinos"].url')
           echo "preview_url=$PREVIEW_URL" >> $GITHUB_OUTPUT
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
 
       - name: Comment preview URL
         uses: actions/github-script@v7
@@ -126,7 +143,7 @@ jobs:
     environment:
       name: staging
       url: https://dawinos--staging.web.app
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -142,10 +159,21 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      # Authenticate using Workload Identity Federation (keyless)
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.FIREBASE_PROJECT }}
+
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
       - name: Deploy to staging channel
         run: firebase hosting:channel:deploy staging --project ${{ env.FIREBASE_PROJECT }} --expires 30d
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
