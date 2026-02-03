@@ -1,23 +1,32 @@
 /**
  * InventoryPage Component
  * Main page for unified inventory management
+ * Enhanced with multi-location stock, warehouse management, and cost history tabs
  */
 
 import { useState, useCallback } from 'react';
+import { Box, Tabs, Tab } from '@mui/material';
 import { useAuth } from '@/contexts/AuthContext';
 import { InventoryList } from '../components/InventoryList';
 import { InventoryItemModal } from '../components/InventoryItemModal';
 import { InventoryItemDetail } from '../components/InventoryItemDetail';
+import StockLevelsByLocation from '../components/StockLevelsByLocation';
+import StockMovementHistory from '../components/StockMovementHistory';
+import CostHistoryChart from '../components/CostHistoryChart';
+import WarehouseManager from '../components/WarehouseManager';
 import type { InventoryListItem } from '../types';
 import { db } from '@/firebase/config';
 import { collection, addDoc, onSnapshot, serverTimestamp, doc } from 'firebase/firestore';
 
 export function InventoryPage() {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [editItemId, setEditItemId] = useState<string | undefined>();
   const [detailItem, setDetailItem] = useState<InventoryListItem | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [selectedStockLevelId, setSelectedStockLevelId] = useState<string | null>(null);
+  const [selectedCostItemId, setSelectedCostItemId] = useState<string | null>(null);
 
   // All hooks must be called before any early returns
   const handleEditItem = useCallback((item: InventoryListItem) => {
@@ -40,7 +49,7 @@ export function InventoryPage() {
 
   const handleSyncKatana = async () => {
     if (!user) return;
-    
+
     try {
       // Create a sync request document - Firestore trigger will process it
       const syncRequestsRef = collection(db, 'syncRequests');
@@ -51,18 +60,18 @@ export function InventoryPage() {
         requestedByEmail: user.email,
         requestedAt: serverTimestamp(),
       });
-      
+
       // Wait for the sync to complete by listening to the document
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
           unsubscribe();
           reject(new Error('Sync timed out after 120 seconds'));
         }, 120000);
-        
+
         const unsubscribe = onSnapshot(doc(db, 'syncRequests', requestDoc.id), (snapshot) => {
           const data = snapshot.data();
           if (!data) return;
-          
+
           if (data.status === 'completed') {
             clearTimeout(timeout);
             unsubscribe();
@@ -78,7 +87,7 @@ export function InventoryPage() {
           }
         });
       });
-      
+
     } catch (error: any) {
       alert(`Failed to sync: ${error?.message || 'Unknown error'}`);
       console.error(error);
@@ -121,28 +130,81 @@ export function InventoryPage() {
         </p>
       </div>
 
-      <InventoryList
-        key={refreshKey}
-        onSyncKatana={handleSyncKatana}
-        onAddItem={handleAddItem}
-        onItemClick={handleViewItem}
-        showActions={true}
-      />
+      {/* Tab Navigation */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
+          <Tab label="Items" />
+          <Tab label="Stock Levels" />
+          <Tab label="Cost History" />
+          <Tab label="Warehouses" />
+        </Tabs>
+      </Box>
 
-      <InventoryItemModal
-        isOpen={modalOpen}
-        onClose={handleModalClose}
-        onSaved={handleModalSaved}
-        itemId={editItemId}
-        userId={user.uid}
-      />
+      {/* Tab: Items (original view) */}
+      {activeTab === 0 && (
+        <>
+          <InventoryList
+            key={refreshKey}
+            onSyncKatana={handleSyncKatana}
+            onAddItem={handleAddItem}
+            onItemClick={handleViewItem}
+            showActions={true}
+          />
 
-      {detailItem && (
-        <InventoryItemDetail
-          itemId={detailItem.id}
-          onClose={handleDetailClose}
-          onEdit={handleDetailEdit}
-        />
+          <InventoryItemModal
+            isOpen={modalOpen}
+            onClose={handleModalClose}
+            onSaved={handleModalSaved}
+            itemId={editItemId}
+            userId={user.uid}
+          />
+
+          {detailItem && (
+            <InventoryItemDetail
+              itemId={detailItem.id}
+              onClose={handleDetailClose}
+              onEdit={handleDetailEdit}
+            />
+          )}
+        </>
+      )}
+
+      {/* Tab: Stock Levels by Location */}
+      {activeTab === 1 && (
+        <Box>
+          <StockLevelsByLocation
+            onItemClick={(sl) => setSelectedStockLevelId(sl.id)}
+          />
+          {selectedStockLevelId && (
+            <Box sx={{ mt: 3 }}>
+              <StockMovementHistory
+                stockLevelId={selectedStockLevelId}
+                title="Movement History"
+              />
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {/* Tab: Cost History */}
+      {activeTab === 2 && (
+        <Box>
+          <Box sx={{ mb: 2 }}>
+            <input
+              type="text"
+              placeholder="Enter inventory item ID to view cost history..."
+              className="w-full px-3 py-2 border rounded-md text-sm"
+              value={selectedCostItemId || ''}
+              onChange={(e) => setSelectedCostItemId(e.target.value || null)}
+            />
+          </Box>
+          <CostHistoryChart inventoryItemId={selectedCostItemId} />
+        </Box>
+      )}
+
+      {/* Tab: Warehouse Manager */}
+      {activeTab === 3 && (
+        <WarehouseManager />
       )}
     </div>
   );

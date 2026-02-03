@@ -44,6 +44,8 @@ export const INTELLIGENCE_SOURCE_MODULES = [
   { value: 'inventory', label: 'Inventory' },
   { value: 'hr_central', label: 'HR Central' },
   { value: 'matflow', label: 'MatFlow' },
+  { value: 'manufacturing', label: 'Manufacturing' },
+  { value: 'procurement', label: 'Procurement' },
 ] as const;
 
 // ============================================

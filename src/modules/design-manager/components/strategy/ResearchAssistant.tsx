@@ -15,13 +15,16 @@ interface ResearchAssistantProps {
 }
 
 export function ResearchAssistant({ messages, isSending, onSendQuery, onSaveFinding }: ResearchAssistantProps) {
+  // Safety check: provide default empty array if undefined
+  const safeMessages = messages || [];
+
   const [query, setQuery] = useState('');
   const [enableWebSearch, setEnableWebSearch] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [safeMessages]);
 
   const handleSend = async () => {
     if (!query.trim() || isSending) return;
@@ -50,7 +53,7 @@ export function ResearchAssistant({ messages, isSending, onSendQuery, onSaveFind
     <div className="flex flex-col">
       {/* Messages - constrained scroll area */}
       <div className="min-h-[250px] max-h-[500px] overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 ? (
+        {safeMessages.length === 0 ? (
           <div className="text-center py-8">
             <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
               <Sparkles className="w-6 h-6 text-blue-600" />
@@ -71,7 +74,7 @@ export function ResearchAssistant({ messages, isSending, onSendQuery, onSaveFind
             </div>
           </div>
         ) : (
-          messages.map((message) => (
+          safeMessages.map((message) => (
             <div
               key={message.id}
               className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}

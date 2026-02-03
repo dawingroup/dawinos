@@ -59,14 +59,7 @@ export const FINISHES_NAVIGATION: NavItem[] = [
       { id: 'design-features', label: 'Features', href: '/design/features', icon: 'Layers' },
     ],
   },
-  {
-    id: 'customers',
-    label: 'Customers',
-    href: '/customers',
-    icon: 'Users',
-    description: 'Customer management',
-    keywords: ['clients', 'contacts'],
-  },
+  // Customers moved to GLOBAL_NAVIGATION (cross-subsidiary)
   {
     id: 'assets',
     label: 'Assets',
@@ -82,6 +75,19 @@ export const FINISHES_NAVIGATION: NavItem[] = [
     icon: 'Package',
     description: 'Stock management',
     keywords: ['stock', 'materials'],
+  },
+  {
+    id: 'manufacturing',
+    label: 'Manufacturing',
+    href: '/manufacturing',
+    icon: 'Factory',
+    description: 'Production orders & procurement',
+    keywords: ['manufacturing', 'production', 'purchase orders', 'MRP', 'BOM'],
+    children: [
+      { id: 'mfg-dashboard', label: 'Dashboard', href: '/manufacturing', icon: 'LayoutDashboard' },
+      { id: 'mfg-orders', label: 'Production Orders', href: '/manufacturing/orders', icon: 'ClipboardList' },
+      { id: 'mfg-purchase-orders', label: 'Purchase Orders', href: '/manufacturing/purchase-orders', icon: 'ShoppingCart' },
+    ],
   },
   {
     id: 'launch-pipeline',
@@ -128,6 +134,8 @@ export const ADVISORY_NAVIGATION: NavItem[] = [
 // SHARED/UTILITY NAVIGATION
 // ============================================================================
 
+// AI Intelligence & Assistant are now in the header (AIIntelligenceMenu + GlobalTaskButton).
+// UTILITY_NAVIGATION is kept for command palette indexing only.
 export const UTILITY_NAVIGATION: NavItem[] = [
   {
     id: 'intelligence',
@@ -172,6 +180,21 @@ export const UTILITY_NAVIGATION: NavItem[] = [
     icon: 'Bot',
     description: 'AI-powered help',
     keywords: ['ai', 'help', 'assistant', 'chat'],
+  },
+];
+
+// ============================================================================
+// GLOBAL NAVIGATION (Available across ALL subsidiaries in the sidebar)
+// ============================================================================
+
+export const GLOBAL_NAVIGATION: NavItem[] = [
+  {
+    id: 'customers',
+    label: 'Customers',
+    href: '/customers',
+    icon: 'Users',
+    description: 'Customer management',
+    keywords: ['clients', 'contacts'],
   },
 ];
 

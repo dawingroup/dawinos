@@ -201,6 +201,26 @@ exports.onEngagementUpdated = onEngagementUpdated;
 exports.onDisbursementCreated = onDisbursementCreated;
 exports.onDeliveryProjectUpdated = onDeliveryProjectUpdated;
 
+// Manufacturing Order Triggers
+const {
+  onManufacturingOrderCreated,
+  onManufacturingOrderUpdated,
+} = require('./src/triggers/manufacturingTriggers');
+exports.onManufacturingOrderCreated = onManufacturingOrderCreated;
+exports.onManufacturingOrderUpdated = onManufacturingOrderUpdated;
+
+// Purchase Order Triggers
+const {
+  onPurchaseOrderCreated,
+  onPurchaseOrderUpdated,
+} = require('./src/triggers/purchaseOrderTriggers');
+exports.onPurchaseOrderCreated = onPurchaseOrderCreated;
+exports.onPurchaseOrderUpdated = onPurchaseOrderUpdated;
+
+// Stock Level Alerts
+const { checkLowStockLevels } = require('./src/triggers/stockAlerts');
+exports.checkLowStockLevels = checkLowStockLevels;
+
 // Inventory Katana Sync
 const { pullFromKatana, pushToKatana, triggerKatanaSync, processSyncRequest } = require('./src/inventory/katanaSync');
 exports.pullFromKatana = pullFromKatana;
@@ -219,6 +239,17 @@ exports.sendPushNotification = sendPushNotification;
 exports.onDeliveryCreated = onDeliveryCreated;
 exports.onProcurementStatusChange = onProcurementStatusChange;
 exports.checkCriticalItems = checkCriticalItems;
+
+// Zoko WhatsApp Integration
+const { sendWhatsAppMessage } = require('./src/integrations/zoko/sendMessage');
+const { zokoWebhook } = require('./src/webhooks/zokoWebhook');
+const { syncWhatsAppTemplates, scheduledTemplateSync } = require('./src/integrations/zoko/syncTemplates');
+const { setupZokoWebhook } = require('./src/integrations/zoko/setupWebhook');
+exports.sendWhatsAppMessage = sendWhatsAppMessage;
+exports.zokoWebhook = zokoWebhook;
+exports.syncWhatsAppTemplates = syncWhatsAppTemplates;
+exports.scheduledTemplateSync = scheduledTemplateSync;
+exports.setupZokoWebhook = setupZokoWebhook;
 
 // EFRIS Tax Invoice Validation - Disabled until EFRIS API key is configured
 // const {

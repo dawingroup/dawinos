@@ -3,13 +3,13 @@
  * Authentication hook for Firebase Auth
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { 
-  onAuthChange, 
-  signInWithGoogle as firebaseSignIn, 
+import { useState, useEffect, useCallback, useTransition, startTransition } from 'react';
+import {
+  onAuthChange,
+  signInWithGoogle as firebaseSignIn,
   signOut as firebaseSignOut,
   getGoogleAccessToken,
-  type User 
+  type User
 } from '@/shared/services/firebase';
 
 export interface AuthState {
@@ -34,8 +34,13 @@ export function useAuth(): UseAuthReturn {
 
   useEffect(() => {
     const unsubscribe = onAuthChange((currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
+      // Use setTimeout to defer state updates and prevent Suspense errors during navigation
+      setTimeout(() => {
+        startTransition(() => {
+          setUser(currentUser);
+          setLoading(false);
+        });
+      }, 0);
     });
 
     return () => unsubscribe();
@@ -50,7 +55,11 @@ export function useAuth(): UseAuthReturn {
       console.error('Sign in error:', error);
       return null;
     } finally {
-      setLoading(false);
+      setTimeout(() => {
+        startTransition(() => {
+          setLoading(false);
+        });
+      }, 0);
     }
   }, []);
 

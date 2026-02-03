@@ -39,6 +39,7 @@ export interface ProjectStrategy {
     priorities: string[];
   };
   researchFindings: ResearchFinding[];
+  designBrief?: string;
   updatedAt?: Date;
 }
 
@@ -59,12 +60,17 @@ export interface ResearchMessage {
   timestamp: Date;
 }
 
+export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
 interface UseStrategyResearchReturn {
   strategy: ProjectStrategy | null;
   messages: ResearchMessage[];
   isLoading: boolean;
   isSending: boolean;
   error: string | null;
+  saveStatus: SaveStatus;
+  lastSaved: Date | null;
+  isSynced: boolean;
   updateStrategy: (updates: Partial<ProjectStrategy>) => Promise<void>;
   sendQuery: (query: string, enableWebSearch?: boolean) => Promise<void>;
   saveFinding: (finding: Omit<ResearchFinding, 'id' | 'createdAt'>) => Promise<void>;
@@ -90,8 +96,13 @@ export function useStrategyResearch(projectId: string, userId?: string): UseStra
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [chatId, setChatId] = useState<string | null>(null);
   const chatInitialized = useRef(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isSavingRef = useRef(false);
+  const pendingUpdateRef = useRef<any>(null);
 
   // Load strategy from Firestore
   useEffect(() => {
@@ -101,8 +112,15 @@ export function useStrategyResearch(projectId: string, userId?: string): UseStra
     }
 
     const strategyRef = doc(db, 'projectStrategy', projectId);
-    
+
     const unsubscribe = onSnapshot(strategyRef, (snapshot) => {
+      // Skip update if we're currently saving to prevent overwriting user input
+      if (isSavingRef.current) {
+        // Store the update to apply after save completes
+        pendingUpdateRef.current = snapshot;
+        return;
+      }
+
       if (snapshot.exists()) {
         const data = snapshot.data();
         setStrategy({
@@ -190,15 +208,63 @@ export function useStrategyResearch(projectId: string, userId?: string): UseStra
   const updateStrategy = useCallback(async (updates: Partial<ProjectStrategy>) => {
     if (!projectId) return;
 
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Set saving flag to prevent onSnapshot from overwriting user input
+    isSavingRef.current = true;
+    setSaveStatus('saving');
+    setError(null);
+
     try {
       const strategyRef = doc(db, 'projectStrategy', projectId);
       await setDoc(strategyRef, {
         ...updates,
         updatedAt: Timestamp.now(),
       }, { merge: true });
+
+      setSaveStatus('saved');
+      setLastSaved(new Date());
+
+      // Reset to idle after 2 seconds
+      saveTimeoutRef.current = setTimeout(() => {
+        setSaveStatus('idle');
+      }, 2000);
+
     } catch (err) {
       console.error('Error updating strategy:', err);
+      setSaveStatus('error');
       setError('Failed to save changes');
+
+      // Reset to idle after 5 seconds even on error
+      saveTimeoutRef.current = setTimeout(() => {
+        setSaveStatus('idle');
+      }, 5000);
+    } finally {
+      // Clear saving flag and apply any pending updates
+      isSavingRef.current = false;
+
+      // If there was a pending Firestore update, apply it now
+      if (pendingUpdateRef.current) {
+        const snapshot = pendingUpdateRef.current;
+        pendingUpdateRef.current = null;
+
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setStrategy({
+            id: snapshot.id,
+            projectId,
+            ...data,
+            updatedAt: data.updatedAt?.toDate(),
+            researchFindings: (data.researchFindings || []).map((f: any) => ({
+              ...f,
+              createdAt: f.createdAt?.toDate() || new Date(),
+            })),
+          } as ProjectStrategy);
+        }
+      }
     }
   }, [projectId]);
 
@@ -303,12 +369,24 @@ export function useStrategyResearch(projectId: string, userId?: string): UseStra
 
   const clearError = useCallback(() => setError(null), []);
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
   return {
     strategy,
     messages,
     isLoading,
     isSending,
     error,
+    saveStatus,
+    lastSaved,
+    isSynced: saveStatus === 'saved' || saveStatus === 'idle',
     updateStrategy,
     sendQuery,
     saveFinding,

@@ -4,11 +4,11 @@
  * Enhanced with command palette and improved navigation UX
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  Menu, 
-  X, 
+import {
+  Menu,
+  X,
   ChevronDown,
   LogOut,
   User,
@@ -17,6 +17,7 @@ import {
   LucideIcon,
   Building2,
   Settings,
+  MessageSquare,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Button } from '@/core/components/ui/button';
@@ -41,11 +42,14 @@ import {
   FINISHES_NAVIGATION,
   ADVISORY_NAVIGATION,
   CORPORATE_NAVIGATION,
-  UTILITY_NAVIGATION,
+  GLOBAL_NAVIGATION,
   ADMIN_NAVIGATION,
   type NavItem,
 } from '@/config/navigation.unified';
+import { AIIntelligenceMenu } from '@/modules/intelligence-layer/components/AIIntelligenceMenu';
 import { cn } from '@/shared/lib/utils';
+import { useFeatureFlag } from '@/shared/hooks/useFeatureFlag';
+import { subscribeToUnreadCount } from '@/modules/whatsapp/services/whatsappService';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -56,7 +60,7 @@ export function AppShell({ children }: AppShellProps) {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { dawinUser } = useCurrentDawinUser();
-  const { sidebarOpen, toggleSidebar, sidebarAutoClose } = useUIStore();
+  const { sidebarOpen, toggleSidebar, sidebarAutoClose, sidebarHovered, setSidebarHovered } = useUIStore();
   const { currentSubsidiary, subsidiaries, setCurrentSubsidiary } = useSubsidiary();
   const { 
     favoriteItems, 
@@ -68,6 +72,25 @@ export function AppShell({ children }: AppShellProps) {
     toggleSection,
     setExpandedSections,
   } = useNavigationStore();
+
+  // WhatsApp
+  const whatsappEnabled = useFeatureFlag('WHATSAPP_ENABLED');
+  const [waUnread, setWaUnread] = useState(0);
+
+  React.useEffect(() => {
+    if (!whatsappEnabled) return;
+    return subscribeToUnreadCount(setWaUnread);
+  }, [whatsappEnabled]);
+
+  // Track desktop breakpoint for sidebar rail behavior
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024);
+
+  useEffect(() => {
+    const mql = window.matchMedia('(min-width: 1024px)');
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
 
   // Scroll detection for header shadow
   const [isScrolled, setIsScrolled] = useState(false);
@@ -92,7 +115,10 @@ export function AppShell({ children }: AppShellProps) {
 
   // Corporate modules available to all
   const corporateNavItems = CORPORATE_NAVIGATION;
-  const utilityNavItems = UTILITY_NAVIGATION;
+  const globalNavItems = GLOBAL_NAVIGATION;
+
+  // Desktop: collapsed rail, expands on hover. Mobile: always expanded (full drawer).
+  const sidebarExpanded = isDesktop ? sidebarHovered : true;
   
   // Filter admin navigation based on user roles
   const adminNavItems = useMemo(() => {
@@ -125,7 +151,7 @@ export function AppShell({ children }: AppShellProps) {
 
   // Auto-expand navigation groups based on active route
   useEffect(() => {
-    const allItems = [...mainNavItems, ...corporateNavItems, ...utilityNavItems, ...adminNavItems];
+    const allItems = [...mainNavItems, ...corporateNavItems, ...globalNavItems, ...adminNavItems];
     const activeParents = allItems.filter(item => 
       item.children?.some((child: NavItem) => 
         location.pathname === child.href || 
@@ -175,13 +201,38 @@ export function AppShell({ children }: AppShellProps) {
     const isFavorite = favoriteItems.includes(item.id);
     const IconComponent = getIcon(item.icon);
 
+    // Collapsed rail mode (desktop only): show icon-only buttons with tooltip
+    if (!sidebarExpanded && depth === 0) {
+      return (
+        <div key={item.id}>
+          <Link
+            to={hasChildren && item.children?.[0] ? item.children[0].href : item.href}
+            title={item.label}
+            className={cn(
+              'flex items-center justify-center w-full h-10 rounded-lg transition-colors',
+              active
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            )}
+            onClick={() => {
+              if (sidebarAutoClose && window.innerWidth < 1024) {
+                setTimeout(() => toggleSidebar(), 100);
+              }
+            }}
+          >
+            {IconComponent && <IconComponent className="h-5 w-5" />}
+          </Link>
+        </div>
+      );
+    }
+
     return (
       <div key={item.id}>
         <div
           className={cn(
             'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer select-none',
-            active 
-              ? 'bg-primary text-primary-foreground' 
+            active
+              ? 'bg-primary text-primary-foreground'
               : 'text-muted-foreground hover:bg-muted hover:text-foreground',
             depth > 0 && 'ml-4'
           )}
@@ -194,26 +245,25 @@ export function AppShell({ children }: AppShellProps) {
         >
           {hasChildren ? (
             <>
-              {IconComponent && <IconComponent className="h-4 w-4" />}
-              <span className="flex-1">{item.label}</span>
+              {IconComponent && <IconComponent className="h-4 w-4 flex-shrink-0" />}
+              <span className="flex-1 truncate">{item.label}</span>
               <ChevronDown className={cn(
-                'h-4 w-4 transition-transform',
+                'h-4 w-4 transition-transform flex-shrink-0',
                 isExpanded && 'rotate-180'
               )} />
             </>
           ) : (
-            <Link 
-              to={item.href} 
-              className="flex items-center gap-3 flex-1"
+            <Link
+              to={item.href}
+              className="flex items-center gap-3 flex-1 min-w-0"
               onClick={() => {
-                // Auto-close sidebar on mobile after navigation if enabled
                 if (sidebarAutoClose && window.innerWidth < 1024) {
                   setTimeout(() => toggleSidebar(), 100);
                 }
               }}
             >
-              {IconComponent && <IconComponent className="h-4 w-4" />}
-              <span>{item.label}</span>
+              {IconComponent && <IconComponent className="h-4 w-4 flex-shrink-0" />}
+              <span className="truncate">{item.label}</span>
               {item.badge && (
                 <span className="ml-auto text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                   {item.badge}
@@ -230,7 +280,7 @@ export function AppShell({ children }: AppShellProps) {
                 isFavorite ? removeFavorite(item.id) : addFavorite(item.id);
               }}
               className={cn(
-                'p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity',
+                'p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0',
                 isFavorite ? 'text-yellow-500 opacity-100' : 'hover:text-yellow-500',
                 active && 'text-primary-foreground/70 hover:text-primary-foreground'
               )}
@@ -239,7 +289,7 @@ export function AppShell({ children }: AppShellProps) {
             </button>
           )}
         </div>
-        
+
         {hasChildren && isExpanded && (
           <div className="mt-1 space-y-1">
             {item.children!.map((child: NavItem) => renderNavItem(child, depth + 1))}
@@ -316,8 +366,28 @@ export function AppShell({ children }: AppShellProps) {
           onRemoveFavorite={removeFavorite}
         />
 
-        {/* Global Task Button */}
+        {/* AI Intelligence Menu */}
+        <AIIntelligenceMenu />
+
+        {/* Global Task Button (My Tasks quick-access) */}
         <GlobalTaskButton />
+
+        {/* WhatsApp */}
+        {whatsappEnabled && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/whatsapp')}
+            className="relative h-8 w-8"
+          >
+            <MessageSquare className="h-4 w-4" />
+            {waUnread > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-green-600 text-[10px] font-medium text-white flex items-center justify-center">
+                {waUnread > 9 ? '9+' : waUnread}
+              </span>
+            )}
+          </Button>
+        )}
 
         {/* User Menu */}
         <DropdownMenu>
@@ -377,6 +447,26 @@ export function AppShell({ children }: AppShellProps) {
             }}
           />
         </div>
+        {/* AI Intelligence + Tasks - Mobile */}
+        <AIIntelligenceMenu />
+        <GlobalTaskButton />
+
+        {/* WhatsApp - Mobile */}
+        {whatsappEnabled && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/whatsapp')}
+            className="relative"
+          >
+            <MessageSquare className="h-5 w-5" />
+            {waUnread > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-green-600 text-[10px] font-medium text-white flex items-center justify-center">
+                {waUnread > 9 ? '9+' : waUnread}
+              </span>
+            )}
+          </Button>
+        )}
         {/* Dawin Group dropdown for mobile */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -424,35 +514,50 @@ export function AppShell({ children }: AppShellProps) {
 
       <div className="flex flex-1">
         {/* Sidebar */}
-        <aside className={cn(
-          // Mobile: Start below header (top-14 = 56px), Desktop: sticky below desktop header
-          // Use z-[60] to be above Radix UI portaled dropdowns (z-50)
-          'fixed left-0 z-[60] w-64 bg-background border-r',
-          'top-14 bottom-0', // Mobile: below header
-          'lg:sticky lg:top-12 lg:h-[calc(100vh-3rem)] lg:translate-x-0',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
-          // Add slide-in animation for mobile
-          'transition-transform duration-300 ease-in-out'
-        )}>
+        <aside
+          className={cn(
+            'fixed left-0 z-[60] bg-background border-r',
+            'top-14 bottom-0', // Mobile: below header
+            'lg:sticky lg:top-12 lg:h-[calc(100vh-3rem)] lg:translate-x-0',
+            // Mobile: slide in/out
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+            'transition-all duration-300 ease-in-out',
+            // Desktop: collapsed rail (w-16) or expanded (w-64)
+            sidebarExpanded ? 'w-64' : 'lg:w-16 w-64',
+          )}
+          onMouseEnter={() => {
+            if (window.innerWidth >= 1024) setSidebarHovered(true);
+          }}
+          onMouseLeave={() => {
+            if (window.innerWidth >= 1024) setSidebarHovered(false);
+          }}
+        >
+          {/* Subsidiary Switcher */}
           <div className="flex h-14 items-center px-4 border-b lg:border-b-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="w-full justify-start gap-2 px-2">
-                  <div 
-                    className="h-8 w-8 rounded-lg flex items-center justify-center"
+                <Button variant="ghost" className={cn(
+                  'w-full justify-start gap-2 px-2',
+                  !sidebarExpanded && 'lg:justify-center lg:px-0'
+                )}>
+                  <div
+                    className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0"
                     style={{ backgroundColor: subsidiaryColor }}
                   >
                     <span className="text-white font-bold">{subsidiaryName.charAt(0)}</span>
                   </div>
-                  <span className="font-semibold flex-1 text-left">{subsidiaryName}</span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  {sidebarExpanded && (
+                    <>
+                      <span className="font-semibold flex-1 text-left truncate">{subsidiaryName}</span>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    </>
+                  )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent 
-                align="start" 
+              <DropdownMenuContent
+                align="start"
                 className="w-56"
                 sideOffset={5}
-                // Ensure dropdown appears above sidebar (z-[60]) and other elements
                 style={{ zIndex: 70 }}
               >
                 <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
@@ -468,7 +573,7 @@ export function AppShell({ children }: AppShellProps) {
                     }}
                     className="gap-2 cursor-pointer"
                   >
-                    <div 
+                    <div
                       className="h-6 w-6 rounded flex items-center justify-center"
                       style={{ backgroundColor: sub.color }}
                     >
@@ -487,7 +592,7 @@ export function AppShell({ children }: AppShellProps) {
                     disabled
                     className="gap-2 opacity-50"
                   >
-                    <div 
+                    <div
                       className="h-6 w-6 rounded flex items-center justify-center bg-muted"
                     >
                       <span className="text-muted-foreground text-xs font-bold">{sub.shortName.charAt(0)}</span>
@@ -501,23 +606,32 @@ export function AppShell({ children }: AppShellProps) {
           </div>
 
           <ScrollArea className="flex-1 h-[calc(100vh-3.5rem-3.5rem-4rem)] lg:h-[calc(100vh-3rem-3.5rem)]">
-            <div className="p-4 space-y-6">
+            <div className={cn('p-4 space-y-6', !sidebarExpanded && 'lg:px-2')}>
               {/* Main Navigation - Subsidiary specific */}
               <div className="space-y-1">
                 {mainNavItems.map(item => renderNavItem(item))}
               </div>
 
-              {/* Utility Navigation */}
-              <div className="space-y-1">
-                {utilityNavItems.map((item: NavItem) => renderNavItem(item))}
-              </div>
+              {/* Global Navigation (Customers, etc.) */}
+              {globalNavItems.length > 0 && (
+                <div className="space-y-1">
+                  {sidebarExpanded && (
+                    <p className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                      Global
+                    </p>
+                  )}
+                  {globalNavItems.map((item: NavItem) => renderNavItem(item))}
+                </div>
+              )}
 
               {/* Admin Navigation - Only show if user has admin permissions */}
               {adminNavItems.length > 0 && (
                 <div>
-                  <p className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                    Administration
-                  </p>
+                  {sidebarExpanded && (
+                    <p className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                      Administration
+                    </p>
+                  )}
                   <div className="space-y-1">
                     {adminNavItems.map((item: NavItem) => renderNavItem(item))}
                   </div>
@@ -530,18 +644,23 @@ export function AppShell({ children }: AppShellProps) {
           <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-background">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="w-full justify-start gap-2">
-                  <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                <Button variant="ghost" className={cn(
+                  'w-full justify-start gap-2',
+                  !sidebarExpanded && 'lg:justify-center lg:px-0'
+                )}>
+                  <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
                     <User className="h-4 w-4" />
                   </div>
-                  <div className="flex-1 text-left">
-                    <div className="text-sm text-gray-600">
-                      {dawinUser?.displayName || user?.displayName}
+                  {sidebarExpanded && (
+                    <div className="flex-1 text-left min-w-0">
+                      <div className="text-sm text-gray-600 truncate">
+                        {dawinUser?.displayName || user?.displayName}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {user?.email}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {user?.email}
-                    </p>
-                  </div>
+                  )}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">

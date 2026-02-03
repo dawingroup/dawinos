@@ -94,6 +94,56 @@ service cloud.firestore {
     }
     
     // ============================================
+    // Manufacturing & Inventory Operations
+    // ============================================
+
+    // Manufacturing Orders
+    match /manufacturingOrders/{moId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    // Purchase Orders
+    match /purchaseOrders/{poId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    // Warehouses & Storage Locations
+    match /warehouses/{warehouseId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    // Stock Levels (per-item per-location)
+    match /stockLevels/{stockLevelId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+
+      // Stock Movement audit trail
+      match /movements/{movementId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update, delete: if false; // Immutable audit trail
+      }
+    }
+
+    // Cost History (unit cost changes over time)
+    match /costHistory/{entryId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Immutable cost audit
+    }
+
+    // ============================================
     // Customer Hub Collections
     // ============================================
     
@@ -1655,11 +1705,25 @@ service cloud.firestore {
     // ----------------------------------------
     // User Preferences & Settings
     // ----------------------------------------
-    
+
     match /user_settings/{userId} {
       allow read, write: if isOwner(userId) || isAdmin();
     }
-    
+
+    // Root-level notifications collection (used by GlobalContext)
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+    }
+
     match /user_notifications/{userId}/{notificationId} {
       allow read: if isOwner(userId);
       allow create: if isAuthenticated();
@@ -1841,6 +1905,33 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow update: if isAuthenticated();
       allow delete: if isAuthenticated();
+    }
+
+    // ============================================
+    // WHATSAPP COMMUNICATION COLLECTIONS
+    // ============================================
+
+    // WhatsApp Conversations
+    match /whatsappConversations/{conversationId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated();
+        allow delete: if false;
+      }
+    }
+
+    // WhatsApp Templates (synced from Zoko or added manually)
+    match /whatsappTemplates/{templateId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
     }
 
     // ============================================

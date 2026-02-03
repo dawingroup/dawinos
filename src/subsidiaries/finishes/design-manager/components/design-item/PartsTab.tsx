@@ -1,20 +1,18 @@
 /**
  * PartsTab Component
  * Display and manage parts within a design item
- * Includes: Sheet parts, Standard parts (from Katana), and Special parts (approved for luxury)
+ * Includes: Sheet parts, Standard parts (from inventory), and Special parts (approved for luxury)
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Plus, Upload, Trash2, Edit2, Package, AlertCircle, Wrench, Sparkles, Save, Check, Library, Loader2, Search, DollarSign, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useParts } from '../../hooks/useParts';
-import type { DesignItem, PartEntry, StandardPartEntry, SpecialPartEntry, ProjectPart } from '../../types';
+import type { DesignItem, PartEntry, StandardPartEntry, SpecialPartEntry } from '../../types';
 import { PartForm } from './PartForm';
 import { PartsImportDialog } from './PartsImportDialog';
-import { ProjectPartsPicker } from './ProjectPartsPicker';
 import { updateDesignItem } from '../../services/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/firebase/config';
+import { useInventory } from '@/modules/inventory/hooks/useInventory';
 
 interface PartsTabProps {
   item: DesignItem;
@@ -32,15 +30,14 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
   const [selectedParts, setSelectedParts] = useState<Set<string>>(new Set());
   const [activeSection, setActiveSection] = useState<PartsSection>('sheet');
   
-  // Standard parts state (hinges, screws, edging from Katana)
+  // Standard parts state (hinges, screws, edging from inventory)
   const manufacturing = (item as any).manufacturing || {};
   const [standardParts, setStandardParts] = useState<StandardPartEntry[]>(manufacturing.standardParts || []);
   const [newStandardPart, setNewStandardPart] = useState({ name: '', category: 'hinge', quantity: 1, katanaSku: '' });
-  
-  // Katana inventory state
-  const [katanaInventory, setKatanaInventory] = useState<Array<{ id: string; name: string; sku: string; category: string; unitCost: number }>>([]);
-  const [loadingKatana, setLoadingKatana] = useState(false);
-  const [katanaSearch, setKatanaSearch] = useState('');
+
+  // Inventory module state (replaces Katana)
+  const { items: inventoryItems, loading: loadingInventory, search: searchInventory, searchResults, isSearching, clearSearch } = useInventory({ tier: 'global', status: 'active' });
+  const [inventorySearch, setInventorySearch] = useState('');
   
   // Exchange rates for special parts
   const EXCHANGE_RATES: Record<string, number> = {
@@ -192,69 +189,50 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
     }
   };
 
-  // Fetch Katana inventory on mount
+  // Map inventory items to standard part picker format
+  const inventoryPickerItems = useMemo(() => {
+    const source = inventorySearch.trim() && searchResults.length > 0 ? searchResults : inventoryItems;
+    return source.slice(0, 30).map(item => ({
+      id: item.id,
+      name: item.displayName || item.name,
+      sku: item.sku,
+      category: item.category || 'other',
+      unitCost: item.costPerUnit || 0,
+    }));
+  }, [inventoryItems, searchResults, inventorySearch]);
+
+  // Trigger inventory search on input change
   useEffect(() => {
-    fetchKatanaInventory();
-  }, []);
-
-  const fetchKatanaInventory = async () => {
-    setLoadingKatana(true);
-    try {
-      // Use Firebase callable function (bypasses Cloud Run IAM org policy)
-      const getKatanaMaterials = httpsCallable(functions, 'getKatanaMaterialsCallable');
-      const result = await getKatanaMaterials();
-      const data = result.data as any;
-      
-      if (data.success && data.materials) {
-        // Map Katana materials to inventory items with costs
-        const inventory = data.materials.map((m: any) => ({
-          id: m.katanaId || m.id,
-          name: m.name,
-          sku: m.sku || m.katanaId || m.id,
-          category: m.type || 'other',
-          unitCost: m.unitCost || m.cost || 0, // Cost from Katana
-        }));
-        setKatanaInventory(inventory);
-        console.log(`Loaded ${inventory.length} materials from Katana`);
-      }
-    } catch (error) {
-      console.error('Failed to fetch Katana inventory:', error);
-    } finally {
-      setLoadingKatana(false);
+    if (inventorySearch.trim()) {
+      searchInventory(inventorySearch);
+    } else {
+      clearSearch();
     }
-  };
+  }, [inventorySearch, searchInventory, clearSearch]);
 
-  // Filter Katana inventory based on search
-  const filteredKatanaInventory = useMemo(() => {
-    if (!katanaSearch.trim()) return katanaInventory.slice(0, 20);
-    const search = katanaSearch.toLowerCase();
-    return katanaInventory.filter(item =>
-      item.name.toLowerCase().includes(search) ||
-      item.sku.toLowerCase().includes(search)
-    ).slice(0, 20);
-  }, [katanaInventory, katanaSearch]);
-
-  // Add standard part from Katana selection
-  const addStandardPartFromKatana = (katanaItem: typeof katanaInventory[0], quantity: number) => {
+  // Add standard part from inventory selection
+  const addStandardPartFromInventory = (invItem: typeof inventoryPickerItems[0], quantity: number) => {
     setStandardParts([...standardParts, {
       id: `sp-${Date.now()}`,
-      katanaSku: katanaItem.sku,
-      name: katanaItem.name,
-      category: (katanaItem.category || 'other') as StandardPartEntry['category'],
+      inventoryItemId: invItem.id,
+      katanaSku: invItem.sku,
+      name: invItem.name,
+      category: (invItem.category || 'other') as StandardPartEntry['category'],
       quantity: quantity,
-      unitCost: katanaItem.unitCost, // Auto-fetched from Katana
-      totalCost: quantity * katanaItem.unitCost,
+      unitCost: invItem.unitCost,
+      currency: 'UGX',
+      totalCost: quantity * invItem.unitCost,
     }]);
-    setKatanaSearch('');
+    setInventorySearch('');
     setNewStandardPart({ name: '', category: 'hinge', quantity: 1, katanaSku: '' });
   };
 
-  // Add standard part manually (for items not in Katana)
+  // Add standard part manually (for items not in inventory)
   const addStandardPart = () => {
     if (!newStandardPart.name) return;
-    // Find cost from Katana if SKU matches
-    const katanaMatch = katanaInventory.find(k => k.sku === newStandardPart.katanaSku);
-    const unitCost = katanaMatch?.unitCost || 0;
+    // Find cost from inventory if SKU matches
+    const invMatch = inventoryPickerItems.find(k => k.sku === newStandardPart.katanaSku);
+    const unitCost = invMatch?.unitCost || 0;
     
     setStandardParts([...standardParts, {
       id: `sp-${Date.now()}`,
@@ -683,7 +661,7 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
               <Wrench className="w-5 h-5 text-orange-600 mt-0.5" />
               <div>
                 <h3 className="font-semibold text-orange-900">Standard Parts</h3>
-                <p className="text-sm text-orange-700">Hinges, slides, screws, cams, dowels, and edging from Katana inventory</p>
+                <p className="text-sm text-orange-700">Hinges, slides, screws, cams, dowels, and edging from inventory</p>
               </div>
             </div>
 
@@ -722,33 +700,25 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
               </div>
             )}
 
-            {/* Katana Inventory Search */}
+            {/* Inventory Search */}
             <div className="bg-white p-3 rounded-lg border border-orange-200 space-y-3">
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
-                    value={katanaSearch}
-                    onChange={(e) => setKatanaSearch(e.target.value)}
-                    placeholder="Search Katana inventory by name or SKU..."
+                    value={inventorySearch}
+                    onChange={(e) => setInventorySearch(e.target.value)}
+                    placeholder="Search inventory by name or SKU..."
                     className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   />
                 </div>
-                <button
-                  onClick={fetchKatanaInventory}
-                  disabled={loadingKatana}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-orange-700 bg-orange-100 rounded-lg hover:bg-orange-200 disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-4 h-4 ${loadingKatana ? 'animate-spin' : ''}`} />
-                  Refresh
-                </button>
               </div>
 
-              {/* Katana Items List */}
-              {katanaSearch && filteredKatanaInventory.length > 0 && (
+              {/* Inventory Items List */}
+              {inventoryPickerItems.length > 0 && (
                 <div className="max-h-48 overflow-y-auto border border-orange-100 rounded-lg divide-y divide-orange-100">
-                  {filteredKatanaInventory.map(item => (
+                  {inventoryPickerItems.map(item => (
                     <div key={item.id} className="flex items-center justify-between p-2 hover:bg-orange-50">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{item.name}</p>
@@ -765,7 +735,7 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
                         <button
                           onClick={() => {
                             const qty = parseInt((document.getElementById(`qty-${item.id}`) as HTMLInputElement)?.value || '1');
-                            addStandardPartFromKatana(item, qty);
+                            addStandardPartFromInventory(item, qty);
                           }}
                           className="px-3 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600"
                         >
@@ -777,18 +747,18 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
                 </div>
               )}
 
-              {katanaSearch && filteredKatanaInventory.length === 0 && !loadingKatana && (
-                <p className="text-sm text-gray-500 text-center py-2">No items found in Katana inventory</p>
+              {inventorySearch && inventoryPickerItems.length === 0 && !loadingInventory && !isSearching && (
+                <p className="text-sm text-gray-500 text-center py-2">No items found in inventory</p>
               )}
 
-              {loadingKatana && (
+              {(loadingInventory || isSearching) && (
                 <div className="flex items-center justify-center py-4">
                   <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
-                  <span className="ml-2 text-sm text-gray-500">Loading Katana inventory...</span>
+                  <span className="ml-2 text-sm text-gray-500">Loading inventory...</span>
                 </div>
               )}
 
-              <p className="text-xs text-orange-600">💡 Costs are auto-fetched from Katana inventory. Only specify quantity.</p>
+              <p className="text-xs text-orange-600">Costs are fetched from the inventory module. Only specify quantity.</p>
             </div>
 
             {standardPartsCostPerUnit > 0 && (

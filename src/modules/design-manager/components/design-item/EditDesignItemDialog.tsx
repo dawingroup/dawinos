@@ -101,8 +101,8 @@ export function EditDesignItemDialog({
         priority,
         sourcingType,
         requiredQuantity: requiredQuantity || 1,
-        dueDate: dueDate ? { seconds: new Date(dueDate).getTime() / 1000, nanoseconds: 0 } : undefined,
-        architectural: architecturalUpdate,
+        ...(dueDate ? { dueDate: { seconds: new Date(dueDate).getTime() / 1000, nanoseconds: 0 } } : {}),
+        ...(architecturalUpdate ? { architectural: architecturalUpdate } : {}),
       } as any, userId);
 
       onClose();

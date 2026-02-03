@@ -4,11 +4,11 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, RefreshCw, FolderPlus } from 'lucide-react';
+import { X, RefreshCw, FolderPlus, Copy } from 'lucide-react';
 import { useCustomerMutations } from '../hooks';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDriveService } from '@/services/driveService';
-import type { Customer, CustomerFormData, CustomerType, CustomerStatus } from '../types';
+import type { Customer, CustomerFormData, CustomerType, CustomerStatus, Address } from '../types';
 
 interface CustomerFormProps {
   customer?: Customer;
@@ -37,6 +37,7 @@ export function CustomerForm({ customer, onClose, onSuccess }: CustomerFormProps
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [createDriveFolder, setCreateDriveFolder] = useState(true);
   const [folderStatus, setFolderStatus] = useState<string | null>(null);
+  const [shippingSameAsBilling, setShippingSameAsBilling] = useState(false);
 
   const isEditing = !!customer;
   const isLoading = createState.loading || updateState.loading;
@@ -284,6 +285,214 @@ export function CustomerForm({ customer, onClose, onSuccess }: CustomerFormProps
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
               placeholder="Additional notes about this customer..."
             />
+          </div>
+
+          {/* Billing Address */}
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Billing Address</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address</label>
+                <input
+                  type="text"
+                  value={formData.billingAddress?.street1 || ''}
+                  onChange={(e) => setFormData((prev) => ({
+                    ...prev,
+                    billingAddress: { ...prev.billingAddress, street1: e.target.value } as Address,
+                    ...(shippingSameAsBilling ? { shippingAddress: { ...prev.billingAddress, street1: e.target.value } as Address } : {}),
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  placeholder="Street address, P.O. Box"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address 2</label>
+                <input
+                  type="text"
+                  value={formData.billingAddress?.street2 || ''}
+                  onChange={(e) => setFormData((prev) => ({
+                    ...prev,
+                    billingAddress: { ...prev.billingAddress, street2: e.target.value } as Address,
+                    ...(shippingSameAsBilling ? { shippingAddress: { ...prev.billingAddress, street2: e.target.value } as Address } : {}),
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  placeholder="Apartment, suite, unit, floor (optional)"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                  <input
+                    type="text"
+                    value={formData.billingAddress?.city || ''}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      billingAddress: { ...prev.billingAddress, city: e.target.value } as Address,
+                      ...(shippingSameAsBilling ? { shippingAddress: { ...prev.billingAddress, city: e.target.value } as Address } : {}),
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    placeholder="City"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">State / Region</label>
+                  <input
+                    type="text"
+                    value={formData.billingAddress?.state || ''}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      billingAddress: { ...prev.billingAddress, state: e.target.value } as Address,
+                      ...(shippingSameAsBilling ? { shippingAddress: { ...prev.billingAddress, state: e.target.value } as Address } : {}),
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    placeholder="State or region"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
+                  <input
+                    type="text"
+                    value={formData.billingAddress?.postalCode || ''}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      billingAddress: { ...prev.billingAddress, postalCode: e.target.value } as Address,
+                      ...(shippingSameAsBilling ? { shippingAddress: { ...prev.billingAddress, postalCode: e.target.value } as Address } : {}),
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    placeholder="Postal code"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                  <input
+                    type="text"
+                    value={formData.billingAddress?.country || ''}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      billingAddress: { ...prev.billingAddress, country: e.target.value } as Address,
+                      ...(shippingSameAsBilling ? { shippingAddress: { ...prev.billingAddress, country: e.target.value } as Address } : {}),
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    placeholder="Country"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Shipping Address */}
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-900">Shipping / Site Address</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShippingSameAsBilling(!shippingSameAsBilling);
+                  if (!shippingSameAsBilling) {
+                    setFormData((prev) => ({ ...prev, shippingAddress: prev.billingAddress ? { ...prev.billingAddress } : undefined }));
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded-full border transition-colors ${
+                  shippingSameAsBilling
+                    ? 'bg-primary/10 border-primary/30 text-primary'
+                    : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                <Copy className="h-3 w-3" />
+                Same as billing
+              </button>
+            </div>
+            {!shippingSameAsBilling && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Street Address</label>
+                  <input
+                    type="text"
+                    value={formData.shippingAddress?.street1 || ''}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      shippingAddress: { ...prev.shippingAddress, street1: e.target.value } as Address,
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    placeholder="Street address, P.O. Box"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Street Address 2</label>
+                  <input
+                    type="text"
+                    value={formData.shippingAddress?.street2 || ''}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      shippingAddress: { ...prev.shippingAddress, street2: e.target.value } as Address,
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    placeholder="Apartment, suite, unit, floor (optional)"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                    <input
+                      type="text"
+                      value={formData.shippingAddress?.city || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        shippingAddress: { ...prev.shippingAddress, city: e.target.value } as Address,
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      placeholder="City"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">State / Region</label>
+                    <input
+                      type="text"
+                      value={formData.shippingAddress?.state || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        shippingAddress: { ...prev.shippingAddress, state: e.target.value } as Address,
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      placeholder="State or region"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
+                    <input
+                      type="text"
+                      value={formData.shippingAddress?.postalCode || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        shippingAddress: { ...prev.shippingAddress, postalCode: e.target.value } as Address,
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      placeholder="Postal code"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                    <input
+                      type="text"
+                      value={formData.shippingAddress?.country || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        shippingAddress: { ...prev.shippingAddress, country: e.target.value } as Address,
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      placeholder="Country"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            {shippingSameAsBilling && (
+              <p className="text-sm text-gray-500 italic">Shipping address will be the same as billing address.</p>
+            )}
           </div>
 
           {/* External Integrations */}

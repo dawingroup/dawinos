@@ -4,8 +4,8 @@
  * Includes unit-based pricing, labor, materials, and contractor info
  */
 
-import { useState } from 'react';
-import { Calculator, Save } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Calculator, Check, Loader2 } from 'lucide-react';
 import type { DesignItem } from '../../types';
 import {
   CONSTRUCTION_CATEGORY_LABELS,
@@ -72,7 +72,32 @@ export function ConstructionPricingTab({
   });
 
   const [saving, setSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestPricingRef = useRef(pricing);
+
+  const debouncedSave = useCallback(async (data: ConstructionPricing) => {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await onUpdate(data);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  }, [onUpdate]);
+
+  // Cleanup debounce on unmount and flush pending save
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        // Flush pending save on unmount
+        debouncedSave(latestPricingRef.current);
+      }
+    };
+  }, [debouncedSave]);
 
   const handleFieldChange = <K extends keyof ConstructionPricing>(
     field: K,
@@ -83,17 +108,15 @@ export function ConstructionPricingTab({
     // Recalculate totals
     const calculated = calculateConstructionPricing(updated);
     setPricing(calculated);
-    setHasChanges(true);
-  };
+    latestPricingRef.current = calculated;
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await onUpdate(pricing);
-      setHasChanges(false);
-    } finally {
-      setSaving(false);
+    // Debounce auto-save
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
     }
+    debounceRef.current = setTimeout(() => {
+      debouncedSave(calculated);
+    }, 800);
   };
 
   const formatCurrency = (amount: number) => {
@@ -102,18 +125,20 @@ export function ConstructionPricingTab({
 
   return (
     <div className="p-6 space-y-8">
-      {/* Header with Save Button */}
+      {/* Header with Save Status */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium text-gray-900">Construction Pricing</h3>
-        {hasChanges && !readOnly && (
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
-          >
-            <Save className="w-4 h-4" />
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
+        {saving && (
+          <span className="flex items-center gap-2 text-sm text-gray-500">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Saving...
+          </span>
+        )}
+        {saved && !saving && (
+          <span className="flex items-center gap-2 text-sm text-green-600">
+            <Check className="w-4 h-4" />
+            Saved
+          </span>
         )}
       </div>
 
@@ -441,19 +466,6 @@ export function ConstructionPricingTab({
         </div>
       </div>
 
-      {/* Save Button (bottom) */}
-      {hasChanges && !readOnly && (
-        <div className="flex justify-end pt-4 border-t">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 px-6 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
-          >
-            <Save className="w-4 h-4" />
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

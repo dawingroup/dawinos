@@ -32,19 +32,22 @@ const SPACE_TYPES = [
 ];
 
 export function SpaceParametersSection({ params, onUpdate }: SpaceParametersSectionProps) {
+  // Safety check: provide default values if undefined
+  const safeParams = params || { totalArea: 0, areaUnit: 'sqft' as const, spaceType: '', circulationPercent: 25 };
+
   // Convert to sqft for calculations
   const areaInSqft = useMemo(() => {
-    return params.areaUnit === 'sqm' ? params.totalArea * 10.764 : params.totalArea;
-  }, [params.totalArea, params.areaUnit]);
+    return safeParams.areaUnit === 'sqm' ? safeParams.totalArea * 10.764 : safeParams.totalArea;
+  }, [safeParams.totalArea, safeParams.areaUnit]);
 
   // Calculate usable area after circulation
   const usableArea = useMemo(() => {
-    return areaInSqft * (1 - params.circulationPercent / 100);
-  }, [areaInSqft, params.circulationPercent]);
+    return areaInSqft * (1 - safeParams.circulationPercent / 100);
+  }, [areaInSqft, safeParams.circulationPercent]);
 
   // Calculate capacity based on space type
   const capacity = useMemo(() => {
-    const spaceConfig = SPACE_TYPES.find(t => t.value === params.spaceType);
+    const spaceConfig = SPACE_TYPES.find(t => t.value === safeParams.spaceType);
     if (!spaceConfig || usableArea <= 0) {
       return { minimum: 0, optimal: 0, maximum: 0 };
     }
@@ -54,7 +57,7 @@ export function SpaceParametersSection({ params, onUpdate }: SpaceParametersSect
       optimal: Math.floor(usableArea / spaceConfig.sqftPerSeat.opt),
       maximum: Math.floor(usableArea / spaceConfig.sqftPerSeat.max),
     };
-  }, [usableArea, params.spaceType]);
+  }, [usableArea, safeParams.spaceType]);
 
   return (
     <div className="space-y-4">
@@ -65,7 +68,7 @@ export function SpaceParametersSection({ params, onUpdate }: SpaceParametersSect
           <input
             type="number"
             min="0"
-            value={params.totalArea || ''}
+            value={safeParams.totalArea || ''}
             onChange={(e) => onUpdate({ ...params, totalArea: parseFloat(e.target.value) || 0 })}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="0"
@@ -74,7 +77,7 @@ export function SpaceParametersSection({ params, onUpdate }: SpaceParametersSect
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
           <select
-            value={params.areaUnit}
+            value={safeParams.areaUnit}
             onChange={(e) => onUpdate({ ...params, areaUnit: e.target.value as 'sqm' | 'sqft' })}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
@@ -88,7 +91,7 @@ export function SpaceParametersSection({ params, onUpdate }: SpaceParametersSect
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Space Type</label>
         <select
-          value={params.spaceType}
+          value={safeParams.spaceType}
           onChange={(e) => onUpdate({ ...params, spaceType: e.target.value })}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
@@ -102,13 +105,13 @@ export function SpaceParametersSection({ params, onUpdate }: SpaceParametersSect
       <div>
         <div className="flex items-center justify-between mb-1">
           <label className="text-sm font-medium text-gray-700">Circulation %</label>
-          <span className="text-sm text-gray-500">{params.circulationPercent}%</span>
+          <span className="text-sm text-gray-500">{safeParams.circulationPercent}%</span>
         </div>
         <input
           type="range"
           min="10"
           max="50"
-          value={params.circulationPercent}
+          value={safeParams.circulationPercent}
           onChange={(e) => onUpdate({ ...params, circulationPercent: parseInt(e.target.value) })}
           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
         />
@@ -120,7 +123,7 @@ export function SpaceParametersSection({ params, onUpdate }: SpaceParametersSect
       </div>
 
       {/* Capacity Calculation */}
-      {params.totalArea > 0 && (
+      {safeParams.totalArea > 0 && (
         <div className="mt-4 p-4 bg-blue-50 rounded-lg">
           <div className="flex items-center gap-2 mb-3">
             <Calculator className="w-4 h-4 text-blue-600" />

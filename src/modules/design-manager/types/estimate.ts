@@ -4,11 +4,12 @@
  */
 
 import { Timestamp } from 'firebase/firestore';
+import type { BudgetTier } from './strategy';
 
 /**
  * Line item categories
  */
-export type EstimateLineItemCategory = 
+export type EstimateLineItemCategory =
   | 'material'
   | 'labor'
   | 'hardware'
@@ -18,6 +19,7 @@ export type EstimateLineItemCategory =
   | 'procurement'
   | 'procurement-logistics'
   | 'procurement-customs'
+  | 'construction'
   | 'other';
 
 /**
@@ -64,7 +66,7 @@ export interface ConsolidatedEstimate {
   lineItems: EstimateLineItem[];
   
   // Totals
-  subtotal: number;        // Before overhead and margin
+  subtotal: number;        // Sum of line items (overhead + margin already included in unit prices)
   taxRate: number;         // e.g., 0.16 for 16%
   taxAmount: number;
   total: number;
@@ -97,6 +99,16 @@ export interface ConsolidatedEstimate {
   designItemCount?: number;
   lineItemCount?: number;
   hasErrors?: boolean;
+
+  // Budget tracking (strategy integration)
+  budgetSummary?: {
+    totalAllocated?: number;        // Sum of allocated budgets from strategyContext
+    totalActual: number;            // Total estimate (same as total field)
+    variance: number;               // totalActual - totalAllocated
+    variancePercent: number;        // (variance / totalAllocated) × 100
+    itemsOverBudget: number;        // Count of items exceeding allocated budget
+    budgetTier?: BudgetTier;        // Project budget tier if available
+  };
 }
 
 /**
@@ -115,7 +127,7 @@ export interface EstimateConfig {
  * Default estimate configuration
  */
 export const DEFAULT_ESTIMATE_CONFIG: EstimateConfig = {
-  laborRatePerHour: 500, // KES
+  laborRatePerHour: 15000, // UGX per hour
   laborMinutesPerPart: 15, // 15 min per part average
   defaultTaxRate: 0.18, // 18% VAT
   defaultMarginPercent: 0.45, // 45% margin
@@ -136,6 +148,7 @@ export const ESTIMATE_CATEGORY_LABELS: Record<EstimateLineItemCategory, string> 
   procurement: 'Procured Items',
   'procurement-logistics': 'Logistics & Shipping',
   'procurement-customs': 'Customs & Duties',
+  construction: 'Construction',
   other: 'Other',
 };
 

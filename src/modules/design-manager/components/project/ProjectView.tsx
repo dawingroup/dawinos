@@ -12,6 +12,13 @@ import {
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { ResponsiveTabs } from '@/shared/components/ui/ResponsiveTabs';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/core/components/ui/sheet';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProject, useDesignItems } from '../../hooks';
 import { ProjectDialog } from './ProjectDialog';
@@ -34,9 +41,10 @@ import { ProjectPartsLibrary } from './ProjectPartsLibrary';
 import { runProjectProduction } from '@/shared/services/optimization';
 import QuoteManagement from '../client-portal/QuoteManagement';
 import ClientPortalManager from '../client-portal/ClientPortalManager';
+import { ProjectDocuments } from './ProjectDocuments';
 
 type ViewMode = 'kanban' | 'list';
-type ProjectTab = 'items' | 'cutlist' | 'estimate' | 'production' | 'quotes' | 'portal';
+type ProjectTab = 'items' | 'cutlist' | 'estimate' | 'production' | 'quotes' | 'portal' | 'files';
 
 export default function ProjectView() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -116,6 +124,7 @@ export default function ProjectView() {
     { id: 'estimate' as ProjectTab, label: 'Estimate', icon: Calculator },
     { id: 'production' as ProjectTab, label: 'Production', icon: Scissors },
     { id: 'quotes' as ProjectTab, label: 'Quotes', icon: FileText },
+    { id: 'files' as ProjectTab, label: 'Files', icon: FolderOpen },
     { id: 'portal' as ProjectTab, label: 'Portal', icon: Package },
   ];
 
@@ -489,6 +498,15 @@ export default function ProjectView() {
         />
       )}
 
+      {activeTab === 'files' && projectId && (
+        <ProjectDocuments
+          projectId={projectId}
+          projectCode={project.code}
+          userId={user?.email || ''}
+          userName={user?.displayName || user?.email || ''}
+        />
+      )}
+
       {/* New Item Dialog */}
       <NewDesignItemDialog
         open={showNewItem}
@@ -506,9 +524,16 @@ export default function ProjectView() {
         project={project}
       />
 
-      {/* Strategy Canvas with AI Report Generation */}
-      {showStrategy && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
+      {/* Strategy Canvas Drawer */}
+      <Sheet open={showStrategy} onOpenChange={setShowStrategy}>
+        <SheetContent
+          side="right"
+          className="w-full sm:max-w-3xl p-0 overflow-y-auto [&>button]:hidden"
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>Project Strategy</SheetTitle>
+            <SheetDescription>AI-powered strategy canvas</SheetDescription>
+          </SheetHeader>
           <StrategyCanvas
             projectId={projectId!}
             projectName={project.name}
@@ -517,8 +542,8 @@ export default function ProjectView() {
             userId={user?.email || undefined}
             onClose={() => setShowStrategy(false)}
           />
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
 
       {/* Bulk Importer */}
       {showBulkImport && (

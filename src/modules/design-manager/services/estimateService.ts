@@ -23,12 +23,64 @@ import type {
 } from '../types/estimate';
 import { DEFAULT_ESTIMATE_CONFIG } from '../types/estimate';
 import type { ConsolidatedCutlist, DesignItem, ProcurementPricing, ManufacturingCost, PartEntry, SheetMaterialBreakdown } from '../types';
+import type { ConstructionPricing } from '../types/deliverables';
+import { normalizeSourcingType } from '../types/deliverables';
 import type { EstimationResult, MaterialPaletteEntry } from '@/shared/types';
 import { getMaterial } from './materialService';
 import { getMaterialPriceByName } from '@/modules/inventory/services/inventoryPriceService';
+import type { BudgetTier, ProjectStrategy } from '../types/strategy';
+import { BUDGET_TIER_MULTIPLIERS } from '../types/strategy';
 
 // Default sheet size for material estimation (mm)
 const DEFAULT_SHEET_SIZE = { length: 2440, width: 1220 };
+
+/**
+ * Get budget tier multiplier for pricing adjustments
+ * Priority: item.strategyContext.budgetTier > strategy.budgetFramework.tier > 'standard' (1.0x)
+ */
+function getBudgetTierMultiplier(
+  item: DesignItem,
+  projectStrategy: ProjectStrategy | null
+): number {
+  // 1. Check item-level strategy context
+  const itemTier = item.strategyContext?.budgetTier;
+  if (itemTier && itemTier in BUDGET_TIER_MULTIPLIERS) {
+    return BUDGET_TIER_MULTIPLIERS[itemTier];
+  }
+
+  // 2. Fall back to project-level strategy
+  const projectTier = projectStrategy?.budgetFramework?.tier;
+  if (projectTier && projectTier in BUDGET_TIER_MULTIPLIERS) {
+    return BUDGET_TIER_MULTIPLIERS[projectTier];
+  }
+
+  // 3. Default to standard tier (1.0x - no adjustment)
+  return BUDGET_TIER_MULTIPLIERS.standard;
+}
+
+/**
+ * Fetch project strategy for budget tier pricing
+ */
+async function fetchProjectStrategy(projectId: string): Promise<ProjectStrategy | null> {
+  try {
+    const strategySnapshot = await getDocs(collection(db, 'projectStrategy'));
+    const strategyDoc = strategySnapshot.docs.find(d => d.id === projectId);
+
+    if (!strategyDoc) {
+      return null;
+    }
+
+    const data = strategyDoc.data();
+    return {
+      id: strategyDoc.id,
+      projectId,
+      ...data,
+    } as ProjectStrategy;
+  } catch (err) {
+    console.warn('[Estimate] Failed to fetch project strategy:', err);
+    return null;
+  }
+}
 
 /**
  * Calculate sheet material breakdown from parts list
@@ -133,10 +185,10 @@ export async function calculateSheetMaterialsFromParts(
       }
     }
     
-    // 4. Last resort fallback pricing (to be deprecated)
+    // 4. Last resort fallback pricing in UGX (to be deprecated)
     if (unitCost === 0) {
       console.warn(`[Estimate] No price found for ${group.materialName}, using fallback`);
-      const defaultPrices: Record<number, number> = {
+      const defaultPrices: Record<number, number> = { // UGX per sheet
         3: 45000, 6: 65000, 9: 85000, 12: 105000, 15: 125000,
         16: 135000, 18: 155000, 22: 185000, 25: 210000,
       };
@@ -195,16 +247,114 @@ export function calculateLaborFromParts(
 }
 
 /**
+ * Calculate design document cost from matrix-based pricing
+ */
+function calculateDesignDocumentCost(item: DesignItem): {
+  totalLaborCost: number;
+  totalLaborHours: number;
+  logisticsCost: number;
+  externalStudiesCost: number;
+  adminFeeAmount: number;
+  grandTotal: number;
+  hasValidPricing: boolean;
+} {
+  const architectural = item.architectural as any;
+
+  if (!architectural) {
+    return {
+      totalLaborCost: 0,
+      totalLaborHours: 0,
+      logisticsCost: 0,
+      externalStudiesCost: 0,
+      adminFeeAmount: 0,
+      grandTotal: 0,
+      hasValidPricing: false,
+    };
+  }
+
+  // Get pricing matrix and rates
+  const pricingMatrix = architectural.pricingMatrix || {};
+  const logistics = architectural.logistics || [];
+  const externalStudies = architectural.externalStudies || [];
+  const adminFeePercent = architectural.adminFeePercent || 10;
+
+  // Hourly rates: use saved rateConfig if available, otherwise defaults (UGX)
+  const defaultRates: Record<string, number> = {
+    'principal': 550000,
+    'senior-engineer': 440000,
+    'mid-level-architect': 330000,
+    'junior-drafter': 220000,
+  };
+
+  // Read saved rate config from the item (persisted from DesignDocumentPricingTab)
+  const savedRateConfig = architectural.rateConfig;
+  const getRateForRole = (roleId: string): number => {
+    if (savedRateConfig?.roles?.length) {
+      const found = savedRateConfig.roles.find((r: any) => r.id === roleId);
+      if (found?.hourlyRate !== undefined) return found.hourlyRate;
+    }
+    return defaultRates[roleId] || 0;
+  };
+
+  const roles = ['principal', 'senior-engineer', 'mid-level-architect', 'junior-drafter'];
+  const stages = ['concept', 'schematic', 'design-development', 'construction-docs'];
+
+  // Calculate labor cost from matrix
+  let totalLaborHours = 0;
+  let totalLaborCost = 0;
+
+  for (const role of roles) {
+    const rate = getRateForRole(role);
+    for (const stage of stages) {
+      const key = `${role}_${stage}`;
+      const hours = pricingMatrix[key] || 0;
+      totalLaborHours += hours;
+      totalLaborCost += hours * rate;
+    }
+  }
+
+  // Calculate logistics cost
+  const logisticsCost = logistics.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0);
+
+  // Calculate external studies with admin fee
+  const externalStudiesCost = externalStudies.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0);
+  const adminFeeAmount = externalStudiesCost * (adminFeePercent / 100);
+  const externalStudiesTotalWithFee = externalStudiesCost + adminFeeAmount;
+
+  // Grand total
+  const grandTotal = totalLaborCost + logisticsCost + externalStudiesTotalWithFee;
+
+  return {
+    totalLaborCost,
+    totalLaborHours,
+    logisticsCost,
+    externalStudiesCost,
+    adminFeeAmount,
+    grandTotal,
+    hasValidPricing: grandTotal > 0,
+  };
+}
+
+/**
  * Fetch all design items for a project
  */
 async function fetchAllDesignItems(projectId: string): Promise<Array<DesignItem & { procurement?: ProcurementPricing; manufacturing?: ManufacturingCost }>> {
   const itemsRef = collection(db, 'designProjects', projectId, 'designItems');
   const snapshot = await getDocs(itemsRef);
-  
-  return snapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Array<DesignItem & { procurement?: ProcurementPricing; manufacturing?: ManufacturingCost }>;
+
+  const items = snapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      sourcingType: normalizeSourcingType(data.sourcingType),
+    };
+  }) as Array<DesignItem & { procurement?: ProcurementPricing; manufacturing?: ManufacturingCost; construction?: ConstructionPricing }>;
+
+  // Sort by sortOrder ascending (items without sortOrder go last)
+  items.sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity));
+
+  return items;
 }
 
 /**
@@ -455,22 +605,23 @@ export async function calculateEstimate(
   const procurementLineItems = generateProcurementLineItems(procuredItems);
   lineItems.push(...procurementLineItems);
 
-  // Apply overhead and margin markup to each line item's rate
+  // Apply overhead + margin markup to each line item's unit price
+  // These are internal adjustments - the client sees the adjusted price directly
   const overheadMultiplier = 1 + config.overheadPercent;
   const marginMultiplier = 1 + config.defaultMarginPercent;
   const totalMarkup = overheadMultiplier * marginMultiplier;
-  
+
   const markedUpLineItems = lineItems.map(item => ({
     ...item,
     unitPrice: Math.round(item.unitPrice * totalMarkup),
     totalPrice: Math.round(item.totalPrice * totalMarkup),
   }));
 
-  // Calculate totals from marked-up line items
+  // Subtotal = sum of marked-up line items (OH + margin already included)
   const subtotal = markedUpLineItems.reduce((sum, li) => sum + li.totalPrice, 0);
   const taxAmount = Math.round(subtotal * config.defaultTaxRate);
-  
-  // Track base amounts for reference
+
+  // Track base amounts internally for reference
   const baseSubtotal = lineItems.reduce((sum, li) => sum + li.totalPrice, 0);
   const overheadAmount = Math.round(baseSubtotal * config.overheadPercent);
   const marginAmount = Math.round((baseSubtotal + overheadAmount) * config.defaultMarginPercent);
@@ -480,7 +631,7 @@ export async function calculateEstimate(
     generatedBy: userId,
     isStale: false,
     lastCutlistUpdate: cutlist.generatedAt as any,
-    lineItems: markedUpLineItems,
+    lineItems: markedUpLineItems, // Unit prices include OH + margin
     subtotal: Math.round(subtotal),
     taxRate: config.defaultTaxRate,
     taxAmount,
@@ -529,19 +680,35 @@ export async function calculateEstimateFromOptimization(
   // NEW ARCHITECTURE: Generate per-design-item line items
   // Each design item becomes a line item with its unit cost × requiredQuantity
   // This ensures: Design Item Costing Tab total × qty = Estimation line item
-  
+
+  // Fetch project strategy for budget tier pricing
+  const projectStrategy = await fetchProjectStrategy(projectId);
+
   const allDesignItems = await fetchAllDesignItems(projectId);
   const baseLineItems: EstimateLineItem[] = [];
   const errorChecks: { itemId: string; itemName: string; issue: string }[] = [];
+
+  // Track budget allocations for summary
+  let totalAllocated = 0;
+  let itemsOverBudget = 0;
   
-  // Generate line items for ALL design items (manufactured + procured)
+  // Generate line items for ALL design items (manufactured + procured + design documents)
   for (const item of allDesignItems) {
     const requiredQuantity = item.requiredQuantity || 1;
-    
+
+    // Get budget tier multiplier for this item
+    const tierMultiplier = getBudgetTierMultiplier(item, projectStrategy);
+
+    // Track allocated budget from strategyContext
+    const allocatedBudget = item.budgetTracking?.allocatedBudget || 0;
+    if (allocatedBudget > 0) {
+      totalAllocated += allocatedBudget;
+    }
+
     if (item.sourcingType === 'PROCURED') {
       // PROCURED items: use procurement pricing
       const procurement = item.procurement;
-      
+
       if (!procurement || !procurement.totalLandedCost || procurement.totalLandedCost === 0) {
         errorChecks.push({
           itemId: item.id,
@@ -550,10 +717,17 @@ export async function calculateEstimateFromOptimization(
         });
         continue;
       }
-      
-      const unitCost = Math.round(procurement.landedCostPerUnit || 0);
+
+      // Apply budget tier multiplier to unit cost
+      const baseUnitCost = Math.round(procurement.landedCostPerUnit || 0);
+      const unitCost = Math.round(baseUnitCost * tierMultiplier);
       const extendedCost = unitCost * requiredQuantity;
-      
+
+      // Check if over allocated budget
+      if (allocatedBudget > 0 && extendedCost > allocatedBudget) {
+        itemsOverBudget++;
+      }
+
       baseLineItems.push({
         id: nanoid(10),
         description: item.name,
@@ -565,15 +739,104 @@ export async function calculateEstimateFromOptimization(
         linkedDesignItemId: item.id,
         ...(procurement.vendor && { notes: `Vendor: ${procurement.vendor}` }),
       });
+    } else if (item.sourcingType === 'DESIGN_DOCUMENT') {
+      // DESIGN_DOCUMENT items: use matrix-based pricing from architectural field
+      const designDocCost = calculateDesignDocumentCost(item);
+
+      if (!designDocCost.hasValidPricing) {
+        errorChecks.push({
+          itemId: item.id,
+          itemName: item.name,
+          issue: 'Missing design document pricing - go to Pricing tab and enter hours in the matrix',
+        });
+        continue;
+      }
+
+      // Apply budget tier multiplier to unit cost
+      const baseUnitCost = Math.round(designDocCost.grandTotal);
+      const unitCost = Math.round(baseUnitCost * tierMultiplier);
+      const extendedCost = unitCost * requiredQuantity;
+
+      // Check if over allocated budget
+      if (allocatedBudget > 0 && extendedCost > allocatedBudget) {
+        itemsOverBudget++;
+      }
+
+      // Build cost breakdown notes
+      const breakdown: string[] = [];
+      if (designDocCost.totalLaborHours > 0) {
+        breakdown.push(`Labor: ${designDocCost.totalLaborHours.toFixed(1)} hrs = ${designDocCost.totalLaborCost.toLocaleString()}`);
+      }
+      if (designDocCost.logisticsCost > 0) {
+        breakdown.push(`Logistics: ${designDocCost.logisticsCost.toLocaleString()}`);
+      }
+      if (designDocCost.externalStudiesCost > 0) {
+        breakdown.push(`Studies: ${designDocCost.externalStudiesCost.toLocaleString()} + Admin: ${designDocCost.adminFeeAmount.toLocaleString()}`);
+      }
+
+      baseLineItems.push({
+        id: nanoid(10),
+        description: item.name,
+        category: 'labor', // Design documents are labor-based
+        quantity: requiredQuantity,
+        unit: 'project',
+        unitPrice: unitCost,
+        totalPrice: extendedCost,
+        linkedDesignItemId: item.id,
+        ...(breakdown.length > 0 && { notes: breakdown.join(' | ') }),
+      });
+    } else if (item.sourcingType === 'CONSTRUCTION') {
+      // CONSTRUCTION items: use construction pricing (unit-based + labor + materials)
+      const construction = (item as any).construction as ConstructionPricing | undefined;
+
+      if (!construction || !construction.totalCost || construction.totalCost === 0) {
+        errorChecks.push({
+          itemId: item.id,
+          itemName: item.name,
+          issue: 'Missing construction pricing - go to Pricing tab and enter costs',
+        });
+        continue;
+      }
+
+      // Apply budget tier multiplier to unit cost
+      const baseUnitCost = Math.round(construction.totalCost);
+      const unitCost = Math.round(baseUnitCost * tierMultiplier);
+      const extendedCost = unitCost * requiredQuantity;
+
+      // Check if over allocated budget
+      if (allocatedBudget > 0 && extendedCost > allocatedBudget) {
+        itemsOverBudget++;
+      }
+
+      // Build cost breakdown notes
+      const breakdown: string[] = [];
+      if (construction.quantity && construction.unitRate) {
+        breakdown.push(`Units: ${construction.quantity} × ${construction.currency || ''} ${construction.unitRate.toLocaleString()}`);
+      }
+      if (construction.laborCost) breakdown.push(`Labor: ${construction.laborCost.toLocaleString()}`);
+      if (construction.materialsCost) breakdown.push(`Materials: ${construction.materialsCost.toLocaleString()}`);
+      if (construction.contractor) breakdown.push(`Contractor: ${construction.contractor}`);
+
+      baseLineItems.push({
+        id: nanoid(10),
+        description: item.name,
+        category: 'construction',
+        quantity: requiredQuantity,
+        unit: 'lot',
+        unitPrice: unitCost,
+        totalPrice: extendedCost,
+        linkedDesignItemId: item.id,
+        ...(breakdown.length > 0 && { notes: breakdown.join(' | ') }),
+      });
     } else {
-      // MANUFACTURED items: use manufacturing.costPerUnit from Costing tab
+      // CUSTOM_FURNITURE_MILLWORK (and legacy MANUFACTURED) items: use manufacturing.costPerUnit from Costing tab
       const manufacturing = item.manufacturing;
-      
+
       // Check if manufacturing data exists with valid costs
       // Note: 0 is a valid cost (e.g., for items with no material cost), so check explicitly for undefined/null
       const hasCostPerUnit = manufacturing?.costPerUnit !== undefined && manufacturing?.costPerUnit !== null;
       const hasTotalCost = manufacturing?.totalCost !== undefined && manufacturing?.totalCost !== null;
-      
+
       if (!manufacturing || (!hasCostPerUnit && !hasTotalCost)) {
         errorChecks.push({
           itemId: item.id,
@@ -582,19 +845,27 @@ export async function calculateEstimateFromOptimization(
         });
         continue;
       }
-      
+
       // Use costPerUnit if available, otherwise calculate from totalCost
       const mfgQty = manufacturing.quantity || 1;
-      const unitCost = Math.round(manufacturing.costPerUnit || (manufacturing.totalCost / mfgQty));
+      const baseUnitCost = Math.round(manufacturing.costPerUnit || (manufacturing.totalCost / mfgQty));
+
+      // Apply budget tier multiplier to unit cost
+      const unitCost = Math.round(baseUnitCost * tierMultiplier);
       const extendedCost = unitCost * requiredQuantity;
-      
+
+      // Check if over allocated budget
+      if (allocatedBudget > 0 && extendedCost > allocatedBudget) {
+        itemsOverBudget++;
+      }
+
       // Build cost breakdown notes
       const breakdown: string[] = [];
       if (manufacturing.sheetMaterialsCost) breakdown.push(`Sheets: ${manufacturing.sheetMaterialsCost.toLocaleString()}`);
       if (manufacturing.standardPartsCost) breakdown.push(`Std Parts: ${manufacturing.standardPartsCost.toLocaleString()}`);
       if (manufacturing.specialPartsCost) breakdown.push(`Spc Parts: ${manufacturing.specialPartsCost.toLocaleString()}`);
       if (manufacturing.laborCost) breakdown.push(`Labor: ${manufacturing.laborCost.toLocaleString()}`);
-      
+
       baseLineItems.push({
         id: nanoid(10),
         description: item.name,
@@ -609,39 +880,47 @@ export async function calculateEstimateFromOptimization(
     }
   }
   
-  // Calculate markup multiplier (overhead + margin applied to each item's rate)
+  // Apply overhead + margin markup to each line item's unit price
+  // These are internal adjustments - the client sees the adjusted price directly
   const overheadMultiplier = 1 + config.overheadPercent;
   const marginMultiplier = 1 + config.defaultMarginPercent;
   const totalMarkup = overheadMultiplier * marginMultiplier;
-  
-  // Apply markup to each line item's unit price and total price
+
   const lineItems: EstimateLineItem[] = baseLineItems.map(item => ({
     ...item,
     unitPrice: Math.round(item.unitPrice * totalMarkup),
     totalPrice: Math.round(item.totalPrice * totalMarkup),
   }));
-  
-  // Calculate subtotal from marked-up line items
+
+  // Subtotal = sum of marked-up line items (OH + margin already included)
   const subtotal = lineItems.reduce((sum, li) => sum + li.totalPrice, 0);
-  
-  // Calculate base amounts for tracking (before markup)
+
+  // Track base amounts internally for reference
   const baseSubtotal = baseLineItems.reduce((sum, li) => sum + li.totalPrice, 0);
   const overheadAmount = Math.round(baseSubtotal * config.overheadPercent);
   const marginAmount = Math.round((baseSubtotal + overheadAmount) * config.defaultMarginPercent);
-  
+
   // Calculate tax based on mode
   let taxAmount: number;
   let total: number;
-  
+
   if (taxMode === 'inclusive') {
-    // Tax is already included in subtotal, extract it
     taxAmount = Math.round(subtotal - (subtotal / (1 + config.defaultTaxRate)));
     total = subtotal;
   } else {
-    // Tax is added on top
     taxAmount = Math.round(subtotal * config.defaultTaxRate);
     total = subtotal + taxAmount;
   }
+
+  // Calculate budget summary if we have allocated budgets
+  const budgetSummary = totalAllocated > 0 ? {
+    totalAllocated,
+    totalActual: Math.round(total),
+    variance: Math.round(total) - totalAllocated,
+    variancePercent: Math.round(((Math.round(total) - totalAllocated) / totalAllocated) * 100),
+    itemsOverBudget,
+    ...(projectStrategy?.budgetFramework?.tier && { budgetTier: projectStrategy.budgetFramework.tier }),
+  } : undefined;
 
   const estimate: ConsolidatedEstimate = {
     generatedAt: Timestamp.now() as any,
@@ -664,6 +943,8 @@ export async function calculateEstimateFromOptimization(
     designItemCount: allDesignItems.length,
     lineItemCount: baseLineItems.length,
     hasErrors: errorChecks.length > 0,
+    // Budget tracking summary
+    ...(budgetSummary && { budgetSummary }),
   };
 
   // Save to project document - filter out any undefined values
@@ -757,19 +1038,38 @@ async function recalculateAndSave(
   lineItems: EstimateLineItem[],
   userId: string
 ): Promise<ConsolidatedEstimate> {
+  // Line items already have OH + margin baked into unitPrice/totalPrice
+  // Subtotal = sum of line items (markup already included)
   const subtotal = lineItems.reduce((sum, li) => sum + li.totalPrice, 0);
-  const taxAmount = Math.round(subtotal * currentEstimate.taxRate);
-  const marginAmount = currentEstimate.marginPercent
-    ? Math.round(subtotal * currentEstimate.marginPercent)
-    : 0;
+
+  // Reverse-calculate base amounts for internal tracking
+  const overheadPercent = currentEstimate.overheadPercent || 0;
+  const marginPercent = currentEstimate.marginPercent || 0;
+  const totalMarkup = (1 + overheadPercent) * (1 + marginPercent);
+  const baseSubtotal = totalMarkup > 0 ? Math.round(subtotal / totalMarkup) : subtotal;
+  const overheadAmount = Math.round(baseSubtotal * overheadPercent);
+  const marginAmount = Math.round((baseSubtotal + overheadAmount) * marginPercent);
+
+  const taxMode = currentEstimate.taxMode || 'exclusive';
+  let taxAmount: number;
+  let total: number;
+
+  if (taxMode === 'inclusive') {
+    taxAmount = Math.round(subtotal - (subtotal / (1 + currentEstimate.taxRate)));
+    total = subtotal;
+  } else {
+    taxAmount = Math.round(subtotal * currentEstimate.taxRate);
+    total = subtotal + taxAmount;
+  }
 
   const estimate: ConsolidatedEstimate = {
     ...currentEstimate,
     lineItems,
     subtotal: Math.round(subtotal),
     taxAmount,
+    overheadAmount,
     marginAmount,
-    total: Math.round(subtotal + taxAmount + marginAmount),
+    total: Math.round(total),
     // Ensure errorChecks is never undefined
     errorChecks: currentEstimate.errorChecks || [],
   };

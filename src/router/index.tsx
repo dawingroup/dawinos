@@ -56,20 +56,24 @@ const UserDetailPage = lazy(() => import('@/pages/admin/UserDetailPage'));
 const RoleManagementPage = lazy(() => import('@/pages/admin/RoleManagementPage'));
 const MigrationDashboardPage = lazy(() => import('@/pages/admin/MigrationDashboardPage'));
 const AuditLogPage = lazy(() => import('@/pages/admin/AuditLogPage'));
-const SystemSettingsPage = lazy(() => import('@/pages/admin/SystemSettingsPage'));
 const SettingsPage = lazy(() => import('@/app/pages/SettingsPage'));
 
-// Finishes Dashboard
-const FinishesDashboard = lazy(() => import('@/app/pages/DawinOSDashboard'));
+// Finishes Dashboard (eagerly loaded to avoid Suspense error on login)
+import FinishesDashboard from '@/app/pages/DawinOSDashboard';
 
 // Finishes Modules
 const DesignManagerModule = lazy(() => import('@/modules/design-manager/DesignManagerModule'));
+const StrategyReportEditor = lazy(() => import('@/modules/design-manager/components/strategy-report/StrategyReportEditor').then(m => ({ default: m.StrategyReportEditor })));
 const CustomerHubModule = lazy(() => import('@/modules/customer-hub/CustomerHubModule'));
 const LaunchPipelineModule = lazy(() => import('@/modules/launch-pipeline/LaunchPipelineModule'));
 const AssetRegistryPage = lazy(() => import('@/modules/assets').then(module => ({ default: module.AssetRegistryPage })));
 const ClipperPage = lazy(() => import('@/app/pages/ClipperPage'));
 const InventoryPage = lazy(() => import('@/modules/inventory/pages/InventoryPage'));
+const ManufacturingModule = lazy(() => import('@/modules/manufacturing/ManufacturingModule'));
 const FeatureLibraryPage = lazy(() => import('@/modules/design-manager/components/feature-library/FeatureLibraryPage'));
+
+// WhatsApp Communication
+const WhatsAppInboxPage = lazy(() => import('@/modules/whatsapp/pages/WhatsAppInboxPage'));
 
 // Client Portal (Public)
 const ClientPortalPage = lazy(() => import('@/modules/design-manager/components/client-portal/ClientPortalPage'));
@@ -225,6 +229,10 @@ export const router = createBrowserRouter([
         element: <PageWrapper><ClipperPage /></PageWrapper>,
       },
       {
+        path: 'projects/:projectId/strategy-report/:reportId',
+        element: <PageWrapper><StrategyReportEditor /></PageWrapper>,
+      },
+      {
         path: 'design/*',
         element: <PageWrapper><DesignManagerModule /></PageWrapper>,
       },
@@ -248,6 +256,10 @@ export const router = createBrowserRouter([
         path: 'features',
         element: <PageWrapper><FeatureLibraryPage /></PageWrapper>,
       },
+      {
+        path: 'manufacturing/*',
+        element: <PageWrapper><ManufacturingModule /></PageWrapper>,
+      },
 
       // ========================================
       // DAWIN ADVISORY ROUTES
@@ -257,9 +269,10 @@ export const router = createBrowserRouter([
         element: <PageWrapper><DashboardPage /></PageWrapper>,
       },
 
-      // Engagements
+      // Engagements (member+ access)
       {
         path: 'engagements',
+        element: <RoleGuard roles={['member', 'manager', 'admin', 'super_admin']}><Outlet /></RoleGuard>,
         children: [
           { index: true, element: <PageWrapper><EngagementListPage /></PageWrapper> },
           { path: 'new', element: <PageWrapper><EngagementCreatePage /></PageWrapper> },
@@ -267,9 +280,10 @@ export const router = createBrowserRouter([
         ],
       },
 
-      // Clients (shared across all subsidiaries)
+      // Clients (member+ access, shared across all subsidiaries)
       {
         path: 'clients',
+        element: <RoleGuard roles={['member', 'manager', 'admin', 'super_admin']}><Outlet /></RoleGuard>,
         children: [
           { index: true, element: <PageWrapper><ClientListPage /></PageWrapper> },
           { path: 'new', element: <PageWrapper><ClientCreatePage /></PageWrapper> },
@@ -304,10 +318,14 @@ export const router = createBrowserRouter([
         ],
       },
 
-      // AI Assistant
+      // AI Assistant (member+ access)
       {
         path: 'assistant',
-        element: <PageWrapper><AIAssistantPage /></PageWrapper>,
+        element: (
+          <RoleGuard roles={['member', 'manager', 'admin', 'super_admin']}>
+            <PageWrapper><AIAssistantPage /></PageWrapper>
+          </RoleGuard>
+        ),
       },
 
       // Admin
@@ -329,11 +347,15 @@ export const router = createBrowserRouter([
       },
 
       // ========================================
-      // HR CENTRAL ROUTES - with Tab Navigation
+      // HR CENTRAL ROUTES - with Tab Navigation (member+ access)
       // ========================================
       {
         path: 'hr',
-        element: <PageWrapper><HRLayout /></PageWrapper>,
+        element: (
+          <RoleGuard roles={['member', 'manager', 'admin', 'super_admin']}>
+            <PageWrapper><HRLayout /></PageWrapper>
+          </RoleGuard>
+        ),
         children: [
           { index: true, element: <Navigate to="/hr/employees" replace /> },
           { path: 'employees', element: <EmployeeListPage /> },
@@ -370,11 +392,15 @@ export const router = createBrowserRouter([
       },
 
       // ========================================
-      // FINANCE ROUTES - with Tab Navigation
+      // FINANCE ROUTES - with Tab Navigation (member+ access)
       // ========================================
       {
         path: 'finance',
-        element: <PageWrapper><FinanceLayout /></PageWrapper>,
+        element: (
+          <RoleGuard roles={['member', 'manager', 'admin', 'super_admin']}>
+            <PageWrapper><FinanceLayout /></PageWrapper>
+          </RoleGuard>
+        ),
         children: [
           { index: true, element: <Navigate to="/finance/budgets" replace /> },
           { path: 'budgets', element: <BudgetListPage /> },
@@ -401,11 +427,15 @@ export const router = createBrowserRouter([
       },
 
       // ========================================
-      // CAPITAL HUB ROUTES - with Tab Navigation
+      // CAPITAL HUB ROUTES - with Tab Navigation (member+ access)
       // ========================================
       {
         path: 'capital',
-        element: <PageWrapper><CapitalLayout /></PageWrapper>,
+        element: (
+          <RoleGuard roles={['member', 'manager', 'admin', 'super_admin']}>
+            <PageWrapper><CapitalLayout /></PageWrapper>
+          </RoleGuard>
+        ),
         children: [
           { index: true, element: <Navigate to="/capital/deals" replace /> },
           { path: 'deals', element: <CapitalDealListPage /> },
@@ -418,11 +448,15 @@ export const router = createBrowserRouter([
       },
 
       // ========================================
-      // MARKET INTELLIGENCE ROUTES - with Tab Navigation
+      // MARKET INTELLIGENCE ROUTES - with Tab Navigation (member+ access)
       // ========================================
       {
         path: 'market-intel',
-        element: <PageWrapper><MarketIntelLayout /></PageWrapper>,
+        element: (
+          <RoleGuard roles={['member', 'manager', 'admin', 'super_admin']}>
+            <PageWrapper><MarketIntelLayout /></PageWrapper>
+          </RoleGuard>
+        ),
         children: [
           { index: true, element: <Navigate to="/market-intel/competitors" replace /> },
           { path: 'competitors', element: <MarketCompetitorListPage /> },
@@ -442,8 +476,22 @@ export const router = createBrowserRouter([
         element: <PageWrapper><IntelligenceLayout /></PageWrapper>,
         children: [
           { index: true, element: <IntelligenceLayerDashboard /> },
-          { path: 'team', element: <ManagerDashboardPage /> },
-          { path: 'admin', element: <IntelligenceAdminPage /> },
+          {
+            path: 'team',
+            element: (
+              <RoleGuard roles={['manager', 'admin', 'super_admin']}>
+                <ManagerDashboardPage />
+              </RoleGuard>
+            ),
+          },
+          {
+            path: 'admin',
+            element: (
+              <RoleGuard roles={['admin', 'super_admin']}>
+                <IntelligenceAdminPage />
+              </RoleGuard>
+            ),
+          },
         ],
       },
 
@@ -454,6 +502,12 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <EmployeeTaskInboxPage /> },
         ],
+      },
+
+      // WhatsApp Communication Inbox
+      {
+        path: 'whatsapp',
+        element: <PageWrapper><WhatsAppInboxPage /></PageWrapper>,
       },
 
       // ========================================

@@ -57,6 +57,27 @@ export interface EmployeeTask {
   updatedAt?: Date;
   createdBy: string;
   notes?: string;
+  aiDescription?: string;
+  aiChecklist?: AIChecklistItem[];
+  aiRelevantDocuments?: AIRelevantDocument[];
+  aiUrgencyScore?: number;
+  aiUrgencyReason?: string;
+  urgencyScore: number;
+}
+
+export interface AIChecklistItem {
+  id: string;
+  title: string;
+  description: string;
+  isRequired: boolean;
+  order: number;
+  completed: boolean;
+}
+
+export interface AIRelevantDocument {
+  name: string;
+  type: string;
+  reason: string;
 }
 
 export type TaskStatusFilter = 'all' | 'pending' | 'in_progress' | 'completed' | 'blocked';
@@ -85,6 +106,88 @@ export interface GroupedTasks {
   [groupKey: string]: EmployeeTask[];
 }
 
+export type SnapshotFilter = 'burning' | 'nextUp' | 'stuck' | 'moved' | null;
+
+export interface SnapshotStats {
+  burning: { count: number; topTask?: string };
+  nextUp: { count: number; nearestDue?: string };
+  stuck: { count: number; oldestTask?: string };
+  moved: { count: number };
+}
+
+// ============================================
+// Urgency Score Calculation
+// ============================================
+
+const PRIORITY_WEIGHTS: Record<string, number> = {
+  P0: 100,
+  P1: 70,
+  P2: 40,
+  P3: 10,
+};
+
+function computeUrgencyScore(task: {
+  priority: string;
+  status: string;
+  dueDate?: Date;
+  createdAt: Date;
+  updatedAt?: Date;
+  startedAt?: Date;
+  aiUrgencyScore?: number;
+}): number {
+  // Completed/cancelled tasks get score 0 so they sink to the bottom
+  if (task.status === 'completed' || task.status === 'cancelled') return 0;
+
+  let score = PRIORITY_WEIGHTS[task.priority] ?? 40;
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (task.dueDate) {
+    const dueDateOnly = new Date(
+      task.dueDate.getFullYear(),
+      task.dueDate.getMonth(),
+      task.dueDate.getDate()
+    );
+    const diffDays = Math.ceil(
+      (dueDateOnly.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (diffDays < 0) {
+      // Overdue — base 80 + scale by days overdue (max +40 extra)
+      score += 80 + Math.min(Math.abs(diffDays) * 5, 40);
+    } else if (diffDays === 0) {
+      score += 50; // Due today
+    } else if (diffDays === 1) {
+      score += 30; // Due tomorrow
+    } else if (diffDays <= 3) {
+      score += 15; // Due within 3 days
+    }
+  }
+
+  // Blocked tasks get penalized — user can't act on them
+  if (task.status === 'blocked') {
+    score -= 20;
+  }
+
+  // Stale tasks: pending for >3 days with no start
+  if (task.status === 'pending' && !task.startedAt) {
+    const taskAgeDays = Math.floor(
+      (now.getTime() - task.createdAt.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    if (taskAgeDays > 3) {
+      score += 20;
+    }
+  }
+
+  // AI urgency boost (0-50, scaled from 0-100 AI score)
+  if (task.aiUrgencyScore != null && task.aiUrgencyScore > 0) {
+    score += Math.round(task.aiUrgencyScore / 2);
+  }
+
+  return Math.max(score, 1); // Ensure non-completed tasks always score > 0
+}
+
 // ============================================
 // Hook Implementation
 // ============================================
@@ -101,6 +204,7 @@ export function useEmployeeTaskInbox() {
     groupBy: 'none',
     searchQuery: '',
   });
+  const [snapshotFilter, setSnapshotFilter] = useState<SnapshotFilter>(null);
 
   // Fetch tasks with real-time subscription
   useEffect(() => {
@@ -111,6 +215,7 @@ export function useEmployeeTaskInbox() {
     }
 
     if (!employeeDocId) {
+      console.warn('[TaskInbox] No employeeDocId resolved — cannot query tasks');
       setLoading(false);
       setTasks([]);
       return;
@@ -162,9 +267,14 @@ export function useEmployeeTaskInbox() {
             dueDate: data.dueDate?.toDate(),
             startedAt: data.startedAt?.toDate(),
             completedAt: data.completedAt?.toDate(),
-            checklistItems: (data.checklistItems || []).map((item: any) => ({
-              ...item,
+            checklistItems: (data.checklistItems || []).map((item: any, idx: number) => ({
+              id: item.id || String(idx + 1),
+              title: item.title || item.text || '',
+              description: item.description || '',
+              isRequired: item.isRequired ?? false,
+              completed: item.completed ?? false,
               completedAt: item.completedAt?.toDate?.() || item.completedAt,
+              completedBy: item.completedBy,
             })),
             checklistProgress: data.checklistProgress || 0,
             sourceModule: data.sourceModule || '',
@@ -178,15 +288,33 @@ export function useEmployeeTaskInbox() {
             updatedAt: data.updatedAt?.toDate(),
             createdBy: data.createdBy || 'system',
             notes: data.notes,
+            aiDescription: data.aiDescription,
+            aiChecklist: data.aiChecklist,
+            aiRelevantDocuments: data.aiRelevantDocuments,
+            aiUrgencyScore: data.aiUrgencyScore,
+            aiUrgencyReason: data.aiUrgencyReason,
+            urgencyScore: 0, // computed below
           } as EmployeeTask;
         });
+
+        // Compute urgency scores and sort by urgency descending
+        taskData.forEach((t) => {
+          t.urgencyScore = computeUrgencyScore(t);
+        });
+        taskData.sort((a, b) => b.urgencyScore - a.urgencyScore);
 
         setTasks(taskData);
         setLoading(false);
       },
       (err) => {
-        console.error('Error fetching tasks:', err);
-        setError('Failed to load tasks');
+        console.error('[TaskInbox] Error fetching tasks:', err);
+        // Show actionable error — Firestore missing index errors include a URL to create it
+        const errMsg = err?.message || 'Unknown error';
+        if (errMsg.includes('index')) {
+          setError('Missing Firestore index — check console for creation link');
+        } else {
+          setError(`Failed to load tasks: ${errMsg}`);
+        }
         setLoading(false);
       }
     );
@@ -253,9 +381,138 @@ export function useEmployeeTaskInbox() {
     };
   }, [tasks]);
 
-  // Filter tasks based on current filters
+  // Snapshot stats for birds-eye view
+  const snapshotStats = useMemo((): SnapshotStats => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const threeDaysFromNow = new Date(today);
+    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const activeTasks = tasks.filter(
+      (t) => t.status !== 'completed' && t.status !== 'cancelled'
+    );
+
+    // Burning: overdue OR high priority (P0/P1)
+    const burningTasks = activeTasks.filter((t) => {
+      const isOverdue =
+        t.dueDate &&
+        new Date(t.dueDate.getFullYear(), t.dueDate.getMonth(), t.dueDate.getDate()) < today;
+      const isHighPriority = t.priority === 'P0' || t.priority === 'P1';
+      return isOverdue || isHighPriority;
+    });
+
+    // Next Up: due within 3 days, unblocked, NOT already in burning
+    const burningIds = new Set(burningTasks.map((t) => t.id));
+    const nextUpTasks = activeTasks.filter((t) => {
+      if (burningIds.has(t.id)) return false;
+      if (t.status === 'blocked') return false;
+      if (!t.dueDate) return false;
+      const dueDateOnly = new Date(
+        t.dueDate.getFullYear(),
+        t.dueDate.getMonth(),
+        t.dueDate.getDate()
+      );
+      return dueDateOnly >= today && dueDateOnly <= threeDaysFromNow;
+    });
+
+    // Stuck: blocked
+    const stuckTasks = tasks.filter((t) => t.status === 'blocked');
+
+    // Moved: updated in last 24 hours
+    const movedTasks = tasks.filter(
+      (t) => t.updatedAt && t.updatedAt >= twentyFourHoursAgo
+    );
+
+    // Find nearest due in nextUp
+    let nearestDue: string | undefined;
+    if (nextUpTasks.length > 0) {
+      const sorted = [...nextUpTasks].sort(
+        (a, b) => (a.dueDate?.getTime() || 0) - (b.dueDate?.getTime() || 0)
+      );
+      nearestDue = formatDueDate(sorted[0].dueDate);
+    }
+
+    // Find oldest blocked task
+    let oldestTask: string | undefined;
+    if (stuckTasks.length > 0) {
+      const sorted = [...stuckTasks].sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
+      );
+      oldestTask = sorted[0].title.length > 40
+        ? sorted[0].title.slice(0, 37) + '...'
+        : sorted[0].title;
+    }
+
+    return {
+      burning: {
+        count: burningTasks.length,
+        topTask:
+          burningTasks.length > 0
+            ? burningTasks[0].title.length > 40
+              ? burningTasks[0].title.slice(0, 37) + '...'
+              : burningTasks[0].title
+            : undefined,
+      },
+      nextUp: {
+        count: nextUpTasks.length,
+        nearestDue,
+      },
+      stuck: {
+        count: stuckTasks.length,
+        oldestTask,
+      },
+      moved: {
+        count: movedTasks.length,
+      },
+    };
+  }, [tasks]);
+
+  // Filter tasks based on current filters + snapshot filter
   const filteredTasks = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const threeDaysFromNow = new Date(today);
+    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
     return tasks.filter((task) => {
+      // Snapshot filter
+      if (snapshotFilter) {
+        const isActive = task.status !== 'completed' && task.status !== 'cancelled';
+        switch (snapshotFilter) {
+          case 'burning': {
+            if (!isActive) return false;
+            const isOverdue =
+              task.dueDate &&
+              new Date(task.dueDate.getFullYear(), task.dueDate.getMonth(), task.dueDate.getDate()) < today;
+            const isHighPriority = task.priority === 'P0' || task.priority === 'P1';
+            if (!isOverdue && !isHighPriority) return false;
+            break;
+          }
+          case 'nextUp': {
+            if (!isActive || task.status === 'blocked' || !task.dueDate) return false;
+            const dueDateOnly = new Date(
+              task.dueDate.getFullYear(),
+              task.dueDate.getMonth(),
+              task.dueDate.getDate()
+            );
+            // Exclude burning tasks (overdue or P0/P1)
+            const isOverdue = dueDateOnly < today;
+            const isHighPriority = task.priority === 'P0' || task.priority === 'P1';
+            if (isOverdue || isHighPriority) return false;
+            if (dueDateOnly > threeDaysFromNow) return false;
+            break;
+          }
+          case 'stuck':
+            if (task.status !== 'blocked') return false;
+            break;
+          case 'moved':
+            if (!task.updatedAt || task.updatedAt < twentyFourHoursAgo) return false;
+            break;
+        }
+      }
+
       // Priority filter
       if (filters.priority !== 'all' && task.priority !== filters.priority) {
         return false;
@@ -263,18 +520,19 @@ export function useEmployeeTaskInbox() {
 
       // Search filter
       if (filters.searchQuery) {
-        const query = filters.searchQuery.toLowerCase();
-        const matchesTitle = task.title.toLowerCase().includes(query);
-        const matchesDescription = task.description?.toLowerCase().includes(query);
-        const matchesProject = task.projectName?.toLowerCase().includes(query);
-        if (!matchesTitle && !matchesDescription && !matchesProject) {
+        const q = filters.searchQuery.toLowerCase();
+        const matchesTitle = task.title.toLowerCase().includes(q);
+        const matchesDescription = task.description?.toLowerCase().includes(q);
+        const matchesAiDescription = task.aiDescription?.toLowerCase().includes(q);
+        const matchesProject = task.projectName?.toLowerCase().includes(q);
+        if (!matchesTitle && !matchesDescription && !matchesAiDescription && !matchesProject) {
           return false;
         }
       }
 
       return true;
     });
-  }, [tasks, filters.priority, filters.searchQuery]);
+  }, [tasks, filters.priority, filters.searchQuery, snapshotFilter]);
 
   // Group tasks based on groupBy filter
   const groupedTasks = useMemo((): GroupedTasks => {
@@ -372,6 +630,9 @@ export function useEmployeeTaskInbox() {
     tasks: filteredTasks,
     groupedTasks,
     stats,
+    snapshotStats,
+    snapshotFilter,
+    setSnapshotFilter,
     loading,
     error,
     filters,

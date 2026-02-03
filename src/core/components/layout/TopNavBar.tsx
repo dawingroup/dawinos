@@ -1,4 +1,5 @@
-import { Bell, Search, Menu } from 'lucide-react';
+import React from 'react';
+import { Bell, Search, Menu, MessageSquare } from 'lucide-react';
 import { Button } from '@/core/components/ui/button';
 import {
   DropdownMenu,
@@ -14,6 +15,8 @@ import { useNotifications, useAuth } from '@/integration/store';
 import { useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/shared/services/firebase';
+import { useFeatureFlag } from '@/shared/hooks/useFeatureFlag';
+import { subscribeToUnreadCount } from '@/modules/whatsapp/services/whatsappService';
 
 export interface TopNavBarProps {
   currentModule?: any;
@@ -31,6 +34,13 @@ export function TopNavBar({
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
   const { displayName, email } = useAuth();
+  const whatsappEnabled = useFeatureFlag('WHATSAPP_ENABLED');
+  const [waUnread, setWaUnread] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!whatsappEnabled) return;
+    return subscribeToUnreadCount(setWaUnread);
+  }, [whatsappEnabled]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -83,6 +93,28 @@ export function TopNavBar({
           <Search className="h-5 w-5" />
         </Button>
 
+        {/* WhatsApp */}
+        {whatsappEnabled && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate('/whatsapp')}
+                className="relative"
+              >
+                <MessageSquare className="h-5 w-5" />
+                {waUnread > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-green-600 text-[10px] font-medium text-white flex items-center justify-center">
+                    {waUnread > 9 ? '9+' : waUnread}
+                  </span>
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>WhatsApp Messages</TooltipContent>
+          </Tooltip>
+        )}
+
         {/* Notifications */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -120,10 +152,10 @@ export function TopNavBar({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate('/settings/profile')}>
+            <DropdownMenuItem onClick={() => navigate('/profile')}>
               Profile
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/settings')}>
+            <DropdownMenuItem onClick={() => navigate('/admin/settings')}>
               Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />

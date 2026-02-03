@@ -331,8 +331,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   logo: {
-    width: 100,
-    height: 45,
+    width: 140,
+    height: 60,
     objectFit: 'contain',
   },
   companyNameFallback: {
@@ -412,9 +412,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
-    paddingVertical: 10,
+    paddingVertical: 5,
     paddingHorizontal: 8,
-    minHeight: 40,
+    minHeight: 24,
     alignItems: 'center',
   },
   tableRowAlt: {
@@ -620,8 +620,6 @@ const styles = StyleSheet.create({
  */
 interface PDFHeaderProps {
   quoteNumber: string;
-  createdDate: string;
-  validUntil?: string;
   projectName?: string;
   logoUrl?: string;
   companyName?: string;
@@ -629,18 +627,15 @@ interface PDFHeaderProps {
 
 const PDFHeader: React.FC<PDFHeaderProps> = ({
   quoteNumber,
-  createdDate,
-  validUntil,
   projectName,
   logoUrl,
   companyName = 'Dawin Finishes',
 }) => (
   <View style={styles.header}>
     <View style={styles.headerLeft}>
-      <Text style={styles.quoteTitle}>Quote: {quoteNumber}</Text>
+      <Text style={styles.quoteTitle}>Quote</Text>
       {projectName && <Text style={styles.projectName}>{projectName}</Text>}
-      <Text style={styles.createdDate}>Created: {createdDate}</Text>
-      {validUntil && <Text style={styles.validUntil}>Valid until: {validUntil}</Text>}
+      <Text style={styles.createdDate}>Ref: {quoteNumber}</Text>
     </View>
     <View style={styles.headerRight}>
       {logoUrl ? (
@@ -661,6 +656,8 @@ interface PDFCustomerSectionProps {
   customerReference: string;
   billingAddress: Address;
   shippingAddress?: Address;
+  createdDate: string;
+  validUntil?: string;
 }
 
 const PDFCustomerSection: React.FC<PDFCustomerSectionProps> = ({
@@ -668,39 +665,49 @@ const PDFCustomerSection: React.FC<PDFCustomerSectionProps> = ({
   customerReference,
   billingAddress,
   shippingAddress,
+  createdDate,
+  validUntil,
 }) => {
   const billing = formatAddressLines(billingAddress);
   const shipping = formatAddressLines(shippingAddress || billingAddress);
 
   return (
-    <View style={styles.customerSection}>
-      {/* Customer Info */}
-      <View style={styles.customerColumn}>
-        <Text style={styles.sectionLabel}>Customer:</Text>
-        <Text style={styles.customerName}>{customerName}</Text>
-        {billing.map((line, i) => (
-          <Text key={`billing-${i}`} style={styles.addressText}>
-            {line}
-          </Text>
-        ))}
+    <View style={{ marginBottom: 25 }}>
+      {/* Customer Name + Reference Row */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        <View>
+          <Text style={styles.sectionLabel}>Customer</Text>
+          <Text style={styles.customerName}>{customerName}</Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.referenceLabel}>Customer reference:</Text>
+          <Text style={styles.referenceValue}>{customerReference}</Text>
+          <Text style={[styles.addressText, { marginTop: 4 }]}>Created: {createdDate}</Text>
+          {validUntil && <Text style={styles.addressText}>Valid until: {validUntil}</Text>}
+        </View>
       </View>
 
-      {/* Shipping Address */}
-      <View style={styles.addressColumn}>
-        {shipping.map((line, i) => (
-          <Text
-            key={`shipping-${i}`}
-            style={[styles.addressText, { marginTop: i === 0 ? 20 : 0 }]}
-          >
-            {line}
-          </Text>
-        ))}
-      </View>
+      {/* Addresses Row */}
+      <View style={{ flexDirection: 'row' }}>
+        {/* Billing Address */}
+        <View style={styles.customerColumn}>
+          <Text style={styles.sectionLabel}>Bill To:</Text>
+          {billing.map((line, i) => (
+            <Text key={`billing-${i}`} style={styles.addressText}>
+              {line}
+            </Text>
+          ))}
+        </View>
 
-      {/* Customer Reference */}
-      <View style={styles.referenceColumn}>
-        <Text style={styles.referenceLabel}>Customer reference:</Text>
-        <Text style={styles.referenceValue}>{customerReference}</Text>
+        {/* Shipping Address */}
+        <View style={styles.addressColumn}>
+          <Text style={styles.sectionLabel}>Ship To:</Text>
+          {shipping.map((line, i) => (
+            <Text key={`shipping-${i}`} style={styles.addressText}>
+              {line}
+            </Text>
+          ))}
+        </View>
       </View>
     </View>
   );
@@ -713,11 +720,13 @@ const PDFCustomerSection: React.FC<PDFCustomerSectionProps> = ({
 interface PDFItemsTableProps {
   items: Array<LineItem & { taxLabel?: string }>;
   showDiscount?: boolean;
+  currency?: 'UGX' | 'USD';
 }
 
 const PDFItemsTable: React.FC<PDFItemsTableProps> = ({
   items,
   showDiscount = false,
+  currency = 'UGX',
 }) => {
   // Calculate total tax amount for summary
   const totalTaxAmount = items.reduce((sum, item) => {
@@ -776,7 +785,7 @@ const PDFItemsTable: React.FC<PDFItemsTableProps> = ({
       {totalTaxAmount > 0 && (
         <View style={styles.taxSummaryRow}>
           <Text style={styles.taxSummaryText}>
-            Tax total: {formatNumber(totalTaxAmount)} UGX
+            Tax total: {formatNumber(totalTaxAmount)} {currency}
           </Text>
         </View>
       )}
@@ -793,8 +802,6 @@ interface PDFTotalsSectionProps {
   taxTotal: number;
   grandTotal: number;
   currency?: 'UGX' | 'USD';
-  overheadAmount?: number;
-  marginAmount?: number;
 }
 
 const PDFTotalsSection: React.FC<PDFTotalsSectionProps> = ({
@@ -802,8 +809,6 @@ const PDFTotalsSection: React.FC<PDFTotalsSectionProps> = ({
   taxTotal,
   grandTotal,
   currency = 'UGX',
-  overheadAmount,
-  marginAmount,
 }) => (
   <View style={styles.totalsContainer}>
     <View style={styles.totalsBox}>
@@ -815,28 +820,6 @@ const PDFTotalsSection: React.FC<PDFTotalsSectionProps> = ({
           <Text style={styles.currencyLabel}>{currency}</Text>
         </View>
       </View>
-
-      {/* Overhead (if shown) */}
-      {overheadAmount !== undefined && overheadAmount > 0 && (
-        <View style={styles.totalsRow}>
-          <Text style={styles.totalsLabel}>Overhead:</Text>
-          <View style={styles.valueWithCurrency}>
-            <Text style={styles.totalsValue}>{formatNumber(overheadAmount)}</Text>
-            <Text style={styles.currencyLabel}>{currency}</Text>
-          </View>
-        </View>
-      )}
-
-      {/* Margin (if shown) */}
-      {marginAmount !== undefined && marginAmount > 0 && (
-        <View style={styles.totalsRow}>
-          <Text style={styles.totalsLabel}>Margin:</Text>
-          <View style={styles.valueWithCurrency}>
-            <Text style={styles.totalsValue}>{formatNumber(marginAmount)}</Text>
-            <Text style={styles.currencyLabel}>{currency}</Text>
-          </View>
-        </View>
-      )}
 
       {/* Tax */}
       <View style={styles.totalsRow}>
@@ -1000,8 +983,6 @@ export const QuotePDFDocument: React.FC<QuotePDFDocumentProps> = ({
         {/* Header */}
         <PDFHeader
           quoteNumber={quote.quoteNumber}
-          createdDate={formatDate(quote.createdAt)}
-          validUntil={quote.validUntil ? formatDate(quote.validUntil) : undefined}
           projectName={quote.projectName}
           logoUrl={quote.companyInfo.logoUrl}
           companyName={quote.companyInfo.name}
@@ -1013,10 +994,12 @@ export const QuotePDFDocument: React.FC<QuotePDFDocumentProps> = ({
           customerReference={quote.customerReference}
           billingAddress={quote.billingAddress || quote.customer.address}
           shippingAddress={quote.shippingAddress}
+          createdDate={formatDate(quote.createdAt)}
+          validUntil={quote.validUntil ? formatDate(quote.validUntil) : undefined}
         />
 
         {/* Items Table */}
-        <PDFItemsTable items={lineItemsWithLabels} showDiscount={showDiscount} />
+        <PDFItemsTable items={lineItemsWithLabels} showDiscount={showDiscount} currency={quote.financials.currency} />
 
         {/* Totals */}
         <PDFTotalsSection
@@ -1024,8 +1007,6 @@ export const QuotePDFDocument: React.FC<QuotePDFDocumentProps> = ({
           taxTotal={quote.financials.totalTax}
           grandTotal={quote.financials.grandTotal}
           currency={quote.financials.currency}
-          overheadAmount={quote.financials.overheadAmount}
-          marginAmount={quote.financials.marginAmount}
         />
 
         {/* Payment Info */}

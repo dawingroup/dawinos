@@ -127,12 +127,25 @@ export function TaskCard({ task, onStart, onComplete, onViewDetails }: TaskCardP
     onComplete?.(task.id);
   };
 
+  // Urgency tier for visual indicator
+  const urgencyTier =
+    task.urgencyScore >= 150
+      ? 'bg-red-500'
+      : task.urgencyScore >= 100
+      ? 'bg-orange-500'
+      : task.urgencyScore >= 50
+      ? 'bg-blue-500'
+      : 'bg-gray-300';
+
   return (
     <Card
-      className="p-4 hover:bg-muted/50 transition-colors cursor-pointer"
+      className="p-0 hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden"
       onClick={handleCardClick}
     >
-      <div className="flex items-start gap-4">
+      <div className="flex items-stretch">
+        {/* Urgency indicator bar */}
+        <div className={`w-1 flex-shrink-0 ${urgencyTier}`} />
+        <div className="flex items-start gap-4 p-4 flex-1 min-w-0">
         {/* Priority & Status Column */}
         <div className="flex flex-col gap-1.5 flex-shrink-0">
           <PriorityBadge priority={task.priority} />
@@ -144,10 +157,10 @@ export function TaskCard({ task, onStart, onComplete, onViewDetails }: TaskCardP
           {/* Title */}
           <h3 className="font-medium text-sm line-clamp-1">{task.title}</h3>
 
-          {/* Description */}
-          {task.description && (
+          {/* Description - prefer AI description */}
+          {(task.aiDescription || task.description) && (
             <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
-              {task.description}
+              {task.aiDescription || task.description}
             </p>
           )}
 
@@ -218,6 +231,7 @@ export function TaskCard({ task, onStart, onComplete, onViewDetails }: TaskCardP
               <CheckSquare className="h-4 w-4 text-green-600" />
             </Button>
           )}
+        </div>
         </div>
       </div>
     </Card>

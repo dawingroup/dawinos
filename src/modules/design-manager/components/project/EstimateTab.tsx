@@ -4,12 +4,13 @@
  * Includes aggregated standard and special parts for material palette mapping
  */
 
-import { useState, useEffect } from 'react';
-import { RefreshCw, Download, AlertTriangle, Plus, Edit2, Trash2, Calculator, Layers, Package, Wrench, Sparkles } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { RefreshCw, Download, AlertTriangle, Plus, Edit2, Trash2, Calculator, Layers, Package, Wrench, Sparkles, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { NestingStudio } from '../production/NestingStudio';
 import { MaterialPaletteTable } from './MaterialPaletteTable';
-import { subscribeToDesignItems } from '../../services/firestore';
+import { subscribeToDesignItems, updateProject } from '../../services/firestore';
 import type { Project } from '@/shared/types';
 import type { DesignItem, StandardPartEntry, SpecialPartEntry } from '../../types';
 import {
@@ -171,14 +172,65 @@ export function EstimateTab({ project }: EstimateTabProps) {
     projectEstimateSettings.taxMode || 'exclusive'
   );
 
+  // Debounced save of estimate settings to Firestore
+  const settingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveEstimateSettings = useCallback((oh: number, mg: number, tx: number, tm: string) => {
+    if (settingsTimerRef.current) clearTimeout(settingsTimerRef.current);
+    settingsTimerRef.current = setTimeout(async () => {
+      if (!user?.uid && !user?.email) return;
+      try {
+        await updateProject(project.id, {
+          estimateSettings: { overheadPercent: oh, marginPercent: mg, taxRate: tx, taxMode: tm },
+        } as any, user.uid || user.email || '');
+      } catch (err) {
+        console.error('Failed to save estimate settings:', err);
+      }
+    }, 800);
+  }, [project.id, user]);
+
+  // Auto-save settings when they change (skip initial mount)
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    saveEstimateSettings(overheadPercent, marginPercent, taxRate, taxMode);
+  }, [overheadPercent, marginPercent, taxRate, taxMode, saveEstimateSettings]);
+
+  // Flush pending save on unmount
+  useEffect(() => {
+    return () => {
+      if (settingsTimerRef.current) clearTimeout(settingsTimerRef.current);
+    };
+  }, []);
+
   const projectData = project as unknown as Project;
   const projectEstimate = (project as any).consolidatedEstimate as ConsolidatedEstimate | undefined;
   const estimate = localEstimate || projectEstimate;
-  
+
   // Get optimization state
   const estimation = projectData.optimizationState?.estimation;
   const isEstimationValid = estimation && !estimation.invalidatedAt;
   const materialPalette = projectData.materialPalette?.entries || [];
+
+  // Check if project has any manufactured items that require optimization
+  const hasManufacturedItems = designItems.some(
+    item => !item.sourcingType ||
+            item.sourcingType === 'MANUFACTURED' ||
+            item.sourcingType === 'CUSTOM_FURNITURE_MILLWORK'
+  );
+
+  // Check if project has design documents or procured items
+  const hasNonManufacturedItems = designItems.some(
+    item => item.sourcingType === 'DESIGN_DOCUMENT' ||
+            item.sourcingType === 'PROCURED' ||
+            item.sourcingType === 'CONSTRUCTION'
+  );
+
+  // Determine if optimization is required
+  const requiresOptimization = hasManufacturedItems;
+  const canGenerateWithoutOptimization = hasNonManufacturedItems && !hasManufacturedItems;
 
   // Build custom config from settings
   const customConfig = {
@@ -190,19 +242,31 @@ export function EstimateTab({ project }: EstimateTabProps) {
 
   const handleGenerate = async () => {
     if (!user?.email) return;
-    
-    // Check if optimization has been run
-    if (!estimation || !isEstimationValid) {
-      setError('Please run the Nesting Studio optimization first before generating an estimate.');
+
+    // Check if optimization is required and has been run
+    if (requiresOptimization && (!estimation || !isEstimationValid)) {
+      setError('Please run the Nesting Studio optimization first before generating an estimate for manufactured items.');
       return;
     }
     
     setLoading(true);
     setError(null);
     try {
+      // Use empty estimation object if no optimization is required
+      const estimationToUse = estimation || {
+        partsByMaterial: [],
+        sheetsByMaterial: [],
+        totalArea: 0,
+        totalParts: 0,
+        totalSheets: 0,
+        totalWaste: 0,
+        wastePercentage: 0,
+        validAt: new Date(),
+      };
+
       const result = await calculateEstimateFromOptimization(
         project.id,
-        estimation,
+        estimationToUse,
         materialPalette,
         user.email,
         customConfig,
@@ -266,13 +330,24 @@ export function EstimateTab({ project }: EstimateTabProps) {
 
   return (
     <div className="space-y-4">
-      {/* No optimization warning */}
-      {!isEstimationValid && (
+      {/* No optimization warning - only show if manufactured items exist */}
+      {!isEstimationValid && requiresOptimization && !canGenerateWithoutOptimization && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
           <AlertTriangle className="h-5 w-5 text-amber-500" />
           <div>
-            <p className="font-medium text-amber-800">Optimization required</p>
-            <p className="text-sm text-amber-700">Run the Nesting Studio optimization below to generate an estimate</p>
+            <p className="font-medium text-amber-800">Optimization required for manufactured items</p>
+            <p className="text-sm text-amber-700">Run the Nesting Studio optimization below to generate an estimate for manufactured items</p>
+          </div>
+        </div>
+      )}
+
+      {/* Info message when only non-manufactured items exist */}
+      {canGenerateWithoutOptimization && !estimate && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
+          <Calculator className="h-5 w-5 text-blue-500" />
+          <div>
+            <p className="font-medium text-blue-800">Ready to generate estimate</p>
+            <p className="text-sm text-blue-700">This project has design documents or procured items that don't require optimization</p>
           </div>
         </div>
       )}
@@ -289,7 +364,7 @@ export function EstimateTab({ project }: EstimateTabProps) {
           </div>
           <button
             onClick={handleGenerate}
-            disabled={loading || !isEstimationValid}
+            disabled={loading || (requiresOptimization && !isEstimationValid)}
             className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -378,12 +453,12 @@ export function EstimateTab({ project }: EstimateTabProps) {
       {/* Summary */}
       {estimate && (
         <div className="space-y-4">
-          {/* Cost Breakdown */}
+          {/* Cost Breakdown (internal view) */}
           <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-            {/* Base Subtotal (pulled in from items before markup) */}
+            {/* Base Cost (before overhead and margin) */}
             <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500 uppercase">Base Subtotal</p>
-              <p className="text-xs text-gray-400 mb-1">(pulled in costs)</p>
+              <p className="text-xs text-gray-500 uppercase">Base Cost</p>
+              <p className="text-xs text-gray-400 mb-1">(before markup)</p>
               <p className="text-lg font-bold text-gray-900">
                 {estimate.currency} {Math.round(estimate.subtotal / ((1 + (estimate.overheadPercent || 0)) * (1 + (estimate.marginPercent || 0)))).toLocaleString()}
               </p>
@@ -404,7 +479,7 @@ export function EstimateTab({ project }: EstimateTabProps) {
                 +{estimate.currency} {(estimate.marginAmount || 0).toLocaleString()}
               </p>
             </div>
-            {/* Marked-up Subtotal */}
+            {/* Subtotal (with markup) */}
             <div className="bg-gray-100 rounded-lg p-3">
               <p className="text-xs text-gray-600 uppercase">Subtotal</p>
               <p className="text-xs text-gray-400 mb-1">(with markup)</p>
@@ -436,7 +511,7 @@ export function EstimateTab({ project }: EstimateTabProps) {
         <div className="flex items-center gap-2">
           <button
             onClick={handleGenerate}
-            disabled={loading || !isEstimationValid}
+            disabled={loading || (requiresOptimization && !isEstimationValid)}
             className="flex items-center gap-2 px-3 py-1.5 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 disabled:opacity-50"
           >
             <Calculator className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
@@ -481,9 +556,13 @@ export function EstimateTab({ project }: EstimateTabProps) {
           <Calculator className="w-12 h-12 text-gray-300 mx-auto mb-3" />
           <h3 className="text-lg font-medium text-gray-900">No estimate generated</h3>
           <p className="text-gray-500 mt-1">
-            {isEstimationValid 
+            {canGenerateWithoutOptimization
+              ? 'Click "Generate Estimate" to calculate costs for your design documents and procured items'
+              : isEstimationValid
               ? 'Click "Generate Estimate" to calculate costs from optimization'
-              : 'Run the Nesting Studio optimization below, then generate an estimate'}
+              : requiresOptimization
+              ? 'Run the Nesting Studio optimization below, then generate an estimate'
+              : 'Add some design items to the project to generate an estimate'}
           </p>
         </div>
       ) : (
@@ -511,15 +590,29 @@ export function EstimateTab({ project }: EstimateTabProps) {
                       item.category === 'procurement' ? 'bg-teal-100 text-teal-700' :
                       item.category === 'procurement-logistics' ? 'bg-sky-100 text-sky-700' :
                       item.category === 'procurement-customs' ? 'bg-orange-100 text-orange-700' :
+                      item.category === 'construction' ? 'bg-amber-100 text-amber-700' :
                       'bg-purple-100 text-purple-700'
                     }`}>
                       {ESTIMATE_CATEGORY_LABELS[item.category]}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-900">
-                    {item.description}
+                  <td className="px-4 py-3">
+                    {item.linkedDesignItemId ? (
+                      <Link
+                        to={`/design/project/${project.id}/item/${item.linkedDesignItemId}`}
+                        className="text-[#0A7C8E] hover:underline inline-flex items-center gap-1"
+                      >
+                        {item.description}
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                      </Link>
+                    ) : (
+                      <span className="text-gray-900">{item.description}</span>
+                    )}
                     {item.isManual && (
                       <span className="ml-2 text-xs text-gray-400">(manual)</span>
+                    )}
+                    {item.notes && (
+                      <p className="text-xs text-gray-400 mt-0.5">{item.notes}</p>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right text-gray-700">{item.quantity}</td>
@@ -614,7 +707,13 @@ export function EstimateTab({ project }: EstimateTabProps) {
           <div className="space-y-2">
             {estimate.errorChecks?.map((err, idx) => (
               <div key={idx} className="flex items-center gap-3 text-sm bg-white rounded p-2 border border-red-100">
-                <span className="font-medium text-gray-900">{err.itemName}</span>
+                <Link
+                  to={`/design/project/${project.id}/item/${err.itemId}`}
+                  className="font-medium text-[#0A7C8E] hover:underline inline-flex items-center gap-1"
+                >
+                  {err.itemName}
+                  <ExternalLink className="h-3 w-3 shrink-0" />
+                </Link>
                 <span className="text-red-600">→ {err.issue}</span>
               </div>
             ))}
@@ -739,8 +838,8 @@ export function EstimateTab({ project }: EstimateTabProps) {
                           </span>
                         </td>
                         <td className="px-4 py-2 text-center font-medium">{part.totalQuantity}</td>
-                        <td className="px-4 py-2 text-right text-gray-600">UGX {Math.round(part.avgUnitCost).toLocaleString()}</td>
-                        <td className="px-4 py-2 text-right font-medium text-orange-700">UGX {Math.round(part.totalCost).toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right text-gray-600">{estimate?.currency || 'UGX'} {Math.round(part.avgUnitCost).toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right font-medium text-orange-700">{estimate?.currency || 'UGX'} {Math.round(part.totalCost).toLocaleString()}</td>
                         <td className="px-4 py-2 text-xs text-gray-500 max-w-[200px] truncate" title={part.fromItems.join(', ')}>{part.fromItems.join(', ')}</td>
                       </tr>
                     ))}
@@ -748,7 +847,7 @@ export function EstimateTab({ project }: EstimateTabProps) {
                   <tfoot className="bg-orange-50 border-t border-orange-200">
                     <tr>
                       <td colSpan={4} className="px-4 py-2 text-right font-medium text-orange-800">Total Standard Parts</td>
-                      <td className="px-4 py-2 text-right font-bold text-orange-900">UGX {standardPartsTotal.toLocaleString()}</td>
+                      <td className="px-4 py-2 text-right font-bold text-orange-900">{estimate?.currency || 'UGX'} {standardPartsTotal.toLocaleString()}</td>
                       <td></td>
                     </tr>
                   </tfoot>
@@ -792,8 +891,8 @@ export function EstimateTab({ project }: EstimateTabProps) {
                         </td>
                         <td className="px-4 py-2 text-gray-600">{part.supplier || '-'}</td>
                         <td className="px-4 py-2 text-center font-medium">{part.totalQuantity}</td>
-                        <td className="px-4 py-2 text-right text-gray-600">UGX {Math.round(part.avgUnitCost).toLocaleString()}</td>
-                        <td className="px-4 py-2 text-right font-medium text-purple-700">UGX {Math.round(part.totalCost).toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right text-gray-600">{estimate?.currency || 'UGX'} {Math.round(part.avgUnitCost).toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right font-medium text-purple-700">{estimate?.currency || 'UGX'} {Math.round(part.totalCost).toLocaleString()}</td>
                         <td className="px-4 py-2 text-xs text-gray-500 max-w-[200px] truncate" title={part.fromItems.join(', ')}>{part.fromItems.join(', ')}</td>
                       </tr>
                     ))}
@@ -801,7 +900,7 @@ export function EstimateTab({ project }: EstimateTabProps) {
                   <tfoot className="bg-purple-50 border-t border-purple-200">
                     <tr>
                       <td colSpan={5} className="px-4 py-2 text-right font-medium text-purple-800">Total Special Parts</td>
-                      <td className="px-4 py-2 text-right font-bold text-purple-900">UGX {specialPartsTotal.toLocaleString()}</td>
+                      <td className="px-4 py-2 text-right font-bold text-purple-900">{estimate?.currency || 'UGX'} {specialPartsTotal.toLocaleString()}</td>
                       <td></td>
                     </tr>
                   </tfoot>

@@ -4,9 +4,9 @@
  * Similar to Katana's sales order list view
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronUp, ChevronDown, Package, ShoppingCart, Edit2, FileText, HardHat } from 'lucide-react';
+import { ChevronUp, ChevronDown, Package, ShoppingCart, Edit2, FileText, HardHat, GripVertical } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { EditDesignItemDialog } from '../design-item/EditDesignItemDialog';
 import { cn } from '@/shared/lib/utils';
@@ -19,13 +19,14 @@ import {
   getStageOrderForItem
 } from '../../utils/stage-gate';
 import { CONSTRUCTION_STAGES, normalizeSourcingType } from '../../types/deliverables';
+import { updateDesignItemOrder } from '../../services/firestore';
 
 interface DesignItemsTableProps {
   items: DesignItem[];
   projectId: string;
 }
 
-type SortField = 'name' | 'category' | 'readiness' | 'stage';
+type SortField = 'custom' | 'name' | 'category' | 'readiness' | 'stage';
 type SortDirection = 'asc' | 'desc';
 
 // Stage status for display
@@ -137,10 +138,23 @@ function ReadinessBadge({ readiness }: { readiness: number }) {
 
 export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
   const { user } = useAuth();
-  const [sortField, setSortField] = useState<SortField>('name');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [sortField, setSortField] = useState<SortField>('custom');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<DesignItem | null>(null);
+
+  const handleMoveItem = useCallback(async (itemList: DesignItem[], index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= itemList.length) return;
+
+    // Recompute sortOrder for all items in this group
+    const reordered = [...itemList];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    const updates = reordered.map((item, i) => ({ id: item.id, sortOrder: i }));
+    await updateDesignItemOrder(projectId, updates);
+  }, [projectId]);
 
   // Separate items by normalized type
   const manufacturedItems = useMemo(() =>
@@ -166,11 +180,14 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
     [items]
   );
 
-  // Sort items
-  const sortedManufactured = useMemo(() => {
-    return [...manufacturedItems].sort((a, b) => {
+  // Generic sort function
+  const sortItems = useCallback((itemList: DesignItem[], stageOrder: readonly DesignStage[]) => {
+    return [...itemList].sort((a, b) => {
       let comparison = 0;
       switch (sortField) {
+        case 'custom':
+          comparison = (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity);
+          break;
         case 'name':
           comparison = a.name.localeCompare(b.name);
           break;
@@ -180,84 +197,33 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
         case 'readiness':
           comparison = a.overallReadiness - b.overallReadiness;
           break;
-        case 'stage':
-          const aIndex = MANUFACTURING_STAGE_ORDER.indexOf(a.currentStage);
-          const bIndex = MANUFACTURING_STAGE_ORDER.indexOf(b.currentStage);
+        case 'stage': {
+          const aIndex = stageOrder.indexOf(a.currentStage);
+          const bIndex = stageOrder.indexOf(b.currentStage);
           comparison = aIndex - bIndex;
           break;
+        }
       }
       return sortDirection === 'asc' ? comparison : -comparison;
     });
-  }, [manufacturedItems, sortField, sortDirection]);
+  }, [sortField, sortDirection]);
 
-  const sortedProcured = useMemo(() => {
-    return [...procuredItems].sort((a, b) => {
-      let comparison = 0;
-      switch (sortField) {
-        case 'name':
-          comparison = a.name.localeCompare(b.name);
-          break;
-        case 'category':
-          comparison = (a.category || '').localeCompare(b.category || '');
-          break;
-        case 'readiness':
-          comparison = a.overallReadiness - b.overallReadiness;
-          break;
-        case 'stage':
-          const aIndex = PROCUREMENT_STAGE_ORDER.indexOf(a.currentStage);
-          const bIndex = PROCUREMENT_STAGE_ORDER.indexOf(b.currentStage);
-          comparison = aIndex - bIndex;
-          break;
-      }
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
-  }, [procuredItems, sortField, sortDirection]);
-
-  const sortedArchitectural = useMemo(() => {
-    return [...architecturalItems].sort((a, b) => {
-      let comparison = 0;
-      switch (sortField) {
-        case 'name':
-          comparison = a.name.localeCompare(b.name);
-          break;
-        case 'category':
-          comparison = (a.category || '').localeCompare(b.category || '');
-          break;
-        case 'readiness':
-          comparison = a.overallReadiness - b.overallReadiness;
-          break;
-        case 'stage':
-          const aIndex = ARCHITECTURAL_STAGE_ORDER.indexOf(a.currentStage);
-          const bIndex = ARCHITECTURAL_STAGE_ORDER.indexOf(b.currentStage);
-          comparison = aIndex - bIndex;
-          break;
-      }
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
-  }, [architecturalItems, sortField, sortDirection]);
-
-  const sortedConstruction = useMemo(() => {
-    return [...constructionItems].sort((a, b) => {
-      let comparison = 0;
-      switch (sortField) {
-        case 'name':
-          comparison = a.name.localeCompare(b.name);
-          break;
-        case 'category':
-          comparison = (a.category || '').localeCompare(b.category || '');
-          break;
-        case 'readiness':
-          comparison = a.overallReadiness - b.overallReadiness;
-          break;
-        case 'stage':
-          const aIndex = CONSTRUCTION_STAGES.indexOf(a.currentStage);
-          const bIndex = CONSTRUCTION_STAGES.indexOf(b.currentStage);
-          comparison = aIndex - bIndex;
-          break;
-      }
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
-  }, [constructionItems, sortField, sortDirection]);
+  const sortedManufactured = useMemo(() =>
+    sortItems(manufacturedItems, MANUFACTURING_STAGE_ORDER),
+    [manufacturedItems, sortItems]
+  );
+  const sortedProcured = useMemo(() =>
+    sortItems(procuredItems, PROCUREMENT_STAGE_ORDER),
+    [procuredItems, sortItems]
+  );
+  const sortedArchitectural = useMemo(() =>
+    sortItems(architecturalItems, ARCHITECTURAL_STAGE_ORDER),
+    [architecturalItems, sortItems]
+  );
+  const sortedConstruction = useMemo(() =>
+    sortItems(constructionItems, CONSTRUCTION_STAGES),
+    [constructionItems, sortItems]
+  );
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -302,6 +268,8 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
       </div>
     </th>
   );
+
+  const isCustomSort = sortField === 'custom';
 
   const renderTable = (
     title: string,
@@ -435,17 +403,49 @@ export function DesignItemsTable({ items, projectId }: DesignItemsTableProps) {
                     >
                       <span className="text-sm">{hasCosting ? '✓' : '○'}</span>
                     </td>
-                    <td className="w-16 px-2 py-2 text-center">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingItem(item);
-                        }}
-                        className="p-1.5 text-gray-500 hover:text-[#0A7C8E] hover:bg-gray-100 rounded transition-colors"
-                        title="Edit item"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                    <td className="w-24 px-2 py-2 text-center">
+                      <div className="flex items-center justify-center gap-0.5">
+                        {isCustomSort && (
+                          <>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleMoveItem(itemList, idx, 'up'); }}
+                              disabled={idx === 0}
+                              className={cn(
+                                "p-1 rounded transition-colors",
+                                idx === 0
+                                  ? "text-gray-300 cursor-not-allowed"
+                                  : "text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                              )}
+                              title="Move up"
+                            >
+                              <ChevronUp className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleMoveItem(itemList, idx, 'down'); }}
+                              disabled={idx === itemList.length - 1}
+                              className={cn(
+                                "p-1 rounded transition-colors",
+                                idx === itemList.length - 1
+                                  ? "text-gray-300 cursor-not-allowed"
+                                  : "text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                              )}
+                              title="Move down"
+                            >
+                              <ChevronDown className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingItem(item);
+                          }}
+                          className="p-1.5 text-gray-500 hover:text-[#0A7C8E] hover:bg-gray-100 rounded transition-colors"
+                          title="Edit item"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

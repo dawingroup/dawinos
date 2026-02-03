@@ -18,6 +18,9 @@ import {
   XCircle,
   ExternalLink,
   Folder,
+  Sparkles,
+  BookOpen,
+  FileText,
 } from 'lucide-react';
 import {
   collection,
@@ -47,11 +50,11 @@ import {
   SelectValue,
 } from '@/core/components/ui/select';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/core/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/core/components/ui/sheet';
 
 // ============================================
 // Types
@@ -90,6 +93,9 @@ interface GeneratedTask {
   updatedAt?: Timestamp;
   completedAt?: Timestamp;
   notes?: string;
+  aiDescription?: string;
+  aiChecklist?: { id: string; title: string; description: string; isRequired: boolean; order: number; completed: boolean }[];
+  aiRelevantDocuments?: { name: string; type: string; reason: string }[];
 }
 
 type StatusFilter = 'all' | 'pending' | 'in_progress' | 'completed' | 'blocked';
@@ -142,10 +148,22 @@ export function TaskManagementPanel() {
     const q = query(tasksRef, ...constraints);
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const taskData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as GeneratedTask[];
+      const taskData = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          id: doc.id,
+          checklistItems: (data.checklistItems || []).map((item: any, idx: number) => ({
+            id: item.id || String(idx + 1),
+            title: item.title || item.text || '',
+            description: item.description || '',
+            isRequired: item.isRequired ?? false,
+            isCompleted: item.isCompleted ?? item.completed ?? false,
+            completedAt: item.completedAt,
+            completedBy: item.completedBy,
+          })),
+        };
+      }) as GeneratedTask[];
 
       // Client-side filters
       let filtered = taskData;
@@ -470,7 +488,7 @@ export function TaskManagementPanel() {
                         <span className="font-medium">{task.title}</span>
                       </div>
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
-                        {task.description}
+                        {task.aiDescription || task.description}
                       </p>
                       <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                         {task.assignedToName && (
@@ -532,17 +550,17 @@ export function TaskManagementPanel() {
         </CardContent>
       </Card>
 
-      {/* Task Detail Dialog */}
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+      {/* Task Detail Drawer */}
+      <Sheet open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
               <ClipboardList className="h-5 w-5 text-green-500" />
               Task Details
-            </DialogTitle>
-          </DialogHeader>
+            </SheetTitle>
+          </SheetHeader>
           {selectedTask && (
-            <div className="space-y-6">
+            <div className="space-y-6 mt-6">
               {/* Header */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
@@ -550,7 +568,13 @@ export function TaskManagementPanel() {
                   {getStatusBadge(selectedTask.status)}
                 </div>
                 <h3 className="text-lg font-semibold">{selectedTask.title}</h3>
-                <p className="text-muted-foreground mt-1">{selectedTask.description}</p>
+                <p className="text-muted-foreground mt-1">{selectedTask.aiDescription || selectedTask.description}</p>
+                {selectedTask.aiDescription && (
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/60 mt-1">
+                    <Sparkles className="h-3 w-3" />
+                    AI-generated context
+                  </span>
+                )}
               </div>
 
               {/* Meta Info */}
@@ -662,6 +686,63 @@ export function TaskManagementPanel() {
                 </div>
               )}
 
+              {/* AI-Generated Checklist */}
+              {selectedTask.aiChecklist && selectedTask.aiChecklist.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-amber-500" />
+                    Suggested Steps
+                    <span className="text-xs text-muted-foreground/60 font-normal">AI-generated</span>
+                  </h4>
+                  <div className="space-y-2">
+                    {selectedTask.aiChecklist.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-start gap-3 p-3 border border-amber-200/50 bg-amber-50/30 dark:bg-amber-950/10 dark:border-amber-800/30 rounded-lg"
+                      >
+                        <span className="text-xs font-medium text-amber-600 mt-0.5 min-w-[18px]">
+                          {item.order}.
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm">
+                            {item.title}
+                            {item.isRequired && <span className="text-red-500 ml-1">*</span>}
+                          </p>
+                          {item.description && (
+                            <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Relevant Documents */}
+              {selectedTask.aiRelevantDocuments && selectedTask.aiRelevantDocuments.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-blue-500" />
+                    Relevant References
+                    <span className="text-xs text-muted-foreground/60 font-normal">AI-identified</span>
+                  </h4>
+                  <div className="space-y-2">
+                    {selectedTask.aiRelevantDocuments.map((doc, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start gap-3 p-3 border border-blue-200/50 bg-blue-50/30 dark:bg-blue-950/10 dark:border-blue-800/30 rounded-lg"
+                      >
+                        <FileText className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{doc.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{doc.reason}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Actions */}
               <div className="flex justify-between pt-4 border-t">
                 <div className="flex gap-2">
@@ -708,8 +789,8 @@ export function TaskManagementPanel() {
               </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

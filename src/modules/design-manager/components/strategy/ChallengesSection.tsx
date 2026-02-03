@@ -16,38 +16,41 @@ interface ChallengesSectionProps {
 }
 
 export function ChallengesSection({ challenges, onUpdate }: ChallengesSectionProps) {
+  // Safety check: provide default empty arrays if undefined
+  const safeChallenges = challenges || { painPoints: [], goals: [], constraints: [] };
+
   const [newPainPoint, setNewPainPoint] = useState('');
   const [newGoal, setNewGoal] = useState('');
   const [newConstraint, setNewConstraint] = useState('');
 
   const addPainPoint = () => {
     if (!newPainPoint.trim()) return;
-    onUpdate({ ...challenges, painPoints: [...challenges.painPoints, newPainPoint.trim()] });
+    onUpdate({ ...safeChallenges, painPoints: [...safeChallenges.painPoints, newPainPoint.trim()] });
     setNewPainPoint('');
   };
 
   const removePainPoint = (index: number) => {
-    onUpdate({ ...challenges, painPoints: challenges.painPoints.filter((_, i) => i !== index) });
+    onUpdate({ ...challenges, painPoints: safeChallenges.painPoints.filter((_, i) => i !== index) });
   };
 
   const addGoal = () => {
     if (!newGoal.trim()) return;
-    onUpdate({ ...challenges, goals: [...challenges.goals, newGoal.trim()] });
+    onUpdate({ ...challenges, goals: [...safeChallenges.goals, newGoal.trim()] });
     setNewGoal('');
   };
 
   const removeGoal = (index: number) => {
-    onUpdate({ ...challenges, goals: challenges.goals.filter((_, i) => i !== index) });
+    onUpdate({ ...challenges, goals: safeChallenges.goals.filter((_, i) => i !== index) });
   };
 
   const addConstraint = () => {
     if (!newConstraint.trim()) return;
-    onUpdate({ ...challenges, constraints: [...challenges.constraints, newConstraint.trim()] });
+    onUpdate({ ...challenges, constraints: [...safeChallenges.constraints, newConstraint.trim()] });
     setNewConstraint('');
   };
 
   const removeConstraint = (index: number) => {
-    onUpdate({ ...challenges, constraints: challenges.constraints.filter((_, i) => i !== index) });
+    onUpdate({ ...challenges, constraints: safeChallenges.constraints.filter((_, i) => i !== index) });
   };
 
   return (
@@ -59,7 +62,7 @@ export function ChallengesSection({ challenges, onUpdate }: ChallengesSectionPro
           <label className="text-sm font-medium text-gray-700">Pain Points</label>
         </div>
         <div className="space-y-2 mb-2">
-          {challenges.painPoints.map((point, index) => (
+          {safeChallenges.painPoints.map((point, index) => (
             <div key={index} className="flex items-center gap-2 p-2 bg-red-50 rounded-lg group">
               <span className="flex-1 text-sm text-red-800">{point}</span>
               <button
@@ -96,7 +99,7 @@ export function ChallengesSection({ challenges, onUpdate }: ChallengesSectionPro
           <label className="text-sm font-medium text-gray-700">Goals</label>
         </div>
         <div className="space-y-2 mb-2">
-          {challenges.goals.map((goal, index) => (
+          {safeChallenges.goals.map((goal, index) => (
             <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg group">
               <span className="flex-1 text-sm text-green-800">{goal}</span>
               <button
@@ -133,7 +136,7 @@ export function ChallengesSection({ challenges, onUpdate }: ChallengesSectionPro
           <label className="text-sm font-medium text-gray-700">Constraints</label>
         </div>
         <div className="space-y-2 mb-2">
-          {challenges.constraints.map((constraint, index) => (
+          {safeChallenges.constraints.map((constraint, index) => (
             <div key={index} className="flex items-center gap-2 p-2 bg-amber-50 rounded-lg group">
               <span className="flex-1 text-sm text-amber-800">{constraint}</span>
               <button

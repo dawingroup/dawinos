@@ -8,6 +8,8 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 
+const { generateTaskEnrichment, fetchEntityContext, GEMINI_API_KEY } = require('../ai/taskDescriptionGenerator');
+
 const db = admin.firestore();
 
 // Collections — unified with frontend (top-level collections)
@@ -265,6 +267,216 @@ const EVENT_TASK_RULES = {
       checklist: ['Review changes made', 'Verify data accuracy', 'Update related records if needed'],
     },
   ],
+
+  // --------------------------------------------------
+  // WhatsApp Communication Events
+  // --------------------------------------------------
+  whatsapp_message_received: [
+    {
+      title: 'Respond to WhatsApp from: {{entityName}}',
+      description: 'Customer sent a WhatsApp message that needs a response.',
+      defaultPriority: 'high',
+      assignToRole: 'design-manager',
+      checklist: [
+        'Review customer message',
+        'Check conversation context',
+        'Draft and send response',
+        'Log any action items',
+      ],
+    },
+  ],
+  whatsapp_window_expiring: [
+    {
+      title: 'WhatsApp window closing for: {{entityName}}',
+      description: 'The 24-hour messaging window is about to expire. Send template message if follow-up needed.',
+      defaultPriority: 'medium',
+      assignToRole: 'design-manager',
+      checklist: [
+        'Review conversation status',
+        'Determine if follow-up needed',
+        'Send template message if window closed',
+      ],
+    },
+  ],
+  whatsapp_unknown_contact: [
+    {
+      title: 'Match WhatsApp contact: {{entityName}}',
+      description: 'A WhatsApp message was received from an unknown phone number. Match it to an existing customer or create a new one.',
+      defaultPriority: 'medium',
+      assignToRole: 'design-manager',
+      checklist: [
+        'Check phone number against customer records',
+        'Link conversation to existing customer or create new customer',
+        'Respond to the message',
+      ],
+    },
+  ],
+
+  // --------------------------------------------------
+  // Manufacturing Order Events
+  // --------------------------------------------------
+  manufacturing_order_created: [
+    {
+      title: 'Review manufacturing order: {{entityName}}',
+      description: 'A new manufacturing order has been created. Review BOM and schedule production.',
+      defaultPriority: 'high',
+      assignToRole: 'production-planner',
+      checklist: [
+        'Review BOM completeness',
+        'Check material availability',
+        'Schedule production slot',
+        'Assign workstation',
+      ],
+    },
+  ],
+  manufacturing_order_approved: [
+    {
+      title: 'Prepare production for: {{entityName}}',
+      description: 'Manufacturing order approved and materials reserved. Prepare shop floor.',
+      defaultPriority: 'high',
+      assignToRole: 'production-manager',
+      checklist: [
+        'Verify material reservations',
+        'Prepare workstation and tooling',
+        'Brief shop floor team',
+        'Start production tracking',
+      ],
+    },
+  ],
+  manufacturing_order_stage_changed: [
+    {
+      title: 'MO stage update: {{entityName}}',
+      description: 'Manufacturing order has advanced to a new production stage.',
+      defaultPriority: 'medium',
+      assignToRole: 'production-manager',
+      checklist: [
+        'Verify previous stage completion',
+        'Prepare for next stage',
+        'Update production schedule',
+      ],
+    },
+  ],
+  manufacturing_order_completed: [
+    {
+      title: 'QC inspection for: {{entityName}}',
+      description: 'Manufacturing order is complete. Perform quality inspection before delivery.',
+      defaultPriority: 'high',
+      assignToRole: 'quality-inspector',
+      checklist: [
+        'Inspect finished item against specifications',
+        'Check dimensions and tolerances',
+        'Verify finish quality',
+        'Document any defects',
+        'Mark as passed or failed',
+      ],
+    },
+  ],
+  manufacturing_order_on_hold: [
+    {
+      title: 'Resolve MO hold: {{entityName}}',
+      description: 'Manufacturing order has been put on hold. Investigate and resolve the issue.',
+      defaultPriority: 'high',
+      assignToRole: 'production-manager',
+      checklist: [
+        'Review hold reason',
+        'Identify resolution path',
+        'Update production schedule',
+        'Resume when resolved',
+      ],
+    },
+  ],
+  material_shortage_detected: [
+    {
+      title: 'Resolve material shortage for: {{entityName}}',
+      description: 'Insufficient materials for manufacturing order. Create purchase order or find alternatives.',
+      defaultPriority: 'critical',
+      assignToRole: 'procurement-coordinator',
+      checklist: [
+        'Identify shortage items and quantities',
+        'Check alternative suppliers',
+        'Create purchase order if needed',
+        'Update MO schedule accordingly',
+      ],
+    },
+  ],
+  qc_inspection_failed: [
+    {
+      title: 'QC failure for: {{entityName}}',
+      description: 'Quality inspection failed. Address defects and determine corrective action.',
+      defaultPriority: 'critical',
+      assignToRole: 'production-manager',
+      checklist: [
+        'Review defect report',
+        'Determine if rework is possible',
+        'Schedule rework or replacement',
+        'Update client timeline if affected',
+      ],
+    },
+  ],
+
+  // --------------------------------------------------
+  // Purchase Order Events
+  // --------------------------------------------------
+  purchase_order_submitted_for_approval: [
+    {
+      title: 'Approve purchase order: {{entityName}}',
+      description: 'A purchase order requires approval before being sent to the supplier.',
+      defaultPriority: 'high',
+      assignToRole: 'procurement-manager',
+      checklist: [
+        'Review line items and pricing',
+        'Verify budget allocation',
+        'Check supplier terms',
+        'Approve or reject with notes',
+      ],
+    },
+  ],
+  purchase_order_approved: [
+    {
+      title: 'Send PO to supplier: {{entityName}}',
+      description: 'Purchase order has been approved. Send to supplier and confirm receipt.',
+      defaultPriority: 'medium',
+      assignToRole: 'procurement-coordinator',
+      checklist: [
+        'Send PO to supplier',
+        'Confirm supplier acknowledgement',
+        'Record expected delivery date',
+      ],
+    },
+  ],
+  goods_received: [
+    {
+      title: 'Process goods receipt: {{entityName}}',
+      description: 'Goods have been received. Verify quantities, inspect quality, and shelve.',
+      defaultPriority: 'high',
+      assignToRole: 'warehouse-manager',
+      checklist: [
+        'Verify received quantities against PO',
+        'Inspect for damage',
+        'Update stock levels',
+        'File delivery documentation',
+        'Notify requestor of receipt',
+      ],
+    },
+  ],
+
+  // --------------------------------------------------
+  // Enhanced Inventory Events
+  // --------------------------------------------------
+  stock_level_critical: [
+    {
+      title: 'Critical stock level: {{entityName}}',
+      description: 'An inventory item has fallen below its reorder level. Initiate replenishment.',
+      defaultPriority: 'high',
+      assignToRole: 'procurement-coordinator',
+      checklist: [
+        'Review current stock and demand',
+        'Check if PO already exists',
+        'Create purchase order if needed',
+        'Update reorder levels if appropriate',
+      ],
+    },
+  ],
 };
 
 /**
@@ -380,12 +592,74 @@ function calculateDueDate(priority) {
 }
 
 /**
+ * Enrich generated tasks with AI-generated descriptions, checklists, and relevant documents.
+ * Runs asynchronously after task creation — failures are non-blocking.
+ */
+async function enrichTasksWithAI(tasksInfo, eventData) {
+  // Fetch entity context once for all tasks (they share the same event)
+  const entityContext = await fetchEntityContext(eventData);
+
+  for (const taskInfo of tasksInfo) {
+    try {
+      const enrichment = await generateTaskEnrichment(taskInfo, eventData, entityContext);
+      if (!enrichment) continue;
+
+      const updateData = {
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        aiEnrichedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+
+      // AI description
+      if (enrichment.description) {
+        updateData.aiDescription = enrichment.description;
+      }
+
+      // AI-generated checklist (replaces the static checklist if present)
+      if (enrichment.checklist && enrichment.checklist.length > 0) {
+        updateData.aiChecklist = enrichment.checklist;
+      }
+
+      // Relevant documents from project/knowledge base
+      if (enrichment.relevantDocuments && enrichment.relevantDocuments.length > 0) {
+        updateData.aiRelevantDocuments = enrichment.relevantDocuments;
+      }
+
+      // AI urgency score
+      if (enrichment.urgencyScore != null) {
+        updateData.aiUrgencyScore = enrichment.urgencyScore;
+      }
+      if (enrichment.urgencyReason) {
+        updateData.aiUrgencyReason = enrichment.urgencyReason;
+      }
+
+      await db.collection(COLLECTIONS.GENERATED_TASKS).doc(taskInfo.taskId).update(updateData);
+
+      logger.info('AI enrichment added to task', {
+        taskId: taskInfo.taskId,
+        hasDescription: !!enrichment.description,
+        checklistItems: enrichment.checklist?.length || 0,
+        relevantDocs: enrichment.relevantDocuments?.length || 0,
+        urgencyScore: enrichment.urgencyScore,
+      });
+    } catch (err) {
+      logger.warn('Failed to enrich task with AI', {
+        taskId: taskInfo.taskId,
+        error: err.message,
+      });
+    }
+  }
+}
+
+/**
  * Trigger: Process new business events
  */
 const onBusinessEventCreated = onDocumentCreated(
   {
     document: 'businessEvents/{eventId}',
     region: 'europe-west1',
+    timeoutSeconds: 120,
+    memory: '512MiB',
+    secrets: [GEMINI_API_KEY],
   },
   async (event) => {
     const snapshot = event.data;
@@ -432,6 +706,7 @@ const onBusinessEventCreated = onDocumentCreated(
       const eventType = eventData.eventType;
       const taskRules = getTaskRulesForEvent(eventType);
       const generatedTaskIds = [];
+      const generatedTasksInfo = [];
 
       for (const rule of taskRules) {
         // Resolve assignee based on role and workload
@@ -481,12 +756,29 @@ const onBusinessEventCreated = onDocumentCreated(
         });
         generatedTaskIds.push(taskDoc.id);
 
+        // Track task info for AI enrichment
+        generatedTasksInfo.push({
+          taskId: taskDoc.id,
+          title: interpolateTitle(rule.title, eventData),
+          description: rule.description || '',
+          priority,
+          checklist: rule.checklist || [],
+        });
+
         logger.info('Task created', {
           taskId: taskDoc.id,
           title: rule.title,
           assignedTo: assignee?.assigneeName || 'unassigned',
           role: rule.assignToRole || 'none',
         });
+      }
+
+      // Enrich tasks with AI-generated descriptions, checklists, and relevant documents
+      // Awaited so enrichment completes before the function instance terminates
+      try {
+        await enrichTasksWithAI(generatedTasksInfo, eventData);
+      } catch (err) {
+        logger.warn('AI description enrichment failed (non-blocking)', { error: err.message });
       }
 
       // Mark event as processed with generated task IDs
@@ -810,6 +1102,9 @@ const TITLE_TO_ROLE_MAP = {
   'Coordinate procurement for:': 'procurement-coordinator',
   'Coordinate installation:': 'production-manager',
   'Inspect installation quality:': 'production-manager',
+  'Respond to WhatsApp from:': 'design-manager',
+  'WhatsApp window closing for:': 'design-manager',
+  'Match WhatsApp contact:': 'design-manager',
 };
 
 function determineRoleFromTitle(title) {

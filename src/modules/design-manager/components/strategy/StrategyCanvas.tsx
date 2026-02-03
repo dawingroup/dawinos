@@ -3,8 +3,9 @@
  * Main canvas for project strategy research with AI report generation
  */
 
-import { useState, useCallback, lazy, Suspense } from 'react';
-import { Target, Ruler, DollarSign, Search, Lightbulb, X, FileText, Download, Sparkles, Package, User } from 'lucide-react';
+import { useState, useCallback, lazy, Suspense, startTransition } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Target, Ruler, DollarSign, Search, Lightbulb, X, FileText, Download, Sparkles, Package, User, LayoutGrid, Workflow, Edit, Share2 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { functions } from '@/shared/services/firebase';
@@ -15,11 +16,16 @@ import { BudgetFrameworkSection } from './BudgetFrameworkSection';
 import { ResearchAssistant } from './ResearchAssistant';
 import { TrendInsightsPanel } from './TrendInsightsPanel';
 import { ProjectContextSection, DEFAULT_PROJECT_CONTEXT, type ProjectContext } from './ProjectContextSection';
+import { DesignBriefSection } from './DesignBriefSection';
+import { SaveStatusIndicator } from './SaveStatusIndicator';
+import { GuidedStrategyWorkflow } from './GuidedStrategyWorkflow';
 import { InlineRecommendations } from '@/shared/components/recommendations';
 import { useStrategyRecommendations } from '@/shared/hooks/useRecommendations';
 import { StrategyPDF } from '@/modules/strategy/components/StrategyPDF';
 import type { RecommendationItem } from '@/shared/services/recommendationService';
 import type { StrategyReport, GenerateStrategyInput } from '@/modules/strategy/types';
+import { useCustomerIntelligenceSuggestions, applyCustomerIntelligenceSuggestions } from '../../services/aiContextService';
+import { createStrategyReportFromGeneration } from '../../services/strategyReportService';
 
 // Lazy load AI components
 const ProjectScopingAI = lazy(() => 
@@ -39,18 +45,37 @@ interface StrategyCanvasProps {
 }
 
 export function StrategyCanvas({ projectId, projectName, projectCode, clientBrief, userId, onClose }: StrategyCanvasProps) {
+  const navigate = useNavigate();
+
   const {
     strategy,
     messages,
     isLoading,
     isSending,
     error,
+    saveStatus,
+    lastSaved,
+    isSynced,
     updateStrategy,
     sendQuery,
     saveFinding,
     deleteFinding,
     clearError,
   } = useStrategyResearch(projectId, userId);
+
+  // View mode toggle (Guided vs All Sections)
+  const [viewMode, setViewMode] = useState<'guided' | 'all-sections'>(() => {
+    // Load from localStorage
+    const saved = localStorage.getItem(`strategy-view-mode-${projectId}`);
+    return (saved as 'guided' | 'all-sections') || 'all-sections';
+  });
+
+  const handleViewModeChange = (mode: 'guided' | 'all-sections') => {
+    localStorage.setItem(`strategy-view-mode-${projectId}`, mode);
+    startTransition(() => {
+      setViewMode(mode);
+    });
+  };
 
   // Reserved for future panel switching
   const [_activePanel] = useState<'research' | 'findings'>('research');
@@ -60,9 +85,13 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
   const [generatedReport, setGeneratedReport] = useState<StrategyReport | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [showReportPanel, setShowReportPanel] = useState(false);
+  const [activeReportId, setActiveReportId] = useState<string | null>(null);
 
   // Project Scoping AI state - used to feed into Strategy Report
   const [scopingResult, setScopingResult] = useState<any>(null);
+
+  // Design brief → AI Scoping bridge
+  const [briefForScoping, setBriefForScoping] = useState<string | undefined>(undefined);
 
   // Enhanced context state
   const [projectContext, setProjectContext] = useState<ProjectContext>(DEFAULT_PROJECT_CONTEXT);
@@ -76,6 +105,19 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
     priceSensitivity?: number;
     segment?: string;
   } | null>(null);
+
+  // Customer intelligence suggestions
+  const { hasSuggestions, suggestions, canApply } = useCustomerIntelligenceSuggestions(customerIntelligence, strategy);
+  const [showSuggestionsBanner, setShowSuggestionsBanner] = useState(false);
+
+  // Handle applying customer intelligence suggestions
+  const handleApplySuggestions = useCallback(() => {
+    if (!strategy || !canApply) return;
+
+    const updatedStrategy = applyCustomerIntelligenceSuggestions(strategy, suggestions);
+    updateStrategy(updatedStrategy);
+    setShowSuggestionsBanner(false);
+  }, [strategy, suggestions, canApply, updateStrategy]);
 
   // Handle customer intelligence data
   const handleCustomerContextReady = useCallback((context: any) => {
@@ -99,6 +141,8 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
         },
       }));
     }
+    // Show suggestions banner when customer intelligence is loaded
+    setShowSuggestionsBanner(true);
   }, []);
 
   // Contextual recommendations based on strategy data
@@ -208,6 +252,35 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
       });
 
       setGeneratedReport(result.data);
+
+      // NEW: Persist generated report to Firestore
+      if (userId) {
+        try {
+          const savedReport = await createStrategyReportFromGeneration(
+            projectId,
+            result.data,
+            userId,
+            {
+              projectName: projectName || 'Untitled Project',
+              projectType: projectContext.project.type || scopingResult?.entities?.projectType || strategy?.spaceParameters?.spaceType || 'Custom Millwork',
+              clientBrief: clientBrief || 'Custom millwork project',
+              location: projectContext.project.location || scopingResult?.entities?.location || 'East Africa',
+              year: new Date().getFullYear(),
+              constraints: strategy?.challenges?.constraints || [],
+              painPoints: strategy?.challenges?.painPoints || [],
+              goals: strategy?.challenges?.goals || [],
+              budgetTier: strategy?.budgetFramework?.tier,
+            },
+            strategy
+          );
+          setActiveReportId(savedReport.id);
+          console.log('Strategy report persisted:', savedReport.id);
+        } catch (persistError) {
+          console.error('Failed to persist report:', persistError);
+          // Don't fail the whole operation if persistence fails
+        }
+      }
+
       setShowReportPanel(true);
     } catch (err) {
       console.error('Report generation error:', err);
@@ -226,18 +299,54 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="bg-gray-50 min-h-full">
       {/* Header - sticky below AppShell header */}
-      <div className="bg-white border-b border-gray-200 sticky top-14 lg:top-12 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
+        <div className="px-4 sm:px-6 py-3">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Project Strategy</h1>
-              {projectName && (
-                <p className="text-sm text-gray-500 mt-1">{projectName}</p>
-              )}
+            <div className="flex items-center gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Project Strategy</h1>
+                {projectName && (
+                  <p className="text-sm text-gray-500 mt-1">{projectName}</p>
+                )}
+              </div>
+
+              {/* Save Status Indicator */}
+              <SaveStatusIndicator
+                saveStatus={saveStatus}
+                lastSaved={lastSaved}
+                className="ml-4"
+              />
             </div>
             <div className="flex items-center gap-3">
+              {/* View Mode Toggle */}
+              <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg">
+                <button
+                  onClick={() => handleViewModeChange('guided')}
+                  className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    viewMode === 'guided'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Guided workflow (step-by-step)"
+                >
+                  <Workflow className="w-4 h-4" />
+                  Guided
+                </button>
+                <button
+                  onClick={() => handleViewModeChange('all-sections')}
+                  className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    viewMode === 'all-sections'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="All sections (free-form)"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                  All Sections
+                </button>
+              </div>
               {/* Generate AI Report Button */}
               <button
                 onClick={handleGenerateReport}
@@ -283,7 +392,7 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
 
       {/* Error Banners */}
       {(error || reportError) && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+        <div className="px-4 sm:px-6 py-3">
           <div className="flex items-center justify-between p-3 bg-red-50 border border-red-100 rounded-lg">
             <p className="text-sm text-red-600">{error || reportError}</p>
             <button onClick={() => { clearError(); setReportError(null); }} className="text-red-400 hover:text-red-600">
@@ -293,11 +402,87 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
         </div>
       )}
 
+      {/* Customer Intelligence Suggestions Banner */}
+      {showSuggestionsBanner && hasSuggestions && suggestions && (
+        <div className="px-4 sm:px-6 py-3">
+          <div className="p-4 bg-gradient-to-r from-teal-50 to-cyan-50 border-2 border-teal-200 rounded-lg shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 p-2 bg-teal-100 rounded-lg">
+                <User className="w-5 h-5 text-teal-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-teal-900 mb-1">
+                  Customer Intelligence Available
+                </h3>
+                <p className="text-sm text-teal-700 mb-3">
+                  We've analyzed customer preferences. Apply these suggestions to auto-populate your strategy:
+                </p>
+                <ul className="space-y-1 text-sm text-teal-800 mb-3">
+                  {suggestions.materialPreferences.length > 0 && (
+                    <li className="flex items-start gap-2">
+                      <span className="text-teal-500 mt-0.5">•</span>
+                      <span>Material preferences: {suggestions.materialPreferences.join(', ')}</span>
+                    </li>
+                  )}
+                  {suggestions.budgetTier && (
+                    <li className="flex items-start gap-2">
+                      <span className="text-teal-500 mt-0.5">•</span>
+                      <span>Budget tier: {suggestions.budgetTier}</span>
+                    </li>
+                  )}
+                  {suggestions.qualityExpectations && (
+                    <li className="flex items-start gap-2">
+                      <span className="text-teal-500 mt-0.5">•</span>
+                      <span>Quality expectations: {suggestions.qualityExpectations}</span>
+                    </li>
+                  )}
+                </ul>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleApplySuggestions}
+                    className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Apply Customer Preferences
+                  </button>
+                  <button
+                    onClick={() => setShowSuggestionsBanner(false)}
+                    className="px-4 py-2 text-sm text-teal-700 hover:text-teal-900 transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSuggestionsBanner(false)}
+                className="flex-shrink-0 text-teal-400 hover:text-teal-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Left Column - Strategy Inputs */}
-          <div className="lg:col-span-8 space-y-4">
+      {viewMode === 'guided' ? (
+        /* Guided Workflow View */
+        <GuidedStrategyWorkflow
+          projectId={projectId}
+          projectName={projectName}
+          projectCode={projectCode}
+          userId={userId}
+          strategy={strategy}
+          onUpdate={updateStrategy}
+          onGenerateReport={handleGenerateReport}
+          onClose={onClose}
+        />
+      ) : (
+        /* All Sections View (Traditional) */
+        <div className="px-4 sm:px-6 py-4">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            {/* Left Column - Strategy Inputs */}
+            <div className="lg:col-span-8 space-y-4">
             {/* Project Context - Customer & Project Details */}
             <div className="bg-white rounded-xl border-2 border-blue-200 p-4 bg-gradient-to-br from-blue-50 to-white">
               <div className="flex items-center gap-2 mb-3">
@@ -313,6 +498,15 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
                 onUpdate={setProjectContext}
                 customerName={projectContext.customer.name}
                 projectName={projectName}
+              />
+            </div>
+
+            {/* Design Document Brief */}
+            <div className="bg-white rounded-xl border-2 border-teal-200 p-4 bg-gradient-to-br from-teal-50 to-white">
+              <DesignBriefSection
+                brief={strategy?.designBrief || ''}
+                onUpdate={(value) => updateStrategy({ designBrief: value })}
+                onSendToScoping={(text) => setBriefForScoping(text)}
               />
             </div>
 
@@ -333,6 +527,7 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
                 <ProjectScopingAI
                   projectId={projectId}
                   projectName={projectName}
+                  initialBriefText={briefForScoping}
                   onScopingComplete={(result) => {
                     console.log('Scoping complete:', result);
                     setScopingResult(result);
@@ -475,13 +670,14 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
                 onSaveFinding={saveFinding}
               />
             </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Generated Report Slide-out Panel */}
       {showReportPanel && generatedReport && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
+        <div className="fixed inset-0 z-[60] overflow-hidden">
           <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setShowReportPanel(false)} />
           <div className="absolute right-0 top-0 h-full w-full max-w-2xl bg-white shadow-xl overflow-y-auto">
             {/* Report Header */}
@@ -611,7 +807,7 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
               </div>
             </div>
 
-            {/* Report Footer with Download */}
+            {/* Report Footer with Actions */}
             <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex justify-between items-center">
               <button
                 onClick={() => setShowReportPanel(false)}
@@ -619,25 +815,55 @@ export function StrategyCanvas({ projectId, projectName, projectCode, clientBrie
               >
                 Close
               </button>
-              <PDFDownloadLink
-                document={<StrategyPDF report={generatedReport} />}
-                fileName={`${projectCode || projectId}-strategy-${new Date().toISOString().split('T')[0]}.pdf`}
-                className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-              >
-                {({ loading }) => (
-                  loading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                      Preparing...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4" />
-                      Download PDF
-                    </>
-                  )
+              <div className="flex items-center gap-2">
+                {/* Open in Editor Button */}
+                {activeReportId && (
+                  <button
+                    onClick={() => navigate(`/projects/${projectId}/strategy-report/${activeReportId}`)}
+                    className="flex items-center gap-2 px-4 py-2 border border-indigo-300 text-indigo-600 rounded-lg hover:bg-indigo-50"
+                    title="Open in full editor to review and update"
+                  >
+                    <Edit className="w-4 h-4" />
+                    Open in Editor
+                  </button>
                 )}
-              </PDFDownloadLink>
+
+                {/* Share to Client Button (placeholder - will implement modal later) */}
+                {activeReportId && (
+                  <button
+                    onClick={() => {
+                      // TODO: Implement share dialog
+                      alert('Share functionality coming soon!');
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 border border-green-300 text-green-600 rounded-lg hover:bg-green-50"
+                    title="Share with client via portal"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    Share to Client
+                  </button>
+                )}
+
+                {/* Download PDF Button */}
+                <PDFDownloadLink
+                  document={<StrategyPDF report={generatedReport} />}
+                  fileName={`${projectCode || projectId}-strategy-${new Date().toISOString().split('T')[0]}.pdf`}
+                  className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                >
+                  {({ loading }) => (
+                    loading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                        Preparing...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        Download PDF
+                      </>
+                    )
+                  )}
+                </PDFDownloadLink>
+              </div>
             </div>
           </div>
         </div>

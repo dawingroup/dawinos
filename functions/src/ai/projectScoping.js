@@ -1,18 +1,20 @@
 /**
  * Unified Project Scoping AI
- * 
- * Combines brief analysis with strategy research into a single system
- * that generates categorized deliverables from natural language inputs.
- * 
+ *
+ * Hybrid Regex + LLM approach for deliverable extraction from design briefs.
+ * Combines structured pattern matching with LLM intelligence for maximum accuracy.
+ *
  * Features:
- * - Entity extraction with multiplier detection ("32 rooms, each with...")
+ * - Step 1: Fast regex extraction for structured patterns (32 rooms, each with wardrobe)
+ * - Step 2: LLM validation & enhancement with full strategy context
+ * - Step 3: Confidence scoring with reasoning and ambiguities
+ * - Step 4: Budget tier multipliers for pricing hints
  * - Room-based deliverable generation using hospitality ontology
  * - Feature Library matching for manufacturability
  * - Google Search grounding for trend research
- * - Katana inventory verification
- * - Streaming progress updates
- * 
- * Based on Comprehensive AI Architecture specification.
+ * - Strategy context enrichment (budget tier, space parameters, material preferences)
+ *
+ * Based on Comprehensive AI Architecture specification + Strategy Enhancement Plan.
  */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
@@ -162,6 +164,131 @@ const ITEM_PATTERNS = [
   { pattern: /credenza|sideboard/gi, type: 'credenza' },
   { pattern: /display\s*(?:unit|cabinet|case)/gi, type: 'display_unit' },
 ];
+
+// ============================================
+// Strategy Context Integration
+// ============================================
+
+/**
+ * Fetch project strategy from Firestore
+ * @param {string} projectId
+ * @returns {Promise<Object|null>} Project strategy data
+ */
+async function fetchProjectStrategy(projectId) {
+  if (!projectId) return null;
+
+  try {
+    const strategyDoc = await db.collection('projectStrategy').doc(projectId).get();
+    if (!strategyDoc.exists) return null;
+
+    return {
+      id: strategyDoc.id,
+      ...strategyDoc.data(),
+    };
+  } catch (error) {
+    console.warn('Failed to fetch project strategy:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Build unified AI context from strategy, customer intelligence, and brief
+ * @param {Object} strategy - Project strategy
+ * @param {string} briefText - Design brief text
+ * @returns {Object} Unified context for LLM
+ */
+function buildStrategyAIContext(strategy, briefText) {
+  if (!strategy) return null;
+
+  return {
+    projectContext: {
+      type: strategy.projectContext?.type,
+      location: strategy.projectContext?.location,
+      country: strategy.projectContext?.country,
+      timeline: strategy.projectContext?.timeline,
+    },
+    spaceParameters: strategy.spaceParameters ? {
+      totalArea: strategy.spaceParameters.totalArea,
+      areaUnit: strategy.spaceParameters.areaUnit,
+      spaceType: strategy.spaceParameters.spaceType,
+      circulationPercent: strategy.spaceParameters.circulationPercent,
+    } : null,
+    budgetFramework: strategy.budgetFramework ? {
+      tier: strategy.budgetFramework.tier,
+      targetAmount: strategy.budgetFramework.targetAmount,
+      currency: strategy.budgetFramework.currency,
+      priorities: strategy.budgetFramework.priorities,
+    } : null,
+    materialPreferences: strategy.projectContext?.style?.materialPreferences || [],
+    avoidMaterials: strategy.projectContext?.style?.avoidMaterials || [],
+    qualityExpectations: strategy.projectContext?.requirements?.qualityExpectations,
+    designBrief: briefText,
+  };
+}
+
+// ============================================
+// Confidence Scoring
+// ============================================
+
+/**
+ * Calculate confidence score with reasoning
+ * @param {Object} deliverable
+ * @param {Object} extractionMethod - How item was extracted
+ * @returns {Object} Confidence with reasoning
+ */
+function calculateConfidence(deliverable, extractionMethod) {
+  let score = 0.5; // Base score
+  const reasoning = [];
+  const ambiguities = [];
+
+  // Boost for regex pattern match
+  if (extractionMethod.method === 'regex') {
+    score += 0.25;
+    reasoning.push('Extracted via structured pattern matching');
+  }
+
+  // Boost for template/ontology match
+  if (deliverable.roomType && ROOM_ONTOLOGY[deliverable.roomType]) {
+    score += 0.15;
+    reasoning.push(`Matched to ${ROOM_ONTOLOGY[deliverable.roomType].name} template`);
+  }
+
+  // Boost for Feature Library match
+  if (deliverable.manufacturing?.capabilityVerified) {
+    score += 0.1;
+    reasoning.push('Verified against Feature Library');
+  } else if (deliverable.category === 'MANUFACTURED') {
+    ambiguities.push('No Feature Library match - custom fabrication required');
+  }
+
+  // Boost for LLM validation
+  if (extractionMethod.llmValidated) {
+    score += 0.1;
+    reasoning.push('Validated by AI model');
+  }
+
+  // Penalty for missing specifications
+  if (!deliverable.specifications || !deliverable.specifications.dimensions) {
+    score -= 0.05;
+    ambiguities.push('Dimensions need clarification');
+  }
+
+  // Penalty for custom items
+  if (deliverable.itemType === 'custom') {
+    score -= 0.15;
+    ambiguities.push('Custom item requires detailed specification');
+  }
+
+  // Clamp score between 0 and 1
+  score = Math.max(0, Math.min(1, score));
+
+  return {
+    score: Math.round(score * 100) / 100,
+    reasoning: reasoning.join('; '),
+    ambiguities,
+    extractionMethod: extractionMethod.method,
+  };
+}
 
 // ============================================
 // Scoping AI Functions
@@ -385,7 +512,7 @@ const projectScoping = onCall({
   }
 
   const userId = request.auth.uid;
-  const { 
+  const {
     briefText,
     projectId,
     projectName,
@@ -393,6 +520,7 @@ const projectScoping = onCall({
     location: explicitLocation,
     includeResearch = true,
     customerId,
+    strategyId, // Optional: explicit strategy ID
   } = request.data;
 
   // 2. Validate input
@@ -422,11 +550,22 @@ const projectScoping = onCall({
   try {
     const startTime = Date.now();
 
-    // 4. Entity Extraction
-    console.log('Phase 1: Entity extraction...');
+    // 4. Fetch Project Strategy (if available)
+    console.log('Phase 0: Fetching project strategy...');
+    const strategy = await fetchProjectStrategy(strategyId || projectId);
+    const strategyContext = strategy ? buildStrategyAIContext(strategy, briefText) : null;
+
+    if (strategyContext) {
+      console.log(`Strategy loaded: Budget tier ${strategyContext.budgetFramework?.tier}, Space: ${strategyContext.spaceParameters?.totalArea} ${strategyContext.spaceParameters?.areaUnit}`);
+    } else {
+      console.log('No strategy context available - using defaults');
+    }
+
+    // 5. Entity Extraction (Step 1: Regex)
+    console.log('Phase 1: Entity extraction (regex)...');
     const entities = extractEntities(briefText);
-    entities.projectType = explicitProjectType || entities.projectType;
-    entities.location = explicitLocation || entities.location || 'East Africa';
+    entities.projectType = explicitProjectType || strategyContext?.projectContext?.type || entities.projectType;
+    entities.location = explicitLocation || strategyContext?.projectContext?.location || entities.location || 'East Africa';
 
     console.log(`Extracted: ${entities.roomGroups.length} room groups, type: ${entities.projectType}`);
 
@@ -470,42 +609,85 @@ const projectScoping = onCall({
 
     const model = genAI.getGenerativeModel(modelConfig);
 
+    // Build context-aware prompt
+    const strategyContextStr = strategyContext ? `
+STRATEGY CONTEXT:
+- Budget Tier: ${strategyContext.budgetFramework?.tier || 'standard'} (economy=0.7x, standard=1.0x, premium=1.5x, luxury=2.5x)
+- Target Budget: ${strategyContext.budgetFramework?.targetAmount ? `${strategyContext.budgetFramework.targetAmount} ${strategyContext.budgetFramework.currency}` : 'Not specified'}
+- Space: ${strategyContext.spaceParameters?.totalArea || 'Not specified'} ${strategyContext.spaceParameters?.areaUnit || ''}
+- Space Type: ${strategyContext.spaceParameters?.spaceType || 'Not specified'}
+- Material Preferences: ${strategyContext.materialPreferences?.join(', ') || 'None specified'}
+- Materials to Avoid: ${strategyContext.avoidMaterials?.join(', ') || 'None specified'}
+- Quality Expectations: ${strategyContext.qualityExpectations || 'Standard'}
+` : 'STRATEGY CONTEXT: Not available - using defaults';
+
     const enhancementPrompt = `You are a design-to-production manufacturing expert for Dawin Group (custom millwork company in ${entities.location}).
 
 PROJECT BRIEF:
 ${briefText}
 
-EXTRACTED DELIVERABLES (${deliverables.length} types, ${deliverables.reduce((s, d) => s + d.quantity, 0)} total units):
-${JSON.stringify(deliverables.slice(0, 20), null, 2)}
+${strategyContextStr}
+
+REGEX-EXTRACTED DELIVERABLES (${deliverables.length} types, ${deliverables.reduce((s, d) => s + d.quantity, 0)} total units):
+${JSON.stringify(deliverables.slice(0, 20).map(d => ({
+  id: d.id,
+  name: d.name,
+  itemType: d.itemType,
+  category: d.category,
+  quantity: d.quantity,
+  roomCount: d.roomCount,
+})), null, 2)}
 
 PROJECT TYPE: ${entities.projectType || 'custom'}
 LOCATION: ${entities.location}
 
-TASKS:
-1. Validate the extracted deliverables against the brief
-2. Identify any items mentioned in the brief that were NOT extracted
-3. Suggest default specifications for key items (dimensions, materials, finishes)
-4. Flag any ambiguities requiring client clarification
-${includeResearch ? '5. Research current design trends for this project type and location' : ''}
+HYBRID EXTRACTION TASKS:
+1. **Validation**: Review the regex-extracted deliverables. Are they accurate? Any duplicates or errors?
+2. **LLM Extraction**: Scan the brief for items the regex patterns MISSED (especially natural language descriptions, specialty items, or unique custom elements)
+3. **Specifications**: For each item (regex + LLM extracted), suggest:
+   - Dimensions (in mm) - use space parameters and budget tier as guidance
+   - Materials - align with material preferences from strategy
+   - Finish - align with quality expectations
+   - Complexity (low/medium/high)
+4. **Budget Tier Hints**: Apply budget tier multiplier to pricing suggestions (e.g., luxury = 2.5x standard cost)
+5. **Ambiguities**: Flag any items needing client clarification (vague descriptions, conflicting requirements)
+${includeResearch ? '6. **Trend Research**: Research current design trends for this project type and location (use Google Search)' : ''}
 
 Return a JSON object with:
 {
   "validation": {
     "extractedCorrectly": true/false,
-    "missingItems": ["item descriptions not captured"],
-    "corrections": ["any corrections needed"]
+    "regexAccuracy": "high|medium|low",
+    "duplicates": ["item IDs that are duplicates"],
+    "corrections": ["any corrections needed to regex results"]
   },
+  "llmExtractedItems": [
+    {
+      "name": "item name from brief",
+      "category": "MANUFACTURED|PROCURED|DESIGN_DOCUMENT|CONSTRUCTION",
+      "quantity": number,
+      "reasoning": "why regex missed this",
+      "confidence": "high|medium|low"
+    }
+  ],
   "specifications": {
     "itemType": {
-      "suggestedDimensions": {"width": mm, "height": mm, "depth": mm},
-      "suggestedMaterial": "material name",
+      "suggestedDimensions": {"width": number, "height": number, "depth": number},
+      "suggestedMaterial": "material name (from preferences if available)",
       "suggestedFinish": "finish type",
-      "complexity": "low|medium|high"
+      "complexity": "low|medium|high",
+      "estimatedCostMultiplier": number (based on budget tier)
     }
   },
-  "ambiguities": ["items needing clarification"],
+  "ambiguities": [
+    {
+      "itemType": "item type or 'general'",
+      "question": "clarification needed",
+      "severity": "critical|important|minor"
+    }
+  ],
   "trendInsights": ${includeResearch ? '["current trends for this project type"]' : 'null'},
-  "recommendations": ["strategic recommendations"]
+  "recommendations": ["strategic recommendations considering budget tier and quality expectations"]
 }`;
 
     const result = await model.generateContent({
@@ -536,30 +718,72 @@ Return a JSON object with:
             material: specs.suggestedMaterial || null,
             finish: specs.suggestedFinish || null,
             complexity: specs.complexity || 'medium',
+            estimatedCostMultiplier: specs.estimatedCostMultiplier || 1.0,
           };
+
+          // Update confidence with enhanced scoring
+          const confidence = calculateConfidence(deliverable, {
+            method: 'regex',
+            llmValidated: true,
+          });
+          deliverable.aiMetadata.confidenceScore = confidence.score;
+          deliverable.aiMetadata.reasoning = confidence.reasoning;
+          deliverable.aiMetadata.ambiguities = confidence.ambiguities;
+          deliverable.aiMetadata.extractionMethod = 'hybrid-regex';
         }
       }
     }
 
-    // Add missing items from AI validation
-    if (aiEnhancement?.validation?.missingItems?.length > 0) {
+    // Add LLM-extracted items (Step 2: LLM catches what regex missed)
+    if (aiEnhancement?.llmExtractedItems?.length > 0) {
       let nextId = deliverables.length + 1;
-      for (const missingItem of aiEnhancement.validation.missingItems) {
-        deliverables.push({
-          id: `del_${String(nextId++).padStart(3, '0')}`,
-          name: missingItem,
-          itemType: 'custom',
-          category: 'MANUFACTURED',
+      for (const llmItem of aiEnhancement.llmExtractedItems) {
+        const newDeliverable = {
+          id: `del_llm_${String(nextId++).padStart(3, '0')}`,
+          name: llmItem.name,
+          itemType: llmItem.itemType || 'custom',
+          category: llmItem.category || 'MANUFACTURED',
           subcategory: 'specialty',
-          quantity: 1,
+          quantity: llmItem.quantity || 1,
           specifications: null,
           manufacturing: { capabilityVerified: false },
           aiMetadata: {
-            confidenceScore: 0.6,
-            sourceReferences: [{ type: 'ai_extraction', text: missingItem }],
-            requiresClarification: true,
+            confidenceScore: llmItem.confidence === 'high' ? 0.8 : llmItem.confidence === 'medium' ? 0.65 : 0.5,
+            sourceReferences: [{
+              type: 'llm_extraction',
+              text: llmItem.name,
+              reasoning: llmItem.reasoning,
+            }],
+            reasoning: llmItem.reasoning || 'Extracted via LLM (regex missed)',
+            ambiguities: llmItem.confidence === 'low' ? ['Low confidence - needs verification'] : [],
+            requiresClarification: llmItem.confidence !== 'high',
+            extractionMethod: 'hybrid-llm',
           },
-        });
+        };
+
+        // Apply strategy context if available
+        if (strategyContext) {
+          newDeliverable.strategyContext = {
+            budgetTier: strategyContext.budgetFramework?.tier || 'standard',
+            scopingConfidence: newDeliverable.aiMetadata.confidenceScore,
+          };
+        }
+
+        deliverables.push(newDeliverable);
+      }
+    }
+
+    // Add strategy context to all regex-extracted deliverables
+    if (strategyContext) {
+      for (const deliverable of deliverables) {
+        if (!deliverable.strategyContext) {
+          deliverable.strategyContext = {
+            budgetTier: strategyContext.budgetFramework?.tier || 'standard',
+            spaceMultiplier: deliverable.roomCount || 1,
+            scopingConfidence: deliverable.aiMetadata?.confidenceScore || 0.75,
+            deliverableType: deliverable.itemType,
+          };
+        }
       }
     }
 
@@ -589,13 +813,33 @@ Return a JSON object with:
       projectId,
       projectName: projectName || 'Untitled Project',
       generatedAt: new Date().toISOString(),
-      aiModel: 'gemini-2.0-flash',
+      aiModel: 'gemini-2.0-flash-hybrid',
       processingTimeMs: processingTime,
 
+      // Strategy integration
+      strategyContext: strategyContext ? {
+        budgetTier: strategyContext.budgetFramework?.tier,
+        targetBudget: strategyContext.budgetFramework?.targetAmount,
+        spaceArea: strategyContext.spaceParameters?.totalArea,
+        spaceUnit: strategyContext.spaceParameters?.areaUnit,
+        materialPreferences: strategyContext.materialPreferences,
+        qualityExpectations: strategyContext.qualityExpectations,
+      } : null,
+
+      // Extraction results
       entities,
       deliverables,
       summary,
 
+      // Hybrid extraction metadata
+      extractionMetadata: {
+        regexExtracted: deliverables.filter(d => d.aiMetadata?.extractionMethod?.includes('regex')).length,
+        llmExtracted: deliverables.filter(d => d.aiMetadata?.extractionMethod?.includes('llm')).length,
+        regexAccuracy: aiEnhancement?.validation?.regexAccuracy || 'medium',
+        averageConfidence: deliverables.reduce((sum, d) => sum + (d.aiMetadata?.confidenceScore || 0), 0) / deliverables.length || 0,
+      },
+
+      // AI enhancement details
       aiEnhancement: {
         validation: aiEnhancement?.validation || null,
         ambiguities: aiEnhancement?.ambiguities || [],
@@ -628,5 +872,8 @@ module.exports = {
   expandToDeliverables,
   matchFeatureLibrary,
   generateSummary,
+  calculateConfidence,
+  fetchProjectStrategy,
+  buildStrategyAIContext,
   ROOM_ONTOLOGY,
 };

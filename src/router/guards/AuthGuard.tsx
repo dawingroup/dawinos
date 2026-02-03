@@ -3,6 +3,7 @@
  * Protects routes that require authentication
  */
 
+import { Suspense } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/shared/hooks';
 import { FullPageLoader } from '@/shared/components/feedback';
@@ -23,5 +24,10 @@ export function AuthGuard({ children }: AuthGuardProps) {
     return <Navigate to="/auth/login" state={{ from: location }} replace />;
   }
 
-  return <>{children}</>;
+  // Wrap children in Suspense to properly handle lazy-loaded routes after auth
+  return (
+    <Suspense fallback={<FullPageLoader text="Loading..." />}>
+      {children}
+    </Suspense>
+  );
 }

@@ -80,6 +80,9 @@ interface TeamTask {
   id: string;
   title: string;
   description?: string;
+  aiDescription?: string;
+  aiChecklist?: { id: string; title: string; description: string; isRequired: boolean; order: number; completed: boolean }[];
+  aiRelevantDocuments?: { name: string; type: string; reason: string }[];
   priority: 'P0' | 'P1' | 'P2' | 'P3';
   status: string;
   assignedTo?: string;
@@ -293,6 +296,9 @@ export default function ManagerDashboardPage() {
           id: doc.id,
           title: data.title,
           description: data.description,
+          aiDescription: data.aiDescription,
+          aiChecklist: data.aiChecklist,
+          aiRelevantDocuments: data.aiRelevantDocuments,
           priority: data.priority,
           status: data.status,
           assignedTo: data.assignedTo,
@@ -354,6 +360,9 @@ export default function ManagerDashboardPage() {
           id: doc.id,
           title: data.title,
           description: data.description,
+          aiDescription: data.aiDescription,
+          aiChecklist: data.aiChecklist,
+          aiRelevantDocuments: data.aiRelevantDocuments,
           priority: data.priority,
           status: data.status,
           assignedTo: data.assignedTo,
@@ -671,6 +680,9 @@ export default function ManagerDashboardPage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{task.title}</p>
+                            {(task.aiDescription || task.description) && (
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">{task.aiDescription || task.description}</p>
+                            )}
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               <span>{task.assignedToName || 'Unassigned'}</span>
                               {task.projectName && entityRoute && (
@@ -754,6 +766,9 @@ export default function ManagerDashboardPage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium truncate">{task.title}</p>
+                            {(task.aiDescription || task.description) && (
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">{task.aiDescription || task.description}</p>
+                            )}
                             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                               {task.dueDate && (
                                 <span className="flex items-center gap-1">
@@ -914,6 +929,9 @@ export default function ManagerDashboardPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium truncate">{task.title}</p>
+                          {(task.aiDescription || task.description) && (
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">{task.aiDescription || task.description}</p>
+                          )}
                           <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                             <span className="flex items-center gap-1">
                               <User className="h-3 w-3" />

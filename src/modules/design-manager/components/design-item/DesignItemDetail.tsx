@@ -54,7 +54,8 @@ const DesignChat = lazy(() =>
 import { useAIContext } from '../../hooks/useAIContext';
 import { EditDesignItemDialog } from './EditDesignItemDialog';
 import { ArchitecturalPricingTab } from './ArchitecturalPricingTab';
-import { DollarSign } from 'lucide-react';
+import { HandoverToManufacturingButton } from './HandoverToManufacturingButton';
+import { DollarSign, Factory } from 'lucide-react';
 
 type Tab = 'overview' | 'parameters' | 'parts-costing' | 'pricing' | 'rag' | 'files-approvals' | 'ai';
 
@@ -216,7 +217,7 @@ export default function DesignItemDetail() {
           {/* Desktop actions */}
           <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
             <ReadinessGauge value={item.overallReadiness} size="lg" />
-            
+
             {nextStage && (
               <button
                 onClick={() => setShowGateCheck(true)}
@@ -225,7 +226,13 @@ export default function DesignItemDetail() {
                 Advance
               </button>
             )}
-            
+
+            <HandoverToManufacturingButton
+              designItem={item}
+              projectId={projectId!}
+              userId={user?.uid || ''}
+            />
+
             <button
               onClick={() => setShowEditDialog(true)}
               className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
@@ -247,7 +254,7 @@ export default function DesignItemDetail() {
         {/* Mobile action bar */}
         <div className="flex sm:hidden items-center justify-between gap-2 px-1">
           <ReadinessGauge value={item.overallReadiness} size="md" />
-          
+
           <div className="flex items-center gap-1">
             {nextStage && (
               <button
@@ -257,6 +264,12 @@ export default function DesignItemDetail() {
                 Advance
               </button>
             )}
+
+            <HandoverToManufacturingButton
+              designItem={item}
+              projectId={projectId!}
+              userId={user?.uid || ''}
+            />
             <button
               onClick={() => setShowEditDialog(true)}
               className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
@@ -319,6 +332,25 @@ export default function DesignItemDetail() {
           projectId={projectId!}
           userId={user?.email || ''}
         />
+      )}
+
+      {/* Manufacturing Status Banner */}
+      {item.manufacturingOrderId && (
+        <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <Factory className="w-5 h-5 text-blue-600 flex-shrink-0" />
+          <div className="flex-1">
+            <span className="text-sm font-medium text-blue-900">Handed over to Manufacturing</span>
+            <span className="text-sm text-blue-600 ml-2">
+              {item.handoverStatus === 'handed-over' ? 'Manufacturing order active' : 'Pending handover'}
+            </span>
+          </div>
+          <Link
+            to={`/manufacturing/orders/${item.manufacturingOrderId}`}
+            className="text-sm font-medium text-blue-700 hover:text-blue-900 hover:underline flex items-center gap-1"
+          >
+            View MO →
+          </Link>
+        </div>
       )}
 
       {/* Tabs - Responsive */}

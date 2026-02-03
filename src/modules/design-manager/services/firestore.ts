@@ -280,6 +280,21 @@ export async function deleteDesignItem(
 }
 
 /**
+ * Batch update sortOrder for multiple design items
+ */
+export async function updateDesignItemOrder(
+  projectId: string,
+  items: { id: string; sortOrder: number }[]
+): Promise<void> {
+  const batch = writeBatch(db);
+  for (const item of items) {
+    const docRef = getItemDoc(projectId, item.id);
+    batch.update(docRef, { sortOrder: item.sortOrder });
+  }
+  await batch.commit();
+}
+
+/**
  * Get a single design item
  */
 export async function getDesignItem(

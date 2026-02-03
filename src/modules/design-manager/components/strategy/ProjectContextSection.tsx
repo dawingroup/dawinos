@@ -112,12 +112,22 @@ const COUNTRIES = [
   'USA', 'UK', 'Germany', 'France', 'Other',
 ];
 
-export function ProjectContextSection({ 
-  context, 
+export function ProjectContextSection({
+  context,
   onUpdate,
   customerName,
   projectName,
 }: ProjectContextSectionProps) {
+  // Safety check: provide default empty context if undefined
+  const safeContext: ProjectContext = context || {
+    customer: { name: '' },
+    project: { type: '', location: '', country: '' },
+    timeline: { urgency: 'normal' },
+    style: { primary: '' },
+    targetUsers: {},
+    requirements: {}
+  };
+
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(['customer', 'project', 'style'])
   );
@@ -140,15 +150,15 @@ export function ProjectContextSection({
     value: any
   ) => {
     onUpdate({
-      ...context,
+      ...safeContext,
       [section]: {
-        ...context[section],
+        ...safeContext[section],
         [field]: value,
       },
     });
   };
 
-  const selectedProjectType = PROJECT_TYPES.find(t => t.value === context.project.type);
+  const selectedProjectType = PROJECT_TYPES.find(t => t.value === safeContext.project?.type);
 
   return (
     <div className="space-y-4">
@@ -161,8 +171,8 @@ export function ProjectContextSection({
           <div className="flex items-center gap-2">
             <User className="w-4 h-4 text-blue-500" />
             <span className="font-medium text-gray-900">Customer Information</span>
-            {context.customer.name && (
-              <span className="text-sm text-gray-500">• {context.customer.name}</span>
+            {safeContext.customer.name && (
+              <span className="text-sm text-gray-500">• {safeContext.customer.name}</span>
             )}
           </div>
           {expandedSections.has('customer') ? (
@@ -181,7 +191,7 @@ export function ProjectContextSection({
                 </label>
                 <input
                   type="text"
-                  value={context.customer.name || customerName || ''}
+                  value={safeContext.customer.name || customerName || ''}
                   onChange={(e) => updateField('customer', 'name', e.target.value)}
                   placeholder="e.g., John Doe"
                   className="w-full px-3 py-2 border rounded-lg text-sm"
@@ -193,7 +203,7 @@ export function ProjectContextSection({
                 </label>
                 <input
                   type="text"
-                  value={context.customer.company || ''}
+                  value={safeContext.customer.company || ''}
                   onChange={(e) => updateField('customer', 'company', e.target.value)}
                   placeholder="e.g., Marriott Hotels"
                   className="w-full px-3 py-2 border rounded-lg text-sm"
@@ -206,7 +216,7 @@ export function ProjectContextSection({
                   Industry
                 </label>
                 <select
-                  value={context.customer.industry || ''}
+                  value={safeContext.customer.industry || ''}
                   onChange={(e) => updateField('customer', 'industry', e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 >
@@ -228,7 +238,7 @@ export function ProjectContextSection({
                 <input
                   type="number"
                   min="0"
-                  value={context.customer.previousProjects || 0}
+                  value={safeContext.customer.previousProjects || 0}
                   onChange={(e) => updateField('customer', 'previousProjects', parseInt(e.target.value) || 0)}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 />
@@ -247,8 +257,8 @@ export function ProjectContextSection({
           <div className="flex items-center gap-2">
             <Building2 className="w-4 h-4 text-indigo-500" />
             <span className="font-medium text-gray-900">Project Details</span>
-            {context.project.type && (
-              <span className="text-sm text-gray-500">• {context.project.type}</span>
+            {safeContext.project?.type && (
+              <span className="text-sm text-gray-500">• {safeContext.project?.type}</span>
             )}
           </div>
           {expandedSections.has('project') ? (
@@ -266,7 +276,7 @@ export function ProjectContextSection({
                   Project Type
                 </label>
                 <select
-                  value={context.project.type}
+                  value={safeContext.project?.type}
                   onChange={(e) => updateField('project', 'type', e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 >
@@ -281,7 +291,7 @@ export function ProjectContextSection({
                   Sub-Type
                 </label>
                 <select
-                  value={context.project.subType || ''}
+                  value={safeContext.project?.subType || ''}
                   onChange={(e) => updateField('project', 'subType', e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                   disabled={!selectedProjectType}
@@ -299,7 +309,7 @@ export function ProjectContextSection({
                   Country
                 </label>
                 <select
-                  value={context.project.country}
+                  value={safeContext.project?.country}
                   onChange={(e) => updateField('project', 'country', e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 >
@@ -315,7 +325,7 @@ export function ProjectContextSection({
                 </label>
                 <input
                   type="text"
-                  value={context.project.location}
+                  value={safeContext.project?.location}
                   onChange={(e) => updateField('project', 'location', e.target.value)}
                   placeholder="e.g., Kampala, Nairobi"
                   className="w-full px-3 py-2 border rounded-lg text-sm"
@@ -335,11 +345,11 @@ export function ProjectContextSection({
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-green-500" />
             <span className="font-medium text-gray-900">Timeline</span>
-            {context.timeline.urgency && (
+            {safeContext.timeline.urgency && (
               <span className={`text-xs px-2 py-0.5 rounded-full ${
-                URGENCY_OPTIONS.find(u => u.value === context.timeline.urgency)?.color
+                URGENCY_OPTIONS.find(u => u.value === safeContext.timeline.urgency)?.color
               }`}>
-                {context.timeline.urgency}
+                {safeContext.timeline.urgency}
               </span>
             )}
           </div>
@@ -359,7 +369,7 @@ export function ProjectContextSection({
                 </label>
                 <input
                   type="date"
-                  value={context.timeline.startDate || ''}
+                  value={safeContext.timeline.startDate || ''}
                   onChange={(e) => updateField('timeline', 'startDate', e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 />
@@ -370,7 +380,7 @@ export function ProjectContextSection({
                 </label>
                 <input
                   type="date"
-                  value={context.timeline.targetCompletion || ''}
+                  value={safeContext.timeline.targetCompletion || ''}
                   onChange={(e) => updateField('timeline', 'targetCompletion', e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 />
@@ -386,7 +396,7 @@ export function ProjectContextSection({
                     key={option.value}
                     onClick={() => updateField('timeline', 'urgency', option.value)}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      context.timeline.urgency === option.value
+                      safeContext.timeline.urgency === option.value
                         ? option.color
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
@@ -409,8 +419,8 @@ export function ProjectContextSection({
           <div className="flex items-center gap-2">
             <Palette className="w-4 h-4 text-purple-500" />
             <span className="font-medium text-gray-900">Style & Aesthetic</span>
-            {context.style.primary && (
-              <span className="text-sm text-gray-500">• {context.style.primary}</span>
+            {safeContext.style.primary && (
+              <span className="text-sm text-gray-500">• {safeContext.style.primary}</span>
             )}
           </div>
           {expandedSections.has('style') ? (
@@ -428,7 +438,7 @@ export function ProjectContextSection({
                   Primary Style
                 </label>
                 <select
-                  value={context.style.primary}
+                  value={safeContext.style.primary}
                   onChange={(e) => updateField('style', 'primary', e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 >
@@ -443,12 +453,12 @@ export function ProjectContextSection({
                   Secondary Style
                 </label>
                 <select
-                  value={context.style.secondary || ''}
+                  value={safeContext.style.secondary || ''}
                   onChange={(e) => updateField('style', 'secondary', e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 >
                   <option value="">Select style...</option>
-                  {STYLE_OPTIONS.filter(s => s !== context.style.primary).map(style => (
+                  {STYLE_OPTIONS.filter(s => s !== safeContext.style.primary).map(style => (
                     <option key={style} value={style}>{style}</option>
                   ))}
                 </select>
@@ -460,7 +470,7 @@ export function ProjectContextSection({
               </label>
               <input
                 type="text"
-                value={context.style.materialPreferences?.join(', ') || ''}
+                value={safeContext.style.materialPreferences?.join(', ') || ''}
                 onChange={(e) => updateField('style', 'materialPreferences', 
                   e.target.value.split(',').map(s => s.trim()).filter(Boolean)
                 )}
@@ -475,7 +485,7 @@ export function ProjectContextSection({
               </label>
               <input
                 type="text"
-                value={context.style.colorPreferences?.join(', ') || ''}
+                value={safeContext.style.colorPreferences?.join(', ') || ''}
                 onChange={(e) => updateField('style', 'colorPreferences', 
                   e.target.value.split(',').map(s => s.trim()).filter(Boolean)
                 )}
@@ -488,7 +498,7 @@ export function ProjectContextSection({
                 Inspiration Notes
               </label>
               <textarea
-                value={context.style.inspirationNotes || ''}
+                value={safeContext.style.inspirationNotes || ''}
                 onChange={(e) => updateField('style', 'inspirationNotes', e.target.value)}
                 placeholder="Describe the desired look and feel, reference projects, or inspiration sources..."
                 rows={3}
@@ -525,7 +535,7 @@ export function ProjectContextSection({
                 </label>
                 <input
                   type="text"
-                  value={context.targetUsers.demographic || ''}
+                  value={safeContext.targetUsers.demographic || ''}
                   onChange={(e) => updateField('targetUsers', 'demographic', e.target.value)}
                   placeholder="e.g., Business travelers, 30-50 years"
                   className="w-full px-3 py-2 border rounded-lg text-sm"
@@ -538,7 +548,7 @@ export function ProjectContextSection({
                 <input
                   type="number"
                   min="0"
-                  value={context.targetUsers.capacity || ''}
+                  value={safeContext.targetUsers.capacity || ''}
                   onChange={(e) => updateField('targetUsers', 'capacity', parseInt(e.target.value) || undefined)}
                   placeholder="e.g., 50 guests"
                   className="w-full px-3 py-2 border rounded-lg text-sm"
@@ -551,7 +561,7 @@ export function ProjectContextSection({
               </label>
               <input
                 type="text"
-                value={context.targetUsers.usagePattern || ''}
+                value={safeContext.targetUsers.usagePattern || ''}
                 onChange={(e) => updateField('targetUsers', 'usagePattern', e.target.value)}
                 placeholder="e.g., High turnover, 2-3 night stays average"
                 className="w-full px-3 py-2 border rounded-lg text-sm"
@@ -563,7 +573,7 @@ export function ProjectContextSection({
               </label>
               <input
                 type="text"
-                value={context.targetUsers.specialNeeds?.join(', ') || ''}
+                value={safeContext.targetUsers.specialNeeds?.join(', ') || ''}
                 onChange={(e) => updateField('targetUsers', 'specialNeeds', 
                   e.target.value.split(',').map(s => s.trim()).filter(Boolean)
                 )}
@@ -605,8 +615,8 @@ export function ProjectContextSection({
                 <label key={key} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={context.requirements[key as keyof typeof context.requirements] as boolean || false}
-                    onChange={(e) => updateField('requirements', key as keyof typeof context.requirements, e.target.checked)}
+                    checked={safeContext.requirements[key as keyof typeof safeContext.requirements] as boolean || false}
+                    onChange={(e) => updateField('requirements', key as keyof typeof safeContext.requirements, e.target.checked)}
                     className="rounded border-gray-300"
                   />
                   <span className="text-sm text-gray-700">{label}</span>
@@ -618,7 +628,7 @@ export function ProjectContextSection({
                 Additional Notes
               </label>
               <textarea
-                value={context.requirements.notes || ''}
+                value={safeContext.requirements.notes || ''}
                 onChange={(e) => updateField('requirements', 'notes', e.target.value)}
                 placeholder="Any other special requirements or considerations..."
                 rows={2}

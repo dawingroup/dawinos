@@ -119,6 +119,41 @@ export type FinishesCustomerEvent =
   | 'customer_project_assigned'
   | 'customer_communication_logged';
 
+export type WhatsAppCommunicationEvent =
+  | 'whatsapp_message_received'
+  | 'whatsapp_message_sent'
+  | 'whatsapp_window_expiring'
+  | 'whatsapp_delivery_failed'
+  | 'whatsapp_unknown_contact';
+
+// ============================================================================
+// DAWIN FINISHES MANUFACTURING & PROCUREMENT EVENT TYPES
+// ============================================================================
+
+export type FinishesManufacturingEvent =
+  | 'manufacturing_order_created'
+  | 'manufacturing_order_approved'
+  | 'manufacturing_order_stage_changed'
+  | 'manufacturing_order_completed'
+  | 'manufacturing_order_on_hold'
+  | 'material_shortage_detected'
+  | 'material_reservation_created'
+  | 'qc_inspection_failed';
+
+export type FinishesPurchaseOrderEvent =
+  | 'purchase_order_created'
+  | 'purchase_order_submitted_for_approval'
+  | 'purchase_order_approved'
+  | 'purchase_order_rejected'
+  | 'purchase_order_sent'
+  | 'goods_received'
+  | 'purchase_order_closed';
+
+export type FinishesInventoryEnhancedEvent =
+  | 'stock_level_critical'
+  | 'stock_transfer_requested'
+  | 'cost_variance_detected';
+
 // ============================================================================
 // DAWIN ADVISORY EVENT TYPES
 // ============================================================================
@@ -259,6 +294,29 @@ export interface GeneratedTask {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
+
+  // AI enrichment
+  aiDescription?: string;
+  aiChecklist?: AIChecklistItem[];
+  aiRelevantDocuments?: AIRelevantDocument[];
+  aiEnrichedAt?: Date;
+  aiUrgencyScore?: number;
+  aiUrgencyReason?: string;
+}
+
+export interface AIChecklistItem {
+  id: string;
+  title: string;
+  description: string;
+  isRequired: boolean;
+  order: number;
+  completed: boolean;
+}
+
+export interface AIRelevantDocument {
+  name: string;
+  type: 'client_document' | 'deliverable' | 'design_brief' | 'feature_library' | 'design_item' | 'project' | 'moodboard' | 'material_spec' | 'external_reference';
+  reason: string;
 }
 
 // ============================================================================

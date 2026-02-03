@@ -10,7 +10,18 @@ export const API_ENDPOINTS = {
 
 // Feature flags
 export const FEATURES = {
-  // Add feature flags here
+  // Strategy Canvas Enhancements
+  STRATEGY_GUIDED_WORKFLOW: true,                    // Enable guided 6-step workflow for strategy canvas
+  STRATEGY_VALIDATION_UI: true,                      // Enable real-time validation feedback UI
+  STRATEGY_SAVE_STATUS_INDICATORS: true,             // Enable enhanced save status indicators
+  STRATEGY_CUSTOMER_INTELLIGENCE_AUTO_POPULATE: true, // Enable auto-population from customer intelligence
+  STRATEGY_BUDGET_TIER_PRICING: true,                // Enable budget tier multipliers in estimates
+  STRATEGY_CONSTRAINT_VALIDATION: true,              // Enable validation of items against strategy constraints
+  STRATEGY_BOTTOM_UP_PRICING_INTEGRATION: true,      // Enable strategy integration in bottom-up pricing
+  STRATEGY_LLM_SCOPING: false,                       // Enable hybrid regex + LLM scoping (backend required)
+
+  // WhatsApp Communication
+  WHATSAPP_ENABLED: true,                             // Enable WhatsApp messaging via Zoko API
 } as const;
 
 // App configuration

@@ -103,6 +103,13 @@ export function useDesignItems(
             return 0;
         }
       });
+    } else {
+      // Default: sort by sortOrder ascending (items without sortOrder go last)
+      result.sort((a, b) => {
+        const aOrder = a.sortOrder ?? Infinity;
+        const bOrder = b.sortOrder ?? Infinity;
+        return aOrder - bOrder;
+      });
     }
 
     return result;

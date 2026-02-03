@@ -1,6 +1,6 @@
 /**
- * TaskDetailDialog Component
- * Modal dialog showing full task details with checklist management
+ * TaskDetailDrawer Component
+ * Right-side drawer showing full task details with checklist management
  */
 
 import { useNavigate } from 'react-router-dom';
@@ -17,17 +17,21 @@ import {
   XCircle,
   Building2,
   ExternalLink,
+  Sparkles,
+  FileText,
+  BookOpen,
+  Zap,
 } from 'lucide-react';
 
 import { Badge } from '@/core/components/ui/badge';
 import { Button } from '@/core/components/ui/button';
 import { Progress } from '@/core/components/ui/progress';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/core/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/core/components/ui/sheet';
 
 import type { EmployeeTask } from '../../hooks/useEmployeeTaskInbox';
 import { getDueDateStatus, formatDueDate } from '../../hooks/useEmployeeTaskInbox';
@@ -164,16 +168,16 @@ export function TaskDetailDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
             <ClipboardList className="h-5 w-5 text-blue-500" />
             Task Details
-          </DialogTitle>
-        </DialogHeader>
+          </SheetTitle>
+        </SheetHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-6 mt-6">
           {/* Header Section */}
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -181,8 +185,26 @@ export function TaskDetailDialog({
               <StatusBadge status={task.status} />
             </div>
             <h3 className="text-lg font-semibold">{task.title}</h3>
-            {task.description && (
-              <p className="text-muted-foreground mt-2">{task.description}</p>
+            {task.aiUrgencyReason && (
+              <div className="flex items-start gap-1.5 mt-1.5 text-xs text-muted-foreground/80">
+                <Zap className="h-3 w-3 mt-0.5 text-amber-500 flex-shrink-0" />
+                <span>{task.aiUrgencyReason}</span>
+              </div>
+            )}
+            {(task.aiDescription || task.description) && (
+              <div className="mt-2">
+                {task.aiDescription ? (
+                  <>
+                    <p className="text-muted-foreground">{task.aiDescription}</p>
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/60 mt-1">
+                      <Sparkles className="h-3 w-3" />
+                      AI-generated context
+                    </span>
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">{task.description}</p>
+                )}
+              </div>
             )}
           </div>
 
@@ -333,6 +355,72 @@ export function TaskDetailDialog({
             </div>
           )}
 
+          {/* AI-Generated Checklist */}
+          {task.aiChecklist && task.aiChecklist.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  Suggested Steps
+                </h4>
+                <span className="text-xs text-muted-foreground/60">AI-generated</span>
+              </div>
+              <div className="space-y-2">
+                {task.aiChecklist.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-start gap-3 p-3 border border-amber-200/50 bg-amber-50/30 dark:bg-amber-950/10 dark:border-amber-800/30 rounded-lg"
+                  >
+                    <span className="text-xs font-medium text-amber-600 mt-0.5 min-w-[18px]">
+                      {item.order}.
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm">
+                        {item.title}
+                        {item.isRequired && <span className="text-red-500 ml-1">*</span>}
+                      </p>
+                      {item.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {item.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Relevant Documents */}
+          {task.aiRelevantDocuments && task.aiRelevantDocuments.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <h4 className="font-medium flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-blue-500" />
+                  Relevant References
+                </h4>
+                <span className="text-xs text-muted-foreground/60">AI-identified</span>
+              </div>
+              <div className="space-y-2">
+                {task.aiRelevantDocuments.map((doc, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-start gap-3 p-3 border border-blue-200/50 bg-blue-50/30 dark:bg-blue-950/10 dark:border-blue-800/30 rounded-lg"
+                  >
+                    <FileText className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{doc.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{doc.reason}</p>
+                      <Badge variant="outline" className="mt-1 text-[10px] px-1.5 py-0">
+                        {doc.type.replace(/_/g, ' ')}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Notes Section */}
           {task.notes && (
             <div>
@@ -344,8 +432,7 @@ export function TaskDetailDialog({
           )}
 
           {/* Actions */}
-          <div className="flex justify-between pt-4 border-t">
-            <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 pt-4 border-t">
               {task.status === 'pending' && (
                 <Button variant="outline" onClick={handleStart}>
                   <Play className="h-4 w-4 mr-2" />
@@ -370,14 +457,10 @@ export function TaskDetailDialog({
                   Resume Task
                 </Button>
               )}
-            </div>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Close
-            </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
 

@@ -6,7 +6,7 @@
  * Uses the new projectScoping Cloud Function.
  */
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 import { 
@@ -27,6 +27,7 @@ import {
   CheckSquare,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import type { BudgetTier, ProjectStrategy } from '../../types/strategy';
 
 const API_BASE = 'https://api-okekivpl2a-uc.a.run.app';
 
@@ -55,6 +56,9 @@ interface Deliverable {
   aiMetadata: {
     confidenceScore: number;
     requiresClarification: boolean;
+    reasoning?: string;
+    ambiguities?: string[];
+    extractionMethod?: 'regex' | 'llm' | 'hybrid';
   };
 }
 
@@ -89,6 +93,8 @@ interface ScopingResult {
 export interface ProjectScopingAIProps {
   projectId?: string;
   projectName?: string;
+  initialBriefText?: string;
+  projectStrategy?: ProjectStrategy | null;
   onScopingComplete?: (result: ScopingResult) => void;
   onDeliverableSelect?: (deliverable: Deliverable) => void;
   onItemsAdded?: (count: number) => void;
@@ -98,12 +104,22 @@ export interface ProjectScopingAIProps {
 export function ProjectScopingAI({
   projectId,
   projectName = 'New Project',
+  initialBriefText,
+  projectStrategy,
   onScopingComplete,
   onDeliverableSelect,
   onItemsAdded,
   className,
 }: ProjectScopingAIProps) {
-  const [briefText, setBriefText] = useState('');
+  const [briefText, setBriefText] = useState(initialBriefText || '');
+  const userHasTyped = useRef(false);
+
+  // Update brief text when initialBriefText changes (e.g. sent from Design Brief section)
+  useEffect(() => {
+    if (initialBriefText && !userHasTyped.current) {
+      setBriefText(initialBriefText);
+    }
+  }, [initialBriefText]);
   const [projectType, setProjectType] = useState<string>('');
   const [location, setLocation] = useState('East Africa');
   const [includeResearch, setIncludeResearch] = useState(true);
@@ -209,46 +225,70 @@ export function ProjectScopingAI({
           },
         };
 
+        // Build strategy context if available
+        const strategyContext = projectStrategy ? {
+          strategyId: projectStrategy.id,
+          budgetTier: projectStrategy.budgetFramework?.tier as BudgetTier | undefined,
+          spaceMultiplier: del.roomCount > 1 ? del.roomCount : 1,
+          scopingConfidence: del.aiMetadata?.confidenceScore || 0.85,
+          deliverableType: del.itemType,
+        } : undefined;
+
+        // Initialize budget tracking with allocated budget hint if available
+        const budgetTracking = projectStrategy ? {
+          allocatedBudget: 0, // To be set later from pricing hints or user input
+          actualCost: 0,
+          variance: 0,
+          lastUpdated: serverTimestamp(),
+        } : undefined;
+
         await addDoc(designItemsRef, {
           // Identification
           itemCode,
           name: del.name,
           description: `${del.roomTypeName} - ${del.subcategory}`,
-          category: del.category === 'MANUFACTURED' ? 'casework' : 
+          category: del.category === 'MANUFACTURED' ? 'casework' :
                    del.category === 'PROCURED' ? 'fixtures' : 'specialty',
           sourcingType: del.category === 'MANUFACTURED' || del.category === 'PROCURED' ? del.category : undefined,
-          
+
           // Project relationship
           projectId: projectId,
           projectCode: projectId?.substring(0, 8) || 'PROJ',
-          
+
           // Status
           currentStage: del.category === 'PROCURED' ? 'procure-identify' : 'concept',
           ragStatus: defaultRagStatus,
           overallReadiness: 0,
-          
+
           // History
           stageHistory: [],
           approvals: [],
-          
+
           // Files
           files: [],
-          
+
           // Additional fields from scoping
           itemType: del.itemType,
           subcategory: del.subcategory,
           quantity: del.quantity,
+          requiredQuantity: del.quantity, // Set initial required quantity
           roomType: del.roomTypeName,
           priority: 'normal',
           source: 'ai_scoping',
-          
+
           // AI metadata
           aiMetadata: {
             scopedAt: new Date().toISOString(),
             confidenceScore: del.aiMetadata?.confidenceScore || 0.85,
             requiresClarification: del.aiMetadata?.requiresClarification || false,
           },
-          
+
+          // Strategy context (linking to project strategy)
+          ...(strategyContext && { strategyContext }),
+
+          // Budget tracking
+          ...(budgetTracking && { budgetTracking }),
+
           // Timestamps
           createdAt: serverTimestamp(),
           createdBy: 'ai_scoping',
@@ -322,10 +362,31 @@ export function ProjectScopingAI({
     }
   };
 
-  const getConfidenceColor = (score: number) => {
-    if (score >= 0.8) return 'text-green-600 bg-green-50';
-    if (score >= 0.6) return 'text-yellow-600 bg-yellow-50';
-    return 'text-red-600 bg-red-50';
+  const getConfidenceLevel = (score: number): { label: string; color: string; bgColor: string } => {
+    if (score >= 0.8) {
+      return { label: 'High', color: 'text-green-700', bgColor: 'bg-green-50 border-green-200' };
+    }
+    if (score >= 0.6) {
+      return { label: 'Medium', color: 'text-yellow-700', bgColor: 'bg-yellow-50 border-yellow-200' };
+    }
+    return { label: 'Low', color: 'text-red-700', bgColor: 'bg-red-50 border-red-200' };
+  };
+
+  const getExtractionMethodBadge = (method?: 'regex' | 'llm' | 'hybrid') => {
+    if (!method) return null;
+
+    const styles = {
+      regex: { label: 'Regex', color: 'text-gray-600', bg: 'bg-gray-100' },
+      llm: { label: 'AI', color: 'text-purple-600', bg: 'bg-purple-100' },
+      hybrid: { label: 'Hybrid', color: 'text-blue-600', bg: 'bg-blue-100' },
+    };
+
+    const style = styles[method];
+    return (
+      <span className={cn('px-1.5 py-0.5 rounded text-xs font-medium', style.color, style.bg)}>
+        {style.label}
+      </span>
+    );
   };
 
   return (
@@ -350,7 +411,7 @@ export function ProjectScopingAI({
           </label>
           <textarea
             value={briefText}
-            onChange={(e) => setBriefText(e.target.value)}
+            onChange={(e) => { userHasTyped.current = true; setBriefText(e.target.value); }}
             placeholder="Describe your project... e.g., '32 guest rooms, each with wardrobe, desk area, and bathroom vanity. Premium finish required.'"
             className="w-full h-32 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             disabled={isProcessing}
@@ -597,16 +658,76 @@ export function ProjectScopingAI({
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
                         <div className="text-right">
                           <div className="font-semibold">{del.quantity}</div>
                           <div className="text-xs text-gray-500">units</div>
                         </div>
-                        <div className={cn('px-2 py-1 rounded text-xs font-medium', getConfidenceColor(del.aiMetadata?.confidenceScore || 0.85))}>
-                          {Math.round((del.aiMetadata?.confidenceScore || 0.85) * 100)}%
+
+                        {/* Confidence Score Badge with Tooltip */}
+                        <div className="relative group">
+                          {(() => {
+                            const confidence = getConfidenceLevel(del.aiMetadata?.confidenceScore || 0.85);
+                            return (
+                              <div className={cn(
+                                'flex items-center gap-1 px-2 py-1 rounded border cursor-help',
+                                confidence.bgColor,
+                                confidence.color
+                              )}>
+                                <span className="text-xs font-semibold">
+                                  {confidence.label}
+                                </span>
+                                <span className="text-xs opacity-70">
+                                  {Math.round((del.aiMetadata?.confidenceScore || 0.85) * 100)}%
+                                </span>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Tooltip */}
+                          {(del.aiMetadata?.reasoning || del.aiMetadata?.ambiguities?.length || del.aiMetadata?.extractionMethod) && (
+                            <div className="invisible group-hover:visible absolute z-10 w-64 p-3 mt-1 right-0 bg-gray-900 text-white text-xs rounded-lg shadow-xl">
+                              <div className="space-y-2">
+                                {del.aiMetadata.extractionMethod && (
+                                  <div>
+                                    <span className="font-semibold">Method:</span>{' '}
+                                    {del.aiMetadata.extractionMethod.toUpperCase()}
+                                  </div>
+                                )}
+                                {del.aiMetadata.reasoning && (
+                                  <div>
+                                    <span className="font-semibold">Reasoning:</span>{' '}
+                                    {del.aiMetadata.reasoning}
+                                  </div>
+                                )}
+                                {del.aiMetadata.ambiguities && del.aiMetadata.ambiguities.length > 0 && (
+                                  <div>
+                                    <span className="font-semibold">Ambiguities:</span>
+                                    <ul className="mt-1 ml-3 list-disc list-inside">
+                                      {del.aiMetadata.ambiguities.map((amb, i) => (
+                                        <li key={i}>{amb}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="absolute w-2 h-2 bg-gray-900 transform rotate-45 -top-1 right-4" />
+                            </div>
+                          )}
                         </div>
+
+                        {/* Extraction Method Badge */}
+                        {del.aiMetadata?.extractionMethod && getExtractionMethodBadge(del.aiMetadata.extractionMethod)}
+
+                        {/* Requires Clarification Warning */}
                         {del.aiMetadata?.requiresClarification && (
-                          <AlertCircle className="w-4 h-4 text-amber-500" />
+                          <div className="relative group">
+                            <AlertCircle className="w-5 h-5 text-amber-500 cursor-help" />
+                            <div className="invisible group-hover:visible absolute z-10 w-48 p-2 mt-1 right-0 bg-amber-900 text-white text-xs rounded-lg shadow-xl">
+                              This item requires clarification or review
+                              <div className="absolute w-2 h-2 bg-amber-900 transform rotate-45 -top-1 right-2" />
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>

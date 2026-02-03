@@ -22,24 +22,27 @@ const TIERS = [
 ];
 
 export function BudgetFrameworkSection({ budget, onUpdate }: BudgetFrameworkSectionProps) {
+  // Safety check: provide default values if undefined
+  const safeBudget = budget || { tier: 'standard' as const, priorities: [] };
+
   const [newPriority, setNewPriority] = useState('');
 
   const addPriority = () => {
     if (!newPriority.trim()) return;
-    onUpdate({ ...budget, priorities: [...budget.priorities, newPriority.trim()] });
+    onUpdate({ ...safeBudget,priorities: [...safeBudget.priorities, newPriority.trim()] });
     setNewPriority('');
   };
 
   const removePriority = (index: number) => {
-    onUpdate({ ...budget, priorities: budget.priorities.filter((_, i) => i !== index) });
+    onUpdate({ ...safeBudget,priorities: safeBudget.priorities.filter((_, i) => i !== index) });
   };
 
   const movePriority = (fromIndex: number, toIndex: number) => {
-    if (toIndex < 0 || toIndex >= budget.priorities.length) return;
-    const newPriorities = [...budget.priorities];
+    if (toIndex < 0 || toIndex >= safeBudget.priorities.length) return;
+    const newPriorities = [...safeBudget.priorities];
     const [removed] = newPriorities.splice(fromIndex, 1);
     newPriorities.splice(toIndex, 0, removed);
-    onUpdate({ ...budget, priorities: newPriorities });
+    onUpdate({ ...safeBudget,priorities: newPriorities });
   };
 
   return (
@@ -51,14 +54,14 @@ export function BudgetFrameworkSection({ budget, onUpdate }: BudgetFrameworkSect
           {TIERS.map((tier) => (
             <button
               key={tier.value}
-              onClick={() => onUpdate({ ...budget, tier: tier.value as any })}
+              onClick={() => onUpdate({ ...safeBudget,tier: tier.value as any })}
               className={`p-3 rounded-lg border-2 text-left transition-all ${
-                budget.tier === tier.value
+                safeBudget.tier === tier.value
                   ? 'border-green-500 bg-green-50'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
-              <p className={`font-medium ${budget.tier === tier.value ? 'text-green-700' : 'text-gray-900'}`}>
+              <p className={`font-medium ${safeBudget.tier === tier.value ? 'text-green-700' : 'text-gray-900'}`}>
                 {tier.label}
               </p>
               <p className="text-xs text-gray-500">{tier.description}</p>
@@ -73,7 +76,7 @@ export function BudgetFrameworkSection({ budget, onUpdate }: BudgetFrameworkSect
           Priorities (drag to reorder)
         </label>
         <div className="space-y-2 mb-2">
-          {budget.priorities.map((priority, index) => (
+          {safeBudget.priorities.map((priority, index) => (
             <div
               key={index}
               className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg group"
@@ -88,7 +91,7 @@ export function BudgetFrameworkSection({ budget, onUpdate }: BudgetFrameworkSect
                 </button>
                 <button
                   onClick={() => movePriority(index, index + 1)}
-                  disabled={index === budget.priorities.length - 1}
+                  disabled={index === safeBudget.priorities.length - 1}
                   className="text-gray-400 hover:text-gray-600 disabled:opacity-30"
                 >
                   <GripVertical className="w-4 h-4" />

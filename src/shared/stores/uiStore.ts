@@ -7,15 +7,18 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 interface UIState {
-  sidebarOpen: boolean;
-  sidebarCollapsed: boolean;
+  sidebarOpen: boolean; // Mobile drawer open/close
+  sidebarCollapsed: boolean; // Desktop: collapsed to icon rail
+  sidebarHovered: boolean; // Desktop: temporarily expanded via hover
   sidebarAutoClose: boolean; // Auto-close sidebar on mobile after navigation
   theme: 'light' | 'dark' | 'system';
   activeModal: string | null;
   toasts: Toast[];
-  
+
   toggleSidebar: () => void;
+  setSidebarOpen: (open: boolean) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
+  setSidebarHovered: (hovered: boolean) => void;
   setSidebarAutoClose: (autoClose: boolean) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   openModal: (modalId: string) => void;
@@ -36,7 +39,8 @@ export const useUIStore = create<UIState>()(
   persist(
     (set) => ({
       sidebarOpen: false, // Start closed on mobile
-      sidebarCollapsed: false,
+      sidebarCollapsed: true, // Desktop: start as icon rail
+      sidebarHovered: false, // Desktop: not hovered initially
       sidebarAutoClose: true, // Auto-close by default on mobile
       theme: 'system',
       activeModal: null,
@@ -45,8 +49,12 @@ export const useUIStore = create<UIState>()(
       toggleSidebar: () =>
         set((state) => ({ sidebarOpen: !state.sidebarOpen })),
 
+      setSidebarOpen: (open) => set({ sidebarOpen: open }),
+
       setSidebarCollapsed: (collapsed) =>
         set({ sidebarCollapsed: collapsed }),
+
+      setSidebarHovered: (hovered) => set({ sidebarHovered: hovered }),
 
       setSidebarAutoClose: (autoClose) =>
         set({ sidebarAutoClose: autoClose }),

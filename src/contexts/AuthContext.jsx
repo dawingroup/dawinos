@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
+import React, { createContext, useContext, useEffect, useState, startTransition } from 'react';
+import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
-  signOut, 
+  signOut,
   onAuthStateChanged,
   GoogleAuthProvider
 } from 'firebase/auth';
@@ -40,27 +40,48 @@ export const AuthProvider = ({ children }) => {
       })
       .catch((error) => {
         console.error('Redirect result error:', error);
+        // Ensure loading is set to false even on error
+        setTimeout(() => {
+          startTransition(() => {
+            setLoading(false);
+          });
+        }, 0);
       });
     
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       console.log('Auth state changed:', currentUser ? currentUser.email : 'No user');
-      
+
       if (currentUser) {
-        setUser(currentUser);
         try {
           const token = await currentUser.getIdToken();
-          setAccessToken(token);
+          // Use setTimeout to defer state updates and prevent Suspense errors during navigation
+          setTimeout(() => {
+            startTransition(() => {
+              setUser(currentUser);
+              setAccessToken(token);
+              setLoading(false);
+            });
+          }, 0);
           console.log('User signed in:', currentUser.email);
         } catch (error) {
           console.error('Error getting access token:', error);
+          setTimeout(() => {
+            startTransition(() => {
+              setLoading(false);
+            });
+          }, 0);
         }
       } else {
-        setUser(null);
-        setAccessToken(null);
         localStorage.removeItem('googleAccessToken');
+        setTimeout(() => {
+          startTransition(() => {
+            setUser(null);
+            setAccessToken(null);
+            setLoading(false);
+          });
+        }, 0);
         console.log('User signed out');
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -99,8 +120,12 @@ export const AuthProvider = ({ children }) => {
       } else if (error.code === 'auth/cancelled-popup-request') {
         console.log('Popup request cancelled');
       }
-      
-      setLoading(false);
+
+      setTimeout(() => {
+        startTransition(() => {
+          setLoading(false);
+        });
+      }, 0);
       throw error;
     }
   };

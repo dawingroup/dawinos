@@ -12,3 +12,10 @@ export {
   type UseCollectionReturn
 } from './useFirestore';
 export { useOnlineStatus } from './useOnlineStatus';
+export {
+  useFeatureFlag,
+  useFeatureFlags,
+  getEnabledFeatures,
+  isFeatureEnabled,
+  type FeatureFlag
+} from './useFeatureFlag';

@@ -18,12 +18,15 @@ import {
   ExternalLink,
   FolderPlus,
   Loader2,
+  MapPin,
 } from 'lucide-react';
 import { useCustomer, useCustomerMutations } from '../hooks';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDriveService } from '@/services/driveService';
 import { CustomerForm } from './CustomerForm';
-import type { CustomerStatus, CustomerType } from '../types';
+import { CustomerWhatsAppTab } from '@/modules/whatsapp/components/CustomerWhatsAppTab';
+import { useFeatureFlag } from '@/shared/hooks/useFeatureFlag';
+import type { CustomerStatus, CustomerType, Address } from '../types';
 
 const STATUS_CONFIG: Record<CustomerStatus, { bg: string; text: string; label: string }> = {
   active: { bg: 'bg-green-100', text: 'text-green-800', label: 'Active' },
@@ -51,6 +54,7 @@ export function CustomerDetail() {
   const [folderError, setFolderError] = useState<string | null>(null);
   const [syncingQuickBooks, setSyncingQuickBooks] = useState(false);
   const [qbError, setQbError] = useState<string | null>(null);
+  const whatsappEnabled = useFeatureFlag('WHATSAPP_ENABLED');
 
   const handleCreateDriveFolder = async () => {
     if (!customer || !user?.email || !customerId) return;
@@ -134,6 +138,21 @@ export function CustomerDetail() {
   }
 
   const statusConfig = STATUS_CONFIG[customer.status];
+
+  const formatAddress = (addr: Address | undefined) => {
+    if (!addr) return null;
+    const parts = [
+      addr.street1,
+      addr.street2,
+      [addr.city, addr.state].filter(Boolean).join(', '),
+      [addr.postalCode, addr.country].filter(Boolean).join(', '),
+    ].filter(Boolean);
+    return parts.length > 0 ? parts : null;
+  };
+
+  const hasBillingAddress = formatAddress(customer.billingAddress);
+  const hasShippingAddress = formatAddress(customer.shippingAddress);
+  const hasAnyAddress = hasBillingAddress || hasShippingAddress;
 
   return (
     <div className="space-y-6">
@@ -311,6 +330,45 @@ export function CustomerDetail() {
         </div>
       </div>
 
+      {/* Address Section */}
+      {hasAnyAddress && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Billing Address */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <MapPin className="h-4 w-4 text-gray-400" />
+              <h2 className="text-sm font-semibold text-gray-900">Billing Address</h2>
+            </div>
+            {hasBillingAddress ? (
+              <div className="text-sm text-gray-700 space-y-0.5">
+                {hasBillingAddress.map((line, i) => (
+                  <p key={i}>{line}</p>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">Not provided</p>
+            )}
+          </div>
+
+          {/* Shipping Address */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <MapPin className="h-4 w-4 text-gray-400" />
+              <h2 className="text-sm font-semibold text-gray-900">Shipping / Site Address</h2>
+            </div>
+            {hasShippingAddress ? (
+              <div className="text-sm text-gray-700 space-y-0.5">
+                {hasShippingAddress.map((line, i) => (
+                  <p key={i}>{line}</p>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">Not provided</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Projects Section */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-4">
@@ -330,6 +388,15 @@ export function CustomerDetail() {
           <p className="text-xs text-gray-400 mt-1">Projects will appear here once created</p>
         </div>
       </div>
+
+      {/* WhatsApp Section */}
+      {whatsappEnabled && customer.phone && customerId && (
+        <CustomerWhatsAppTab
+          customerId={customerId}
+          phone={customer.phone}
+          customerName={customer.name}
+        />
+      )}
 
       {/* Edit Form Modal */}
       {showEditForm && (

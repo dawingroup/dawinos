@@ -420,24 +420,46 @@ export const GlobalProvider: React.FC<GlobalProviderProps> = ({ children }) => {
   useEffect(() => {
     if (!state.auth.userId || !state.currentOrganizationId) return;
 
-    const notificationsQuery = query(
-      collection(db, 'notifications'),
-      where('userId', '==', state.auth.userId),
-      where('organizationId', '==', state.currentOrganizationId),
-      orderBy('createdAt', 'desc'),
-      limit(50)
-    );
+    let unsubscribe: (() => void) | undefined;
 
-    const unsubscribe = onSnapshot(notificationsQuery, (snapshot) => {
-      const notifications = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Record<string, unknown>),
-      })) as GlobalNotification[];
+    try {
+      const notificationsQuery = query(
+        collection(db, 'notifications'),
+        where('userId', '==', state.auth.userId),
+        where('organizationId', '==', state.currentOrganizationId),
+        orderBy('createdAt', 'desc'),
+        limit(50)
+      );
 
-      dispatch({ type: 'SET_NOTIFICATIONS', payload: notifications });
-    });
+      unsubscribe = onSnapshot(
+        notificationsQuery,
+        (snapshot) => {
+          const notifications = snapshot.docs.map((d) => ({
+            id: d.id,
+            ...(d.data() as Record<string, unknown>),
+          })) as GlobalNotification[];
 
-    return () => unsubscribe();
+          dispatch({ type: 'SET_NOTIFICATIONS', payload: notifications });
+        },
+        (error) => {
+          // Handle errors gracefully (e.g., index still building)
+          console.warn('[GlobalContext] Notifications listener error:', error.message);
+          // Don't crash the app - just log the error and continue
+          if (error.code === 'failed-precondition') {
+            console.info('[GlobalContext] Firestore index is building. Notifications will load once index is ready.');
+          }
+        }
+      );
+    } catch (error) {
+      // Catch any synchronous errors during query setup
+      console.warn('[GlobalContext] Error setting up notifications listener:', error);
+      // Initialize with empty array to prevent undefined state
+      dispatch({ type: 'SET_NOTIFICATIONS', payload: [] });
+    }
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [state.auth.userId, state.currentOrganizationId]);
 
   // Online/offline status

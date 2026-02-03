@@ -118,8 +118,16 @@ export async function createCustomer(
     throw new Error(`Customer code "${data.code}" already exists`);
   }
   
+  // Strip undefined values — Firestore rejects them
+  const cleanData: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) {
+      cleanData[key] = value;
+    }
+  }
+
   const docRef = await addDoc(customersRef, {
-    ...data,
+    ...cleanData,
     createdAt: serverTimestamp(),
     createdBy: userId,
     updatedAt: serverTimestamp(),
@@ -145,9 +153,17 @@ export async function updateCustomer(
     }
   }
   
+  // Strip undefined values — Firestore rejects them in updateDoc
+  const cleanData: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) {
+      cleanData[key] = value;
+    }
+  }
+
   const docRef = doc(customersRef, customerId);
   await updateDoc(docRef, {
-    ...data,
+    ...cleanData,
     updatedAt: serverTimestamp(),
     updatedBy: userId,
   });

@@ -17,7 +17,7 @@ import { StageBadge } from './StageBadge';
 import { CATEGORY_LABELS, formatDateTime, STAGE_LABELS } from '../../utils/formatting';
 import { getNextStageForItem, ARCHITECTURAL_STAGE_ORDER } from '../../utils/stage-gate';
 import { StageGateCheck } from '../stage-gate/StageGateCheck';
-import { ArchitecturalPricingTab } from './ArchitecturalPricingTab';
+import { DesignDocumentPricingTab } from './DesignDocumentPricingTab';
 import {
   transitionStage,
   deleteDesignItem,
@@ -305,13 +305,13 @@ export default function DesignDocumentDetail() {
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="text-xs text-gray-500">Fixed Costs</p>
+                    <p className="text-xs text-gray-500">Pass-Through Costs</p>
                     <p className="text-lg font-semibold">
-                      {pricing.currency} {(pricing.totalFixedCosts || 0).toLocaleString()}
+                      {pricing.currency} {(((pricing.totalCost || 0) - (pricing.totalLaborCost || 0)) > 0 ? ((pricing.totalCost || 0) - (pricing.totalLaborCost || 0)).toLocaleString() : '0')}
                     </p>
                   </div>
                   <div className="bg-indigo-50 rounded-lg p-3">
-                    <p className="text-xs text-indigo-600">Total Cost</p>
+                    <p className="text-xs text-indigo-600">Total Fee</p>
                     <p className="text-lg font-semibold text-indigo-700">
                       {pricing.currency} {(pricing.totalCost || 0).toLocaleString()}
                     </p>
@@ -418,7 +418,7 @@ export default function DesignDocumentDetail() {
         )}
 
         {activeTab === 'pricing' && (
-          <ArchitecturalPricingTab
+          <DesignDocumentPricingTab
             item={item}
             projectId={projectId!}
             userId={user?.uid || ''}
