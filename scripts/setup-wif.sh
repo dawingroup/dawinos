@@ -61,6 +61,7 @@ else
         --workload-identity-pool=$POOL_NAME \
         --display-name="GitHub Provider" \
         --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
+        --attribute-condition="assertion.repository_owner == '${GITHUB_ORG}'" \
         --issuer-uri="https://token.actions.githubusercontent.com"
     echo "✓ Provider created"
 fi
