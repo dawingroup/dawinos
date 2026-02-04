@@ -7,9 +7,11 @@ import { z } from 'zod';
 import { useState, useEffect, useCallback } from 'react';
 import type {
   ProjectStrategy,
-  BudgetTier,
   ValidationResult,
 } from '../types/strategy';
+
+// Re-export ValidationResult for test imports
+export type { ValidationResult };
 
 // ============================================
 // Zod Schemas
@@ -94,9 +96,57 @@ export const RequirementsSchema = z.object({
 });
 
 /**
- * Project context schema (complete)
+ * Simple timeline schema for flat project context
+ */
+export const SimpleTimelineSchema = z.object({
+  startDate: z.union([z.string(), z.date()]).optional(),
+  endDate: z.union([z.string(), z.date()]).optional(),
+}).refine(
+  (data) => {
+    if (data.startDate && data.endDate) {
+      const start = new Date(data.startDate);
+      const end = new Date(data.endDate);
+      return end > start;
+    }
+    return true;
+  },
+  {
+    message: 'End date must be after start date',
+    path: ['endDate'],
+  }
+);
+
+/**
+ * Simple style schema for flat project context
+ */
+export const SimpleStyleSchema = z.object({
+  aestheticDirection: z.string().optional(),
+  materialPreferences: z.array(z.string()).optional(),
+  avoidMaterials: z.array(z.string()).optional(),
+});
+
+/**
+ * Project context schema (flat structure for forms)
+ * Supports both simple flat structure and nested structure
  */
 export const ProjectContextSchema = z.object({
+  // Flat structure fields (for simple forms)
+  type: z.string().transform(s => s.trim()).optional(),
+  location: z.string().transform(s => s.trim()).optional(),
+  country: z.string().optional(),
+  timeline: SimpleTimelineSchema.optional(),
+  style: SimpleStyleSchema.optional(),
+  // Nested structure fields (for complete forms)
+  customer: CustomerSchema.optional(),
+  project: ProjectSchema.optional(),
+  targetUsers: TargetUsersSchema.optional(),
+  requirements: RequirementsSchema.optional(),
+});
+
+/**
+ * Full project context schema (nested structure - for backward compat)
+ */
+export const FullProjectContextSchema = z.object({
   customer: CustomerSchema,
   project: ProjectSchema,
   timeline: TimelineSchema.optional(),
@@ -134,19 +184,14 @@ export const SpaceParametersSchema = z.object({
   spaceType: z.string().min(1, 'Space type is required'),
   circulationPercent: z.number()
     .min(0, 'Circulation percentage cannot be negative')
-    .max(100, 'Circulation percentage cannot exceed 100'),
+    .max(100, 'Circulation percentage cannot exceed 100')
+    .optional(),
   calculatedCapacity: z.object({
     minimum: z.number().int().min(0),
     optimal: z.number().int().min(0),
     maximum: z.number().int().min(0),
   }).optional(),
-}).refine(
-  (data) => data.circulationPercent >= 10 && data.circulationPercent <= 50,
-  {
-    message: 'Circulation percentage should typically be between 10% and 50%',
-    path: ['circulationPercent'],
-  }
-);
+});
 
 /**
  * Budget framework schema
@@ -155,7 +200,7 @@ export const BudgetFrameworkSchema = z.object({
   tier: z.enum(['economy', 'standard', 'premium', 'luxury'] as const),
   targetAmount: z.number().positive().optional(),
   currency: z.string().optional(),
-  priorities: z.array(z.string()),
+  priorities: z.array(z.string()).optional(),
 }).refine(
   (data) => {
     // If target amount provided, currency should be provided
@@ -190,25 +235,67 @@ export const ProjectStrategySchema = z.object({
 });
 
 // ============================================
+// Validation Helper Functions
+// ============================================
+
+/**
+ * Validate a single field value against a Zod schema
+ */
+export function validateField<T>(value: T, schema: z.ZodType<T>): { isValid: boolean; error: string | null } {
+  try {
+    schema.parse(value);
+    return { isValid: true, error: null };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { isValid: false, error: error.issues[0]?.message || 'Validation failed' };
+    }
+    return { isValid: false, error: 'Validation failed' };
+  }
+}
+
+/**
+ * Validate a section of data against a Zod schema
+ */
+export function validateSection<T>(data: T, schema: z.ZodType<T>): ValidationResult {
+  try {
+    schema.parse(data);
+    return { isValid: true, errors: {} };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      const errors: Record<string, string[]> = {};
+      error.issues.forEach((issue) => {
+        const path = issue.path.join('.') || '_root';
+        if (!errors[path]) {
+          errors[path] = [];
+        }
+        errors[path].push(issue.message);
+      });
+      return { isValid: false, errors };
+    }
+    return { isValid: false, errors: { _general: ['Validation failed'] } };
+  }
+}
+
+// ============================================
 // Validation Functions
 // ============================================
 
 /**
  * Validate project context
  */
-export function validateProjectContext(data: any): ValidationResult {
+export function validateProjectContext(data: unknown): ValidationResult {
   try {
     ProjectContextSchema.parse(data);
     return { isValid: true, errors: {} };
   } catch (error) {
     if (error instanceof z.ZodError) {
       const errors: Record<string, string[]> = {};
-      error.errors.forEach((err) => {
-        const path = err.path.join('.');
+      error.issues.forEach((issue) => {
+        const path = issue.path.join('.');
         if (!errors[path]) {
           errors[path] = [];
         }
-        errors[path].push(err.message);
+        errors[path].push(issue.message);
       });
       return { isValid: false, errors };
     }
@@ -226,8 +313,8 @@ export function validateDesignBrief(designBrief: string): ValidationResult {
   } catch (error) {
     if (error instanceof z.ZodError) {
       const errors: Record<string, string[]> = {};
-      error.errors.forEach((err) => {
-        errors['designBrief'] = [err.message];
+      error.issues.forEach((issue) => {
+        errors['designBrief'] = [issue.message];
       });
       return { isValid: false, errors };
     }
@@ -238,19 +325,19 @@ export function validateDesignBrief(designBrief: string): ValidationResult {
 /**
  * Validate challenges section
  */
-export function validateChallenges(data: any): ValidationResult {
+export function validateChallenges(data: unknown): ValidationResult {
   try {
     ChallengesSchema.parse(data);
     return { isValid: true, errors: {} };
   } catch (error) {
     if (error instanceof z.ZodError) {
       const errors: Record<string, string[]> = {};
-      error.errors.forEach((err) => {
-        const path = err.path.join('.');
+      error.issues.forEach((issue) => {
+        const path = issue.path.join('.');
         if (!errors[path]) {
           errors[path] = [];
         }
-        errors[path].push(err.message);
+        errors[path].push(issue.message);
       });
       return { isValid: false, errors };
     }
@@ -261,7 +348,7 @@ export function validateChallenges(data: any): ValidationResult {
 /**
  * Validate space parameters
  */
-export function validateSpaceParameters(data: any): ValidationResult {
+export function validateSpaceParameters(data: unknown): ValidationResult {
   try {
     SpaceParametersSchema.parse(data);
     return { isValid: true, errors: {} };
@@ -270,20 +357,20 @@ export function validateSpaceParameters(data: any): ValidationResult {
       const errors: Record<string, string[]> = {};
       const warnings: Record<string, string[]> = {};
 
-      error.errors.forEach((err) => {
-        const path = err.path.join('.');
+      error.issues.forEach((issue) => {
+        const path = issue.path.join('.');
 
         // Circulation warning is a warning, not an error
-        if (path === 'circulationPercent' && err.message.includes('typically')) {
+        if (path === 'circulationPercent' && issue.message.includes('typically')) {
           if (!warnings[path]) {
             warnings[path] = [];
           }
-          warnings[path].push(err.message);
+          warnings[path].push(issue.message);
         } else {
           if (!errors[path]) {
             errors[path] = [];
           }
-          errors[path].push(err.message);
+          errors[path].push(issue.message);
         }
       });
 
@@ -300,19 +387,19 @@ export function validateSpaceParameters(data: any): ValidationResult {
 /**
  * Validate budget framework
  */
-export function validateBudgetFramework(data: any): ValidationResult {
+export function validateBudgetFramework(data: unknown): ValidationResult {
   try {
     BudgetFrameworkSchema.parse(data);
     return { isValid: true, errors: {} };
   } catch (error) {
     if (error instanceof z.ZodError) {
       const errors: Record<string, string[]> = {};
-      error.errors.forEach((err) => {
-        const path = err.path.join('.');
+      error.issues.forEach((issue) => {
+        const path = issue.path.join('.');
         if (!errors[path]) {
           errors[path] = [];
         }
-        errors[path].push(err.message);
+        errors[path].push(issue.message);
       });
       return { isValid: false, errors };
     }
@@ -330,12 +417,12 @@ export function validateStrategy(strategy: Partial<ProjectStrategy>): Validation
   } catch (error) {
     if (error instanceof z.ZodError) {
       const errors: Record<string, string[]> = {};
-      error.errors.forEach((err) => {
-        const path = err.path.join('.');
+      error.issues.forEach((issue) => {
+        const path = issue.path.join('.');
         if (!errors[path]) {
           errors[path] = [];
         }
-        errors[path].push(err.message);
+        errors[path].push(issue.message);
       });
       return { isValid: false, errors };
     }
@@ -368,7 +455,7 @@ export function useFieldValidation<T>(
         setIsValid(true);
       } catch (err) {
         if (err instanceof z.ZodError) {
-          setError(err.errors[0]?.message || 'Validation failed');
+          setError(err.issues[0]?.message || 'Validation failed');
           setIsValid(false);
         }
       } finally {
@@ -427,7 +514,7 @@ export function useStrategyValidation(strategy: Partial<ProjectStrategy>) {
     const projectContext = strategy.projectContext;
     if (projectContext) {
       let completed = 0;
-      let total = 3; // customer.name, project.type, project.location
+      const total = 3; // customer.name, project.type, project.location
 
       if (projectContext.customer?.name) completed++;
       if (projectContext.project?.type) completed++;
@@ -454,7 +541,7 @@ export function useStrategyValidation(strategy: Partial<ProjectStrategy>) {
     const spaceParams = strategy.spaceParameters;
     if (spaceParams) {
       let completed = 0;
-      let total = 2; // totalArea, spaceType
+      const total = 2; // totalArea, spaceType
 
       if (spaceParams.totalArea && spaceParams.totalArea > 0) completed++;
       if (spaceParams.spaceType) completed++;
@@ -520,7 +607,7 @@ export function getRequiredFields(section: 'projectContext' | 'designBrief' | 's
  * Check if a field is required
  */
 export function isFieldRequired(section: string, fieldPath: string): boolean {
-  const requiredFields = getRequiredFields(section as any);
+  const requiredFields = getRequiredFields(section as 'projectContext' | 'designBrief' | 'spaceParameters' | 'budgetFramework');
   return requiredFields.includes(fieldPath);
 }
 
