@@ -1,58 +1,76 @@
-
 import { vi } from 'vitest';
 
-const firestoreMocks = {
-  connectFirestoreEmulator: vi.fn(),
-  getFirestore: vi.fn(() => ({})),
-  collection: vi.fn(),
-  doc: vi.fn(),
-  getDoc: vi.fn(),
-  getDocs: vi.fn(),
-  writeBatch: vi.fn(() => ({
-    set: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-    commit: vi.fn(),
+// Create individually exported mocks for easy test access
+export const connectFirestoreEmulator = vi.fn();
+export const getFirestore = vi.fn(() => ({}));
+export const collection = vi.fn(() => 'mock-collection-ref');
+export const doc = vi.fn(() => 'mock-doc-ref');
+export const getDoc = vi.fn();
+export const getDocs = vi.fn();
+export const setDoc = vi.fn();
+export const addDoc = vi.fn(() => Promise.resolve({ id: 'new-doc-id' }));
+export const updateDoc = vi.fn();
+export const deleteDoc = vi.fn();
+
+export const writeBatch = vi.fn(() => ({
+  set: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+  commit: vi.fn(() => Promise.resolve()),
+}));
+
+export const query = vi.fn(() => 'mock-query');
+export const where = vi.fn(() => 'mock-where');
+export const orderBy = vi.fn(() => 'mock-orderBy');
+export const limit = vi.fn(() => 'mock-limit');
+export const startAt = vi.fn();
+export const startAfter = vi.fn();
+export const endAt = vi.fn();
+export const endBefore = vi.fn();
+export const onSnapshot = vi.fn();
+export const serverTimestamp = vi.fn(() => ({ _serverTimestamp: true }));
+
+export const Timestamp = {
+  now: vi.fn(() => ({
+    toDate: () => new Date(),
+    toMillis: () => Date.now(),
+    seconds: Math.floor(Date.now() / 1000),
+    nanoseconds: 0,
   })),
-  query: vi.fn(),
-  where: vi.fn(),
-  orderBy: vi.fn(),
-  limit: vi.fn(),
-  startAt: vi.fn(),
-  startAfter: vi.fn(),
-  endAt: vi.fn(),
-  endBefore: vi.fn(),
-  onSnapshot: vi.fn(),
-  serverTimestamp: vi.fn(),
-  Timestamp: {
-    now: vi.fn(() => ({
-      toDate: () => new Date(),
-      toMillis: () => Date.now(),
-    })),
-    fromDate: vi.fn((date) => ({
-      toDate: () => date,
-      toMillis: () => date.getTime(),
-    })),
-  },
+  fromDate: vi.fn((date: Date) => ({
+    toDate: () => date,
+    toMillis: () => date.getTime(),
+    seconds: Math.floor(date.getTime() / 1000),
+    nanoseconds: 0,
+  })),
+  fromMillis: vi.fn((millis: number) => ({
+    toDate: () => new Date(millis),
+    toMillis: () => millis,
+    seconds: Math.floor(millis / 1000),
+    nanoseconds: 0,
+  })),
 };
 
-export const {
-  connectFirestoreEmulator,
-  getFirestore,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  writeBatch,
-  query,
-  where,
-  orderBy,
-  limit,
-  startAt,
-  startAfter,
-  endAt,
-  endBefore,
-  onSnapshot,
-  serverTimestamp,
-  Timestamp,
-} = firestoreMocks;
+// Helper to reset all mocks - can be called in beforeEach
+export function resetFirestoreMocks() {
+  connectFirestoreEmulator.mockClear();
+  getFirestore.mockClear();
+  collection.mockClear();
+  doc.mockClear();
+  getDoc.mockClear();
+  getDocs.mockClear();
+  setDoc.mockClear();
+  addDoc.mockClear();
+  updateDoc.mockClear();
+  deleteDoc.mockClear();
+  query.mockClear();
+  where.mockClear();
+  orderBy.mockClear();
+  limit.mockClear();
+  startAt.mockClear();
+  startAfter.mockClear();
+  endAt.mockClear();
+  endBefore.mockClear();
+  onSnapshot.mockClear();
+  serverTimestamp.mockClear();
+}

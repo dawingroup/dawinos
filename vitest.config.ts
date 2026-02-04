@@ -10,7 +10,17 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/testing/setup.ts'],
     include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    exclude: ['node_modules', 'dist', 'functions', '**/node_modules/**', 'src/extensions/**/node_modules/**'],
+    exclude: [
+      'node_modules',
+      'dist',
+      'functions',
+      '**/node_modules/**',
+      'src/extensions/**/node_modules/**',
+      // Integration tests require Firebase emulators
+      'src/testing/migration/**',
+      'src/testing/performance/**',
+      'src/testing/integration/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
