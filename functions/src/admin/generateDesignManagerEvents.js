@@ -98,16 +98,21 @@ function generateEventForProject(project, projectId) {
 exports.generateDesignManagerEvents = onCall({
   timeoutSeconds: 540,
   memory: '512MiB',
-  invoker: 'public',
+  // Remove 'invoker: public' to require authentication
 }, async (request) => {
+  // Require authentication
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated to generate events');
+  }
+
   const { dryRun = false } = request.data || {};
   const db = admin.firestore();
 
   try {
     // Log authentication info
-    const uid = request.auth?.uid;
+    const uid = request.auth.uid;
     console.log('Starting Business Event Generation for Design Manager Projects');
-    console.log(`Authenticated user: ${uid || 'anonymous'}`);
+    console.log(`Authenticated user: ${uid}`);
     console.log(`Dry Run: ${dryRun}`);
 
     // Fetch all Design Manager projects
@@ -234,27 +239,31 @@ exports.generateDesignManagerEventsHTTP = onRequest({
   timeoutSeconds: 540,
   memory: '512MiB',
   cors: ['https://dawinos.web.app', 'https://dawinos.firebaseapp.com'],
-  invoker: 'public',
+  // Remove 'invoker: public' to require authentication
 }, async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
-  try {
-    // Verify Firebase ID token
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const idToken = authHeader.substring(7);
-      try {
-        const decodedToken = await admin.auth().verifyIdToken(idToken);
-        console.log('Authenticated user:', decodedToken.uid, decodedToken.email);
-      } catch (error) {
-        console.warn('Token verification failed:', error.message);
-        // Continue anyway - token is optional for now
-      }
-    }
+  // Require Firebase ID token authentication
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Unauthorized: Missing or invalid authorization header' });
+    return;
+  }
 
+  try {
+    const idToken = authHeader.substring(7);
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    console.log('Authenticated user:', decodedToken.uid, decodedToken.email);
+  } catch (error) {
+    console.error('Token verification failed:', error.message);
+    res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    return;
+  }
+
+  try {
     const { dryRun = false } = req.body;
     const db = admin.firestore();
 
@@ -395,13 +404,18 @@ exports.processPendingEvents = onCall(
     region: 'us-central1',
     timeoutSeconds: 540,
     memory: '512MiB',
-    invoker: 'public',
+    // Remove 'invoker: public' to require authentication
   },
   async (request) => {
+    // Require authentication
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'User must be authenticated to process events');
+    }
+
     const db = admin.firestore();
     const dryRun = request.data?.dryRun ?? false;
 
-    logger.info('Processing pending business events', { dryRun });
+    logger.info('Processing pending business events', { dryRun, uid: request.auth.uid });
 
     // Task rules (inline copy to avoid import issues)
     const TASK_RULES = {

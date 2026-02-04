@@ -1,123 +1,142 @@
 #!/bin/bash
-# =============================================================================
-# Workload Identity Federation Setup for GitHub Actions
-# =============================================================================
-# This script sets up keyless authentication between GitHub Actions and GCP
-# Run this script locally with gcloud CLI authenticated
-# =============================================================================
-
 set -e
 
-# Configuration - Update these values
+# Configuration
 PROJECT_ID="dawinos"
-PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
-GITHUB_ORG="dawingroup"  # Your GitHub organization or username
-GITHUB_REPO="dawinos"    # Your repository name
-POOL_NAME="github-actions-pool"
+GITHUB_ORG="dawingroup"
+GITHUB_REPO="dawinos"
+POOL_NAME="github-pool"
 PROVIDER_NAME="github-provider"
-SERVICE_ACCOUNT_NAME="github-actions-deployer"
+SA_NAME="firebase-github-deploy"
 
 echo "=========================================="
-echo "Setting up Workload Identity Federation"
+echo "Firebase Workload Identity Federation Setup"
 echo "=========================================="
-echo "Project ID: $PROJECT_ID"
-echo "Project Number: $PROJECT_NUMBER"
-echo "GitHub: $GITHUB_ORG/$GITHUB_REPO"
-echo "=========================================="
-
-# Step 1: Enable required APIs
 echo ""
-echo "Step 1: Enabling required APIs..."
-gcloud services enable iamcredentials.googleapis.com --project=$PROJECT_ID
-gcloud services enable sts.googleapis.com --project=$PROJECT_ID
-gcloud services enable cloudresourcemanager.googleapis.com --project=$PROJECT_ID
-
-# Step 2: Create Workload Identity Pool
+echo "Project: $PROJECT_ID"
+echo "GitHub:  $GITHUB_ORG/$GITHUB_REPO"
 echo ""
-echo "Step 2: Creating Workload Identity Pool..."
-gcloud iam workload-identity-pools create "$POOL_NAME" \
-  --project="$PROJECT_ID" \
-  --location="global" \
-  --display-name="GitHub Actions Pool" \
-  --description="Identity pool for GitHub Actions CI/CD" \
-  2>/dev/null || echo "Pool already exists, continuing..."
 
-# Step 3: Create Workload Identity Provider
+# Check if gcloud is installed
+if ! command -v gcloud &> /dev/null; then
+    echo "Error: gcloud CLI is not installed."
+    echo "Install it from: https://cloud.google.com/sdk/docs/install"
+    exit 1
+fi
+
+# Check if authenticated
+ACTIVE_ACCOUNT=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/null | head -1)
+if [ -z "$ACTIVE_ACCOUNT" ]; then
+    echo "Error: Not authenticated with gcloud. Run: gcloud auth login"
+    exit 1
+fi
+echo "Authenticated as: $ACTIVE_ACCOUNT"
 echo ""
-echo "Step 3: Creating Workload Identity Provider..."
-gcloud iam workload-identity-pools providers create-oidc "$PROVIDER_NAME" \
-  --project="$PROJECT_ID" \
-  --location="global" \
-  --workload-identity-pool="$POOL_NAME" \
-  --display-name="GitHub Provider" \
-  --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
-  --attribute-condition="assertion.repository_owner == '$GITHUB_ORG'" \
-  --issuer-uri="https://token.actions.githubusercontent.com" \
-  2>/dev/null || echo "Provider already exists, continuing..."
 
-# Step 4: Create Service Account
+echo "Step 1/6: Enabling required APIs..."
+gcloud services enable iamcredentials.googleapis.com --project $PROJECT_ID
+gcloud services enable iam.googleapis.com --project $PROJECT_ID
+echo "✓ APIs enabled"
+
 echo ""
-echo "Step 4: Creating Service Account..."
-gcloud iam service-accounts create "$SERVICE_ACCOUNT_NAME" \
-  --project="$PROJECT_ID" \
-  --display-name="GitHub Actions Deployer" \
-  --description="Service account for GitHub Actions Firebase deployments" \
-  2>/dev/null || echo "Service account already exists, continuing..."
+echo "Step 2/6: Creating Workload Identity Pool..."
+if gcloud iam workload-identity-pools describe $POOL_NAME --project=$PROJECT_ID --location="global" > /dev/null 2>&1; then
+    echo "✓ Pool already exists"
+else
+    gcloud iam workload-identity-pools create $POOL_NAME \
+        --project=$PROJECT_ID \
+        --location="global" \
+        --display-name="GitHub Actions Pool"
+    echo "✓ Pool created"
+fi
 
-SERVICE_ACCOUNT_EMAIL="$SERVICE_ACCOUNT_NAME@$PROJECT_ID.iam.gserviceaccount.com"
-
-# Step 5: Grant roles to Service Account
 echo ""
-echo "Step 5: Granting roles to Service Account..."
+echo "Step 3/6: Creating OIDC Provider..."
+if gcloud iam workload-identity-pools providers describe $PROVIDER_NAME --project=$PROJECT_ID --location="global" --workload-identity-pool=$POOL_NAME > /dev/null 2>&1; then
+    echo "✓ Provider already exists"
+else
+    gcloud iam workload-identity-pools providers create-oidc $PROVIDER_NAME \
+        --project=$PROJECT_ID \
+        --location="global" \
+        --workload-identity-pool=$POOL_NAME \
+        --display-name="GitHub Provider" \
+        --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
+        --attribute-condition="assertion.repository_owner == '${GITHUB_ORG}'" \
+        --issuer-uri="https://token.actions.githubusercontent.com"
+    echo "✓ Provider created"
+fi
+
+echo ""
+echo "Step 4/6: Creating Service Account..."
+if gcloud iam service-accounts describe "${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" --project=$PROJECT_ID > /dev/null 2>&1; then
+    echo "✓ Service account already exists"
+else
+    gcloud iam service-accounts create $SA_NAME \
+        --project=$PROJECT_ID \
+        --display-name="Firebase GitHub Deploy"
+    echo "✓ Service account created"
+fi
+
+echo ""
+echo "Step 5/6: Granting Firebase deployment permissions..."
 ROLES=(
-  "roles/firebase.admin"
-  "roles/firebasehosting.admin"
-  "roles/cloudfunctions.admin"
-  "roles/iam.serviceAccountUser"
-  "roles/storage.admin"
-  "roles/datastore.owner"
+    "roles/firebase.admin"
+    "roles/cloudfunctions.admin"
+    "roles/iam.serviceAccountUser"
+    "roles/run.admin"
+    "roles/storage.admin"
+    "roles/firebasehosting.admin"
 )
 
-for ROLE in "${ROLES[@]}"; do
-  echo "  Granting $ROLE..."
-  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-    --member="serviceAccount:$SERVICE_ACCOUNT_EMAIL" \
-    --role="$ROLE" \
-    --condition=None \
-    --quiet
+for role in "${ROLES[@]}"; do
+    echo "  Adding $role..."
+    gcloud projects add-iam-policy-binding $PROJECT_ID \
+        --member="serviceAccount:${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
+        --role="$role" \
+        --quiet > /dev/null
 done
+echo "✓ Permissions granted"
 
-# Step 6: Allow GitHub Actions to impersonate the Service Account
 echo ""
-echo "Step 6: Configuring Workload Identity binding..."
-WORKLOAD_IDENTITY_POOL_ID="projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$POOL_NAME"
+echo "Step 6/6: Configuring Workload Identity binding..."
+POOL_ID=$(gcloud iam workload-identity-pools describe $POOL_NAME \
+    --project=$PROJECT_ID \
+    --location="global" \
+    --format="value(name)")
 
-gcloud iam service-accounts add-iam-policy-binding "$SERVICE_ACCOUNT_EMAIL" \
-  --project="$PROJECT_ID" \
-  --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/$WORKLOAD_IDENTITY_POOL_ID/attribute.repository/$GITHUB_ORG/$GITHUB_REPO"
-
-# Get the full provider resource name
-PROVIDER_RESOURCE_NAME="projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$POOL_NAME/providers/$PROVIDER_NAME"
+gcloud iam service-accounts add-iam-policy-binding \
+    "${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
+    --project=$PROJECT_ID \
+    --role="roles/iam.workloadIdentityUser" \
+    --member="principalSet://iam.googleapis.com/${POOL_ID}/attribute.repository/${GITHUB_ORG}/${GITHUB_REPO}" \
+    --quiet > /dev/null
+echo "✓ Workload Identity binding configured"
 
 echo ""
 echo "=========================================="
 echo "Setup Complete!"
 echo "=========================================="
 echo ""
-echo "Add these secrets to your GitHub repository:"
-echo "(Settings -> Secrets and variables -> Actions -> New repository secret)"
+echo "Add these secrets to GitHub:"
+echo "(Settings → Secrets and variables → Actions)"
 echo ""
-echo "WIF_PROVIDER:"
-echo "$PROVIDER_RESOURCE_NAME"
+
+WIF_PROVIDER=$(gcloud iam workload-identity-pools providers describe $PROVIDER_NAME \
+    --project=$PROJECT_ID \
+    --location="global" \
+    --workload-identity-pool=$POOL_NAME \
+    --format="value(name)")
+
+echo "┌─────────────────────────────────────────────────────────────────┐"
+echo "│ Secret: WIF_PROVIDER                                           │"
+echo "├─────────────────────────────────────────────────────────────────┤"
+echo "│ $WIF_PROVIDER"
+echo "├─────────────────────────────────────────────────────────────────┤"
+echo "│ Secret: WIF_SERVICE_ACCOUNT                                    │"
+echo "├─────────────────────────────────────────────────────────────────┤"
+echo "│ ${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com               │"
+echo "└─────────────────────────────────────────────────────────────────┘"
 echo ""
-echo "WIF_SERVICE_ACCOUNT:"
-echo "$SERVICE_ACCOUNT_EMAIL"
+echo "After adding secrets, push to 'main' or create a PR to trigger deployment."
 echo ""
-echo "=========================================="
-echo ""
-echo "Or run these GitHub CLI commands:"
-echo ""
-echo "gh secret set WIF_PROVIDER --body \"$PROVIDER_RESOURCE_NAME\""
-echo "gh secret set WIF_SERVICE_ACCOUNT --body \"$SERVICE_ACCOUNT_EMAIL\""
-echo ""
+echo "IMPORTANT: Delete any service account keys you created earlier!"

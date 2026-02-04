@@ -310,10 +310,94 @@ export async function refreshReportFromStrategy(
   const now = Timestamp.now();
 
   if (options.forceRegenerate) {
-    // For full regeneration, caller should use cloud function to generate new report
-    // Then merge manual edits if preserveManualEdits is true
-    // This is a placeholder - actual implementation would call the cloud function
-    throw new Error('Full regeneration not yet implemented - use cloud function directly');
+    // Get the project strategy to regenerate from
+    const strategyRef = doc(db, PROJECT_STRATEGY_COLLECTION, report.projectId);
+    const strategyDoc = await getDoc(strategyRef);
+
+    if (!strategyDoc.exists()) {
+      throw new Error('Project strategy not found');
+    }
+
+    const strategy = strategyDoc.data();
+
+    // Import and call the strategy generation function
+    // We use dynamic import to avoid circular dependencies
+    const { generateStrategyReportContent } = await import('./aiService');
+
+    // Build input params from existing report context
+    const inputParams: GenerateStrategyInput = {
+      projectName: report.projectName,
+      projectType: report.projectCode,
+      // Use strategy data for regeneration
+      challenges: strategy.challenges,
+      spaceParameters: strategy.spaceParameters,
+      budgetFramework: strategy.budgetFramework,
+      designBrief: strategy.designBrief,
+    };
+
+    // Generate new content
+    const generatedReport = await generateStrategyReportContent(inputParams);
+
+    // Prepare updated content
+    let updatedContent: Partial<StrategyReportDocument> = {
+      executiveSummary: generatedReport.executiveSummary,
+      trends: generatedReport.trends,
+      recommendations: generatedReport.recommendations,
+      materialPalette: generatedReport.materialPalette,
+      colorScheme: generatedReport.colorScheme,
+      productionFeasibility: generatedReport.productionFeasibility,
+      productionDetails: generatedReport.productionDetails,
+      nextSteps: generatedReport.nextSteps,
+      productRecommendations: generatedReport.productRecommendations,
+      inspirationGallery: generatedReport.inspirationGallery,
+    };
+
+    // Preserve manual edits if requested
+    if (options.preserveManualEdits && report.manualEdits && report.manualEdits.length > 0) {
+      // Apply manual edits on top of regenerated content
+      for (const edit of report.manualEdits) {
+        if (edit.field && edit.value !== undefined) {
+          (updatedContent as any)[edit.field] = edit.value;
+        }
+      }
+    }
+
+    // Create version entry
+    const versionEntry: VersionEntry = {
+      version: report.version + 1,
+      changedBy: userId,
+      changedAt: now,
+      changeType: 'regenerated',
+      changedFields: Object.keys(updatedContent),
+      changeNotes: options.preserveManualEdits
+        ? 'Regenerated from strategy (manual edits preserved)'
+        : 'Regenerated from strategy',
+    };
+
+    // Update generation context
+    const generationContext: GenerationContext = {
+      strategySnapshot: strategy,
+      inputParameters: inputParams,
+      generatedAt: now,
+      generatedBy: userId,
+      aiModel: 'gemini-2.0-flash',
+    };
+
+    await updateStrategyReport(
+      reportId,
+      {
+        ...updatedContent,
+        syncStatus: 'in_sync',
+        isSynced: true,
+        lastSyncedAt: now,
+        staleReason: undefined,
+        generationContext,
+        versionHistory: [...report.versionHistory, versionEntry],
+      },
+      userId
+    );
+
+    return await getStrategyReport(reportId) as StrategyReportDocument;
   } else {
     // Just mark as synced (user reviewed and confirmed no changes needed)
     const versionEntry: VersionEntry = {

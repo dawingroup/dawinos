@@ -1117,7 +1117,22 @@ function determineRoleFromTitle(title) {
 const assignUnassignedTasks = onRequest(
   { region: 'europe-west1', timeoutSeconds: 120, cors: true },
   async (req, res) => {
-    logger.info('assignUnassignedTasks called');
+    // Verify Firebase ID token for authentication
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'Unauthorized: Missing or invalid authorization header' });
+      return;
+    }
+
+    try {
+      const idToken = authHeader.substring(7);
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      logger.info('assignUnassignedTasks called by authenticated user', { uid: decodedToken.uid });
+    } catch (error) {
+      logger.warn('assignUnassignedTasks: Token verification failed', { error: error.message });
+      res.status(401).json({ error: 'Unauthorized: Invalid token' });
+      return;
+    }
 
     const snapshot = await db
       .collection(COLLECTIONS.GENERATED_TASKS)
