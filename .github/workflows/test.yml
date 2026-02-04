@@ -58,7 +58,7 @@ jobs:
           name: codecov-unit
 
       - name: Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: unit-test-results
@@ -113,7 +113,7 @@ jobs:
           FIREBASE_AUTH_EMULATOR_HOST: localhost:9099
 
       - name: Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: integration-test-results
@@ -159,7 +159,7 @@ jobs:
           BASE_URL: http://localhost:3000
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-report
@@ -194,7 +194,7 @@ jobs:
         run: pnpm test:performance
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: performance-results
           path: test-results/benchmarks.json
@@ -209,7 +209,7 @@ jobs:
     if: always()
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
 
       - name: Generate summary
         run: |
