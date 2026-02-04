@@ -58,7 +58,7 @@ jobs:
           name: codecov-unit
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         if: always()
         with:
           name: unit-test-results
@@ -103,29 +103,17 @@ jobs:
       - name: Start Firebase Emulator
         run: |
           firebase emulators:start --only firestore,auth --project demo-dawinos &
-          # Wait for emulators to be ready
-          max_attempts=30
-          attempt=0
-          until curl -s http://localhost:8080 > /dev/null 2>&1; do
-            attempt=$((attempt + 1))
-            if [ $attempt -eq $max_attempts ]; then
-              echo "Firebase emulator failed to start"
-              exit 1
-            fi
-            echo "Waiting for Firebase emulator... ($attempt/$max_attempts)"
-            sleep 2
-          done
-          echo "Firebase emulator is ready"
+          sleep 15
 
       - name: Run integration tests
         run: pnpm test:integration
         env:
           CI: true
-          FIRESTORE_EMULATOR_HOST: localhost:8080
+          FIREBASE_EMULATOR_HOST: localhost:8080
           FIREBASE_AUTH_EMULATOR_HOST: localhost:9099
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         if: always()
         with:
           name: integration-test-results
@@ -171,7 +159,7 @@ jobs:
           BASE_URL: http://localhost:3000
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         if: always()
         with:
           name: playwright-report
@@ -206,7 +194,7 @@ jobs:
         run: pnpm test:performance
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: performance-results
           path: test-results/benchmarks.json
@@ -221,7 +209,7 @@ jobs:
     if: always()
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
 
       - name: Generate summary
         run: |
