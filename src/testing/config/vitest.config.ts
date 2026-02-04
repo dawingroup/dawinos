@@ -24,6 +24,10 @@ export default defineConfig({
       '.idea',
       '.git',
       '.cache',
+      // Integration tests require Firebase emulators
+      'src/testing/migration/**',
+      'src/testing/performance/**',
+      'src/testing/integration/**',
     ],
     coverage: {
       provider: 'v8',
@@ -67,6 +71,7 @@ export default defineConfig({
       '@testing': path.resolve(__dirname, '../'),
       '@modules': path.resolve(__dirname, '../../modules'),
       '@shared': path.resolve(__dirname, '../../shared'),
+      'firebase/firestore': path.resolve(__dirname, '../../firebase/__mocks__/firestore.ts'),
     },
   },
 });
