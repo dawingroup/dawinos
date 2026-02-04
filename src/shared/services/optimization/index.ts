@@ -5,6 +5,9 @@
 
 export * from './InvalidationDetector';
 export * from './OptimizationService';
+export * from './TimberOptimizationService';
+export * from './LinearStockOptimizationService';
+export * from './GlassOptimizationService';
 export * from './projectOptimization';
 export * from './changeDetection';
 export {

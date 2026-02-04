@@ -14,9 +14,9 @@ import {
   Timestamp as FirestoreTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/shared/services/firebase';
-import type { 
-  Project, 
-  EstimationResult, 
+import type {
+  Project,
+  EstimationResult,
   ProductionResult,
   SheetSummary,
   NestingSheet,
@@ -25,9 +25,16 @@ import type {
   PartPlacement,
   WasteRegion,
   Timestamp,
+  MaterialType,
+  TimberSummary,
+  LinearStockSummary,
+  LinearCuttingResult,
 } from '@/shared/types';
 import type { PartEntry } from '@/modules/design-manager/types';
 import { optimizationService, type Panel, type OptimizationResult } from './OptimizationService';
+import { TimberOptimizationService } from './TimberOptimizationService';
+import { LinearStockOptimizationService } from './LinearStockOptimizationService';
+import { GlassOptimizationService } from './GlassOptimizationService';
 import { getMaterialPriceByName } from '@/modules/inventory/services/inventoryPriceService';
 import { updateOptimizationRAG } from '../ragService';
 
@@ -284,6 +291,90 @@ function buildDesignToInventoryMaterialMap(
 }
 
 /**
+ * Determine material type for a part based on material palette
+ */
+function getMaterialType(
+  part: CutlistPart,
+  project: Project
+): MaterialType {
+  const materialPalette = project.materialPalette?.entries || [];
+
+  // Find matching material palette entry
+  const paletteEntry = materialPalette.find(
+    entry => entry.designName === part.materialName || entry.normalizedName === part.materialName
+  );
+
+  if (paletteEntry) {
+    return paletteEntry.materialType;
+  }
+
+  // Default to PANEL for backwards compatibility
+  return 'PANEL';
+}
+
+/**
+ * Group parts by material type
+ */
+function groupPartsByMaterialType(
+  parts: CutlistPart[],
+  project: Project
+): Record<MaterialType, CutlistPart[]> {
+  const groups: Record<MaterialType, CutlistPart[]> = {
+    PANEL: [],
+    SOLID: [],
+    VENEER: [],
+    EDGE: [],
+    TIMBER: [],
+    GLASS: [],
+    METAL_BAR: [],
+    ALUMINIUM: [],
+  };
+
+  for (const part of parts) {
+    const materialType = getMaterialType(part, project);
+    groups[materialType].push(part);
+  }
+
+  return groups;
+}
+
+/**
+ * Extract timber stock definitions from material palette
+ */
+function extractTimberStock(project: Project) {
+  const materialPalette = project.materialPalette?.entries || [];
+  const timberStock = materialPalette
+    .filter(entry => entry.materialType === 'TIMBER' && entry.timberStock)
+    .flatMap(entry => entry.timberStock || []);
+
+  return timberStock;
+}
+
+/**
+ * Extract linear stock definitions from material palette
+ */
+function extractLinearStock(project: Project) {
+  const materialPalette = project.materialPalette?.entries || [];
+  const linearStock = materialPalette
+    .filter(entry => (entry.materialType === 'METAL_BAR' || entry.materialType === 'ALUMINIUM') && entry.linearStock)
+    .flatMap(entry => entry.linearStock || []);
+
+  return linearStock;
+}
+
+/**
+ * Extract glass stock definitions from material palette
+ */
+function extractGlassStock(project: Project) {
+  const materialPalette = project.materialPalette?.entries || [];
+  const glassStock = materialPalette
+    .filter(entry => entry.materialType === 'GLASS' && entry.glassStock)
+    .flatMap(entry => entry.glassStock || []);
+
+  return glassStock;
+}
+
+/**
  * Convert CutlistParts to optimization Panel format
  * Uses inventory material name for grouping when available (via materialMap)
  * This ensures parts with different design materials but same inventory material
@@ -297,7 +388,7 @@ function partsToOptimizationPanels(
     // Use inventory material if mapped, otherwise use design material
     const mappedMaterial = materialMap?.get(part.materialName);
     const nestingMaterial = mappedMaterial?.inventoryName || part.materialName;
-    
+
     return {
       id: part.id,
       label: `${part.designItemName} - ${part.name}`,
@@ -467,72 +558,202 @@ export async function runProjectEstimation(
     }
   }
   
-  // Run estimation optimization
-  const result = optimizationService.optimize(panels, {
-    mode: 'ESTIMATION',
-    bladeKerf: config?.kerf || 4,
-    stockSheets: Object.keys(stockSheets).length > 0 ? stockSheets : undefined,
-  });
-  
+  // ============================================
+  // Group parts by material type and run type-specific optimization
+  // ============================================
+  const partsByType = groupPartsByMaterialType(parts, project);
+
+  // Panel materials (sheet goods) - existing optimization
+  let sheetSummary: SheetSummary[] = [];
+  let panelCost = 0;
+  let totalSheetsCount = 0;
+  let totalPanelParts = 0;
+  let wasteEstimate = 0;
+
+  if (partsByType.PANEL.length > 0 || partsByType.SOLID.length > 0 || partsByType.VENEER.length > 0) {
+    const panelParts = [...partsByType.PANEL, ...partsByType.SOLID, ...partsByType.VENEER];
+    const panelPanels = partsToOptimizationPanels(panelParts, materialMap);
+
+    const panelResult = optimizationService.optimize(panelPanels, {
+      mode: 'ESTIMATION',
+      bladeKerf: config?.kerf || 4,
+      stockSheets: Object.keys(stockSheets).length > 0 ? stockSheets : undefined,
+    });
+
+    sheetSummary = buildSheetSummary(panelResult, panelParts);
+    wasteEstimate = panelResult.totalWastedArea / (panelResult.totalUsedArea + panelResult.totalWastedArea) * 100;
+    panelCost = (panelResult.estimatedMaterialCost || 0) * 1.15; // 15% buffer
+    totalSheetsCount = panelResult.totalSheets;
+    totalPanelParts = panelResult.totalPanels;
+  }
+
+  // Timber materials (dimensional lumber)
+  let timberSummary: TimberSummary[] | undefined;
+  let timberCost = 0;
+  let totalTimberSticks = 0;
+
+  if (partsByType.TIMBER.length > 0) {
+    const timberStock = extractTimberStock(project);
+
+    if (timberStock.length > 0) {
+      const timberService = new TimberOptimizationService(config?.kerf || 4, config?.minimumUsableOffcut || 300);
+      const timberParts = partsByType.TIMBER.map(part => ({
+        partId: part.id,
+        partName: part.name,
+        designItemId: part.designItemId,
+        designItemName: part.designItemName,
+        length: part.length,
+        width: part.width,
+        thickness: part.thickness,
+        quantity: part.quantity,
+        materialName: part.materialName,
+      }));
+
+      timberSummary = await timberService.estimateTimber(timberParts, timberStock);
+      timberCost = timberSummary.reduce((sum, s) => sum + s.estimatedCost, 0);
+      totalTimberSticks = timberSummary.reduce((sum, s) => sum + s.sticksRequired, 0);
+    }
+  }
+
+  // Linear stock materials (metal bars, aluminium)
+  let linearStockSummary: LinearStockSummary[] | undefined;
+  let linearStockCost = 0;
+  let totalLinearBars = 0;
+
+  if (partsByType.METAL_BAR.length > 0 || partsByType.ALUMINIUM.length > 0) {
+    const linearStock = extractLinearStock(project);
+
+    if (linearStock.length > 0) {
+      const linearService = new LinearStockOptimizationService(config?.kerf || 4, config?.minimumUsableOffcut || 300);
+      const linearParts = [...partsByType.METAL_BAR, ...partsByType.ALUMINIUM].map(part => ({
+        partId: part.id,
+        partName: part.name,
+        designItemId: part.designItemId,
+        designItemName: part.designItemName,
+        length: part.length,
+        quantity: part.quantity,
+        materialName: part.materialName,
+        profile: `${part.thickness}x${part.width}`, // TODO: Get actual profile from material palette
+      }));
+
+      linearStockSummary = await linearService.estimateLinearStock(linearParts, linearStock);
+      linearStockCost = linearStockSummary.reduce((sum, s) => sum + s.estimatedCost, 0);
+      totalLinearBars = linearStockSummary.reduce((sum, s) => sum + s.barsRequired, 0);
+    }
+  }
+
+  // Glass materials (handled similarly to panels but with safety margins)
+  if (partsByType.GLASS.length > 0) {
+    const glassStock = extractGlassStock(project);
+
+    if (glassStock.length > 0) {
+      const glassService = new GlassOptimizationService(config?.kerf || 4);
+      const glassParts = partsByType.GLASS.map(part => ({
+        partId: part.id,
+        partName: part.name,
+        designItemId: part.designItemId,
+        designItemName: part.designItemName,
+        length: part.length,
+        width: part.width,
+        thickness: part.thickness,
+        quantity: part.quantity,
+        materialName: part.materialName,
+        grain: part.grainDirection === 'none' ? 0 : 1,
+      }));
+
+      const glassSummary = await glassService.estimateGlass(glassParts, glassStock);
+      // Add glass to sheet summary
+      sheetSummary.push(...glassSummary);
+      const glassCost = glassSummary.reduce((sum, s) => sum + s.estimatedCost, 0);
+      panelCost += glassCost;
+      totalSheetsCount += glassSummary.reduce((sum, s) => sum + s.sheetsRequired, 0);
+    }
+  }
+
   // Aggregate standard and special parts for cost calculation
   const [standardParts, specialParts] = await Promise.all([
     aggregateStandardPartsFromProject(projectId),
     aggregateSpecialPartsFromProject(projectId),
   ]);
-  
+
   // Calculate standard parts cost (quantity × unitCost)
   const standardPartsCost = standardParts.reduce(
     (sum, p) => sum + (p.quantity * p.unitCost), 0
   );
-  
+
   // Calculate special parts cost (unitCost × quantity for proper multiplication)
-  // Note: totalLandedCost is per-entry before requiredQuantity multiplication
   const specialPartsCost = specialParts.reduce(
     (sum, p) => sum + (p.quantity * (p.costing?.unitCost || 0)), 0
   );
-  
-  // Convert to EstimationResult format
-  const sheetSummary = buildSheetSummary(result, parts);
-  const wasteEstimate = result.totalWastedArea / (result.totalUsedArea + result.totalWastedArea) * 100;
-  
-  // Add 15% buffer to sheet material estimation
-  const bufferedCost = (result.estimatedMaterialCost || 0) * 1.15;
-  
-  // Total cost includes all components
-  const totalCost = bufferedCost + standardPartsCost + specialPartsCost;
+
+  // Total cost includes all material types
+  const totalCost = panelCost + timberCost + linearStockCost + standardPartsCost + specialPartsCost;
   
   const now = FirestoreTimestamp.now();
   const timestamp: Timestamp = {
     seconds: now.seconds,
     nanoseconds: now.nanoseconds,
   };
-  
+
   const estimation: EstimationResult = {
+    // Panel materials
     sheetSummary,
-    roughCost: bufferedCost,
+    roughCost: panelCost,
+
+    // Timber materials
+    timberSummary,
+    timberCost,
+
+    // Linear stock (metal bars, aluminium)
+    linearStockSummary,
+    linearStockCost,
+
+    // Other costs
     standardPartsCost,
     specialPartsCost,
     totalCost,
+
+    // Statistics
     wasteEstimate,
-    totalPartsCount: result.totalPanels,
-    totalSheetsCount: result.totalSheets,
+    totalPartsCount: parts.length,
+    totalSheetsCount,
+    totalTimberSticks,
+    totalLinearBars,
     totalStandardParts: standardParts.reduce((sum, p) => sum + p.quantity, 0),
     totalSpecialParts: specialParts.reduce((sum, p) => sum + p.quantity, 0),
+
     validAt: timestamp,
   };
   
   // Save to project - explicitly set fields and clear invalidation
   await updateDoc(projectRef, {
+    // Panel materials
     'optimizationState.estimation.sheetSummary': estimation.sheetSummary,
     'optimizationState.estimation.roughCost': estimation.roughCost,
+
+    // Timber materials
+    'optimizationState.estimation.timberSummary': estimation.timberSummary || deleteField(),
+    'optimizationState.estimation.timberCost': estimation.timberCost || deleteField(),
+
+    // Linear stock
+    'optimizationState.estimation.linearStockSummary': estimation.linearStockSummary || deleteField(),
+    'optimizationState.estimation.linearStockCost': estimation.linearStockCost || deleteField(),
+
+    // Other costs
     'optimizationState.estimation.standardPartsCost': estimation.standardPartsCost,
     'optimizationState.estimation.specialPartsCost': estimation.specialPartsCost,
     'optimizationState.estimation.totalCost': estimation.totalCost,
+
+    // Statistics
     'optimizationState.estimation.wasteEstimate': estimation.wasteEstimate,
     'optimizationState.estimation.totalPartsCount': estimation.totalPartsCount,
     'optimizationState.estimation.totalSheetsCount': estimation.totalSheetsCount,
+    'optimizationState.estimation.totalTimberSticks': estimation.totalTimberSticks || deleteField(),
+    'optimizationState.estimation.totalLinearBars': estimation.totalLinearBars || deleteField(),
     'optimizationState.estimation.totalStandardParts': estimation.totalStandardParts,
     'optimizationState.estimation.totalSpecialParts': estimation.totalSpecialParts,
+
+    // Metadata
     'optimizationState.estimation.validAt': estimation.validAt,
     'optimizationState.estimation.invalidatedAt': deleteField(),
     'optimizationState.estimation.invalidationReasons': deleteField(),
@@ -662,40 +883,187 @@ export async function runProjectProduction(
     }
   }
   
-  // Run production optimization
-  const result = optimizationService.optimize(panels, {
-    mode: 'PRODUCTION',
-    bladeKerf: config?.kerf || 4,
-    stockSheets,
-  });
-  
-  // Convert to ProductionResult format
-  const nestingSheets = buildNestingSheets(result, parts);
+  // ============================================
+  // Group parts by material type and run type-specific optimization
+  // ============================================
+  const partsByType = groupPartsByMaterialType(parts, project);
+
+  // Panel materials (sheet goods) - existing optimization
+  let nestingSheets: NestingSheet[] = [];
+  let panelYield = 0;
+
+  if (partsByType.PANEL.length > 0 || partsByType.SOLID.length > 0 || partsByType.VENEER.length > 0) {
+    const panelParts = [...partsByType.PANEL, ...partsByType.SOLID, ...partsByType.VENEER];
+    const panelPanels = partsToOptimizationPanels(panelParts, materialMap);
+
+    const panelResult = optimizationService.optimize(panelPanels, {
+      mode: 'PRODUCTION',
+      bladeKerf: config?.kerf || 4,
+      stockSheets,
+    });
+
+    nestingSheets = buildNestingSheets(panelResult, panelParts);
+    panelYield = panelResult.averageUtilization;
+  }
+
+  // Timber materials (dimensional lumber) - FFD linear cutting
+  let timberCuttingResults: LinearCuttingResult[] | undefined;
+  let timberYield = 0;
+
+  if (partsByType.TIMBER.length > 0) {
+    const timberStock = extractTimberStock(project);
+
+    if (timberStock.length > 0) {
+      const timberService = new TimberOptimizationService(config?.kerf || 4, config?.minimumUsableOffcut || 300);
+      const timberParts = partsByType.TIMBER.map(part => ({
+        partId: part.id,
+        partName: part.name,
+        designItemId: part.designItemId,
+        designItemName: part.designItemName,
+        length: part.length,
+        width: part.width,
+        thickness: part.thickness,
+        quantity: part.quantity,
+        materialName: part.materialName,
+      }));
+
+      timberCuttingResults = await timberService.optimizeTimber(timberParts, timberStock, config?.targetYield || 85);
+
+      // Calculate average utilization
+      if (timberCuttingResults.length > 0) {
+        timberYield = timberCuttingResults.reduce((sum, r) => sum + r.utilizationPercent, 0) / timberCuttingResults.length;
+      }
+    }
+  }
+
+  // Linear stock materials (metal bars, aluminium) - FFD linear cutting
+  let linearStockCuttingResults: LinearCuttingResult[] | undefined;
+  let linearStockYield = 0;
+
+  if (partsByType.METAL_BAR.length > 0 || partsByType.ALUMINIUM.length > 0) {
+    const linearStock = extractLinearStock(project);
+
+    if (linearStock.length > 0) {
+      const linearService = new LinearStockOptimizationService(config?.kerf || 4, config?.minimumUsableOffcut || 300);
+      const linearParts = [...partsByType.METAL_BAR, ...partsByType.ALUMINIUM].map(part => ({
+        partId: part.id,
+        partName: part.name,
+        designItemId: part.designItemId,
+        designItemName: part.designItemName,
+        length: part.length,
+        quantity: part.quantity,
+        materialName: part.materialName,
+        profile: `${part.thickness}x${part.width}`, // TODO: Get actual profile from material palette
+      }));
+
+      linearStockCuttingResults = await linearService.optimizeLinearStock(linearParts, linearStock, config?.targetYield || 85);
+
+      // Calculate average utilization
+      if (linearStockCuttingResults.length > 0) {
+        linearStockYield = linearStockCuttingResults.reduce((sum, r) => sum + r.utilizationPercent, 0) / linearStockCuttingResults.length;
+      }
+    }
+  }
+
+  // Glass materials (2D nesting with safety margins)
+  if (partsByType.GLASS.length > 0) {
+    const glassStock = extractGlassStock(project);
+
+    if (glassStock.length > 0) {
+      const glassService = new GlassOptimizationService(config?.kerf || 4);
+      const glassParts = partsByType.GLASS.map(part => ({
+        partId: part.id,
+        partName: part.name,
+        designItemId: part.designItemId,
+        designItemName: part.designItemName,
+        length: part.length,
+        width: part.width,
+        thickness: part.thickness,
+        quantity: part.quantity,
+        materialName: part.materialName,
+        grain: part.grainDirection === 'none' ? 0 : 1,
+      }));
+
+      const glassSheets = await glassService.optimizeGlass(glassParts, glassStock, config?.targetYield || 75);
+      nestingSheets.push(...glassSheets);
+
+      // Update panel yield to include glass
+      const glassYield = glassSheets.reduce((sum, s) => sum + s.utilizationPercent, 0) / (glassSheets.length || 1);
+      if (nestingSheets.length > glassSheets.length) {
+        // Weighted average if we have both panels and glass
+        const panelSheetCount = nestingSheets.length - glassSheets.length;
+        panelYield = (panelYield * panelSheetCount + glassYield * glassSheets.length) / nestingSheets.length;
+      } else {
+        panelYield = glassYield;
+      }
+    }
+  }
+
+  // Calculate overall yield (weighted average across all material types)
+  const yields = [];
+  if (nestingSheets.length > 0) yields.push({ yield: panelYield, weight: nestingSheets.length });
+  if (timberCuttingResults && timberCuttingResults.length > 0) yields.push({ yield: timberYield, weight: timberCuttingResults.length });
+  if (linearStockCuttingResults && linearStockCuttingResults.length > 0) yields.push({ yield: linearStockYield, weight: linearStockCuttingResults.length });
+
+  const totalWeight = yields.reduce((sum, y) => sum + y.weight, 0);
+  const optimizedYield = yields.length > 0
+    ? yields.reduce((sum, y) => sum + (y.yield * y.weight), 0) / totalWeight
+    : 0;
+
+  // Build cut sequence from nesting sheets (panels and glass only)
   const cutSequence = buildCutSequence(nestingSheets);
-  const optimizedYield = result.averageUtilization;
   
   const now = FirestoreTimestamp.now();
   const timestamp: Timestamp = {
     seconds: now.seconds,
     nanoseconds: now.nanoseconds,
   };
-  
+
   const production: ProductionResult = {
+    // Panel materials (sheet goods)
     nestingSheets,
     cutSequence,
+
+    // Timber materials (dimensional lumber)
+    timberCuttingResults,
+
+    // Linear stock (metal bars, aluminium)
+    linearStockCuttingResults,
+
+    // Optimization metrics
     optimizedYield,
+    sheetYield: nestingSheets.length > 0 ? panelYield : undefined,
+    timberYield: timberCuttingResults && timberCuttingResults.length > 0 ? timberYield : undefined,
+    linearStockYield: linearStockCuttingResults && linearStockCuttingResults.length > 0 ? linearStockYield : undefined,
+
     totalCuttingLength: calculateTotalCuttingLength(cutSequence),
     estimatedCutTime: estimateCutTime(cutSequence),
+
     validAt: timestamp,
   };
   
   // Save to project - explicitly set fields and clear invalidation
   await updateDoc(projectRef, {
+    // Panel materials
     'optimizationState.production.nestingSheets': production.nestingSheets,
     'optimizationState.production.cutSequence': production.cutSequence,
+
+    // Timber materials
+    'optimizationState.production.timberCuttingResults': production.timberCuttingResults || deleteField(),
+
+    // Linear stock
+    'optimizationState.production.linearStockCuttingResults': production.linearStockCuttingResults || deleteField(),
+
+    // Optimization metrics
     'optimizationState.production.optimizedYield': production.optimizedYield,
+    'optimizationState.production.sheetYield': production.sheetYield || deleteField(),
+    'optimizationState.production.timberYield': production.timberYield || deleteField(),
+    'optimizationState.production.linearStockYield': production.linearStockYield || deleteField(),
+
     'optimizationState.production.totalCuttingLength': production.totalCuttingLength,
     'optimizationState.production.estimatedCutTime': production.estimatedCutTime,
+
+    // Metadata
     'optimizationState.production.validAt': production.validAt,
     'optimizationState.production.invalidatedAt': deleteField(),
     'optimizationState.production.invalidationReasons': deleteField(),

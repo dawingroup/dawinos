@@ -10,7 +10,7 @@ import type { Timestamp } from './common';
 // ============================================
 
 /**
- * Stock sheet configuration for optimization
+ * Stock sheet configuration for optimization (PANEL materials)
  */
 export interface OptimizationStockSheet {
   id: string;
@@ -23,6 +23,92 @@ export interface OptimizationStockSheet {
   costPerSheet: number;
   supplier?: string;
   sku?: string;
+}
+
+/**
+ * Timber stock definition for dimensional lumber (TIMBER materials)
+ * Represents available cross-sections and lengths for solid timber
+ */
+export interface TimberStockDefinition {
+  id: string;
+  materialId: string;
+  materialName: string;     // e.g., "Meranti", "Pine PAR", "Oak"
+
+  // Cross-section (the "profile")
+  thickness: number;        // mm (e.g., 38mm, 50mm)
+  width: number;            // mm (e.g., 100mm, 150mm, 200mm)
+
+  // Available lengths for this cross-section
+  availableLengths: number[]; // [2400, 3000, 3600, 4800, 5400, 6000] mm
+
+  // Pricing
+  costPerLinearMeter?: number;    // Cost per running meter
+  costPerPiece?: {                // Or cost per standard length
+    length: number;
+    cost: number;
+  }[];
+
+  // Processing capabilities
+  isDressed: boolean;       // PAR (Planed All Round) vs rough sawn
+  canBeRipped: boolean;     // Can this be ripped to narrower widths?
+
+  // Metadata
+  species?: string;         // Wood species (e.g., "Meranti", "Oak", "Pine")
+  grade?: string;           // Structural grade, appearance grade
+  supplier?: string;
+  sku?: string;
+  quantity?: number;        // Available pieces in stock
+}
+
+/**
+ * Linear stock definition for metal bars, tubes, and aluminium profiles
+ * (METAL_BAR and ALUMINIUM materials)
+ */
+export interface LinearStockDefinition {
+  id: string;
+  materialId: string;
+  materialName: string;     // e.g., "Steel", "Aluminium 6063"
+
+  // Profile specification
+  profile: string;          // e.g., "50x50 SHS", "25mm Round Bar", "40x40 Angle"
+  profileDimensions: {      // Structured dimensions
+    type: 'round' | 'square' | 'rectangle' | 'angle' | 'channel' | 'flat' | 'tube';
+    dimension1: number;     // mm (diameter for round, width for others)
+    dimension2?: number;    // mm (height for rectangle, thickness for flat)
+    wallThickness?: number; // mm (for tubes)
+  };
+
+  // Available lengths
+  availableLengths: number[]; // [3000, 6000] mm (typical metal stock lengths)
+
+  // Pricing
+  costPerLinearMeter: number;
+  costPerPiece?: {
+    length: number;
+    cost: number;
+  }[];
+
+  // Metadata
+  material: 'steel' | 'aluminium' | 'stainless' | 'brass' | 'copper' | 'other';
+  finish?: string;          // e.g., "Mill finish", "Anodized", "Powder coated"
+  supplier?: string;
+  sku?: string;
+  quantity?: number;
+}
+
+/**
+ * Glass sheet configuration with fragility handling (GLASS materials)
+ */
+export interface GlassStockDefinition extends OptimizationStockSheet {
+  // Glass-specific properties
+  glassType: 'clear' | 'tinted' | 'frosted' | 'laminated' | 'tempered' | 'low-e';
+  safetyMargin: number;     // mm - minimum margin from edges for cuts
+  minimumCutSize: {         // Minimum practical cut size
+    length: number;
+    width: number;
+  };
+  requiresPolishing: boolean; // Edges need polishing after cutting
+  fragile: true;            // Always true for glass
 }
 
 /**
@@ -92,6 +178,91 @@ export interface WasteRegion {
   reusable: boolean;        // Large enough for future use
 }
 
+// ============================================
+// Timber and Linear Stock Types
+// ============================================
+
+/**
+ * Linear cutting result for timber/metal bars/aluminium (1D optimization)
+ */
+export interface LinearCuttingResult {
+  id: string;
+  stockIndex: number;
+  stockId: string;
+  materialId: string;
+  materialName: string;
+
+  // Stock dimensions
+  crossSection: {
+    thickness: number;      // mm
+    width: number;          // mm (for timber/flat stock)
+  };
+  stockLength: number;      // mm - original length of the stick/bar
+
+  // Cuts on this stick
+  cuts: LinearCutPlacement[];
+  utilizationPercent: number;
+  wasteLength: number;      // mm
+  wasteSegments: LinearWasteSegment[];
+}
+
+/**
+ * Part placement on linear stock (1D)
+ */
+export interface LinearCutPlacement {
+  partId: string;
+  partName: string;
+  designItemId: string;
+  designItemName: string;
+  startPosition: number;    // mm from left end of stock
+  cutLength: number;        // mm - length of this cut
+  quantity: number;         // How many of this part from this position
+}
+
+/**
+ * Waste segment on linear stock
+ */
+export interface LinearWasteSegment {
+  startPosition: number;    // mm from left end
+  length: number;           // mm
+  reusable: boolean;        // Large enough for future use (e.g., > 300mm)
+}
+
+/**
+ * Timber-specific summary
+ */
+export interface TimberSummary {
+  materialId: string;
+  materialName: string;
+  crossSection: {
+    thickness: number;
+    width: number;
+  };
+  stockLength: number;
+  sticksRequired: number;
+  totalLinearMeters: number;
+  partsOnSticks: number;
+  averageUtilizationPercent: number;
+  totalWasteLength: number; // mm
+  estimatedCost: number;
+}
+
+/**
+ * Linear stock summary (metal bars, aluminium)
+ */
+export interface LinearStockSummary {
+  materialId: string;
+  materialName: string;
+  profile: string;
+  stockLength: number;
+  barsRequired: number;
+  totalLinearMeters: number;
+  partsOnBars: number;
+  averageUtilizationPercent: number;
+  totalWasteLength: number;
+  estimatedCost: number;
+}
+
 /**
  * Cut operation in sequence
  */
@@ -127,16 +298,33 @@ export interface EdgeBandConfig {
  * Estimation mode results (Stage 3 - Pre-production)
  */
 export interface EstimationResult {
+  // Panel materials (sheet goods)
   sheetSummary: SheetSummary[];
+
+  // Timber materials (dimensional lumber)
+  timberSummary?: TimberSummary[];
+
+  // Linear stock (metal bars, aluminium)
+  linearStockSummary?: LinearStockSummary[];
+
+  // Cost breakdown
   roughCost: number;              // Sheet materials cost (with buffer)
+  timberCost?: number;            // Timber materials cost
+  linearStockCost?: number;       // Metal/aluminium materials cost
   standardPartsCost?: number;     // Consumables cost (hinges, screws, etc)
   specialPartsCost?: number;      // Luxury/approved items cost
   totalCost?: number;             // Total of all costs
-  wasteEstimate: number;          // percentage
+
+  // Statistics
+  wasteEstimate: number;          // percentage (for sheet goods)
   totalPartsCount: number;
   totalSheetsCount: number;
+  totalTimberSticks?: number;
+  totalLinearBars?: number;
   totalStandardParts?: number;
   totalSpecialParts?: number;
+
+  // Metadata
   validAt: Timestamp;
   invalidatedAt?: Timestamp;
   invalidationReasons?: string[];
@@ -146,11 +334,26 @@ export interface EstimationResult {
  * Production mode results (Stage 4 - Production Ready)
  */
 export interface ProductionResult {
+  // Panel materials (sheet goods)
   nestingSheets: NestingSheet[];
   cutSequence: CutOperation[];
-  optimizedYield: number;   // percentage
-  totalCuttingLength: number; // mm
-  estimatedCutTime: number; // minutes
+
+  // Timber materials (dimensional lumber)
+  timberCuttingResults?: LinearCuttingResult[];
+
+  // Linear stock (metal bars, aluminium)
+  linearStockCuttingResults?: LinearCuttingResult[];
+
+  // Optimization metrics
+  optimizedYield: number;         // percentage (average across all materials)
+  sheetYield?: number;            // percentage (panels only)
+  timberYield?: number;           // percentage (timber only)
+  linearStockYield?: number;      // percentage (metal/aluminium only)
+
+  totalCuttingLength: number;     // mm (total for all cuts)
+  estimatedCutTime: number;       // minutes
+
+  // Metadata
   validAt: Timestamp;
   invalidatedAt?: Timestamp;
   invalidationReasons?: string[];
@@ -163,14 +366,28 @@ export interface ProductionResult {
  * Optimization configuration (persisted for re-runs)
  */
 export interface OptimizationConfig {
-  kerf: number;             // mm (blade width)
-  stockSheets: OptimizationStockSheet[];
+  // Cutting parameters
+  kerf: number;                   // mm (blade width / saw kerf)
+
+  // Stock definitions by material type
+  stockSheets: OptimizationStockSheet[];      // Panel materials
+  timberStock?: TimberStockDefinition[];      // Timber materials
+  linearStock?: LinearStockDefinition[];      // Metal bars, aluminium
+  glassStock?: GlassStockDefinition[];        // Glass materials
+
+  // Panel-specific settings
   grainMatching: boolean;
   edgeBandingSettings: EdgeBandConfig;
-  targetYield: number;      // percentage target
   allowRotation: boolean;
   prioritizeGrain: boolean;
   minimumUsableCutoff: { length: number; width: number };
+
+  // Linear stock settings (timber, metal, aluminium)
+  minimumUsableOffcut?: number;   // mm - minimum length to consider reusable (default: 300mm)
+  allowCrossGrain?: boolean;      // For timber - allow cross-grain cuts if needed
+
+  // Target optimization
+  targetYield: number;            // percentage target (applies to all material types)
 }
 
 /**
@@ -226,7 +443,15 @@ export interface OptimizationState {
 /**
  * Material type classification
  */
-export type MaterialType = 'PANEL' | 'SOLID' | 'VENEER' | 'EDGE';
+export type MaterialType =
+  | 'PANEL'        // Sheet goods (MDF, Plywood, Melamine, etc.)
+  | 'SOLID'        // Solid wood (legacy - use TIMBER for dimensional lumber)
+  | 'VENEER'       // Veneers for finishing
+  | 'EDGE'         // Edge banding materials
+  | 'TIMBER'       // Dimensional lumber with varying cross-sections (thickness × width × length)
+  | 'GLASS'        // Glass sheets with fragility handling
+  | 'METAL_BAR'    // Metal bars, tubes, and linear stock
+  | 'ALUMINIUM';   // Aluminium extrusions and profiles
 
 /**
  * Material palette entry - maps design materials to inventory
@@ -249,10 +474,13 @@ export interface MaterialPaletteEntry {
   unitCost?: number;         // Cost per sheet/unit
   mappedAt?: Timestamp;
   mappedBy?: string;
-  
-  // Stock sheet options (for optimization)
-  stockSheets: OptimizationStockSheet[];
-  
+
+  // Stock options (for optimization) - type-specific
+  stockSheets: OptimizationStockSheet[];          // For PANEL materials
+  timberStock?: TimberStockDefinition[];          // For TIMBER materials
+  linearStock?: LinearStockDefinition[];          // For METAL_BAR and ALUMINIUM materials
+  glassStock?: GlassStockDefinition[];            // For GLASS materials
+
   // Metadata
   createdAt: Timestamp;
   updatedAt: Timestamp;

@@ -340,6 +340,10 @@ export function MaterialPaletteTable({
                         entry.materialType === 'PANEL' ? 'bg-blue-100 text-blue-800' :
                         entry.materialType === 'SOLID' ? 'bg-amber-100 text-amber-800' :
                         entry.materialType === 'VENEER' ? 'bg-purple-100 text-purple-800' :
+                        entry.materialType === 'TIMBER' ? 'bg-green-100 text-green-800' :
+                        entry.materialType === 'GLASS' ? 'bg-cyan-100 text-cyan-800' :
+                        entry.materialType === 'METAL_BAR' ? 'bg-slate-100 text-slate-800' :
+                        entry.materialType === 'ALUMINIUM' ? 'bg-gray-100 text-gray-800' :
                         'bg-gray-100 text-gray-800'
                       }`}>
                         {entry.materialType}

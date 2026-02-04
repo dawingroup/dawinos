@@ -84,16 +84,48 @@ export function extractThickness(name: string): number {
  */
 export function detectMaterialType(name: string): MaterialType {
   const lower = name.toLowerCase();
-  
+
+  // Edge banding
   if (lower.includes('edge') || lower.includes('banding')) {
     return 'EDGE';
   }
+
+  // Veneer
   if (lower.includes('veneer')) {
     return 'VENEER';
   }
-  if (lower.includes('solid') || lower.includes('timber') || lower.includes('lumber')) {
+
+  // Glass
+  if (lower.includes('glass')) {
+    return 'GLASS';
+  }
+
+  // Aluminium
+  if (lower.includes('aluminium') || lower.includes('aluminum') || lower.includes('alu ')) {
+    return 'ALUMINIUM';
+  }
+
+  // Metal bars
+  if (lower.includes('steel') || lower.includes('metal') || lower.includes('bar') ||
+      lower.includes('tube') || lower.includes('pipe') || lower.includes('angle') ||
+      lower.includes('channel') || lower.includes('shs') || lower.includes('rhs')) {
+    return 'METAL_BAR';
+  }
+
+  // Timber (dimensional lumber)
+  if (lower.includes('timber') || lower.includes('lumber') || lower.includes('pine') ||
+      lower.includes('oak') || lower.includes('meranti') || lower.includes('par') ||
+      lower.includes('hardwood') || lower.includes('softwood') || lower.includes('beam') ||
+      lower.includes('post') || lower.includes('joist')) {
+    return 'TIMBER';
+  }
+
+  // Solid wood (legacy - less specific than timber)
+  if (lower.includes('solid')) {
     return 'SOLID';
   }
+
+  // Default to panel (sheet goods)
   return 'PANEL';
 }
 

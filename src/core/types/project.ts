@@ -185,7 +185,15 @@ export interface OptimizationState {
 /**
  * Material type classification
  */
-export type MaterialType = 'PANEL' | 'SOLID' | 'VENEER' | 'EDGE';
+export type MaterialType =
+  | 'PANEL'        // Sheet goods (MDF, Plywood, Melamine, etc.)
+  | 'SOLID'        // Solid wood (legacy - use TIMBER for dimensional lumber)
+  | 'VENEER'       // Veneers for finishing
+  | 'EDGE'         // Edge banding materials
+  | 'TIMBER'       // Dimensional lumber with varying cross-sections (thickness × width × length)
+  | 'GLASS'        // Glass sheets with fragility handling
+  | 'METAL_BAR'    // Metal bars, tubes, and linear stock
+  | 'ALUMINIUM';   // Aluminium extrusions and profiles
 
 /**
  * Material palette entry - maps design materials to inventory

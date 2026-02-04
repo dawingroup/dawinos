@@ -141,12 +141,24 @@ export class TestEnvironmentManager {
    * Clear a specific collection
    */
   async clearCollection(collectionName: string): Promise<void> {
-    if (!this.db) return;
+    if (!this.db) {
+      console.warn('Firestore instance not initialized, skipping collection clear');
+      return;
+    }
 
     try {
-      const snapshot = await getDocs(collection(this.db, collectionName));
+      const collectionRef = collection(this.db, collectionName);
+      const snapshot = await getDocs(collectionRef);
 
-      if (snapshot.empty) return;
+      // Check if snapshot is valid
+      if (!snapshot) {
+        console.warn(`Failed to get snapshot for collection ${collectionName}: snapshot is null/undefined`);
+        return;
+      }
+
+      if (snapshot.empty) {
+        return;
+      }
 
       const batch = writeBatch(this.db);
       let count = 0;
@@ -167,6 +179,7 @@ export class TestEnvironmentManager {
       }
     } catch (error) {
       console.warn(`Failed to clear collection ${collectionName}:`, error);
+      // Don't throw - allow tests to continue
     }
   }
 
