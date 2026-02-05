@@ -375,6 +375,36 @@ function extractGlassStock(project: Project) {
 }
 
 /**
+ * Extract panel stock definitions from material palette
+ * Returns stock sheets keyed by inventory material name
+ */
+function extractPanelStock(project: Project): Record<string, { material: string; length: number; width: number; thickness: number; cost: number }> {
+  const materialPalette = project.materialPalette?.entries || [];
+  const stockSheets: Record<string, { material: string; length: number; width: number; thickness: number; cost: number }> = {};
+
+  for (const entry of materialPalette) {
+    // Only process panel-type materials with stockSheets configured
+    if (['PANEL', 'SOLID', 'VENEER'].includes(entry.materialType) && entry.stockSheets && entry.stockSheets.length > 0) {
+      const materialKey = entry.inventoryName || entry.designName;
+
+      // Use the first (or largest) stock sheet for this material
+      // In future, we could support multiple stock sizes per material
+      const sheet = entry.stockSheets[0];
+
+      stockSheets[materialKey] = {
+        material: materialKey,
+        length: sheet.length,
+        width: sheet.width,
+        thickness: sheet.thickness,
+        cost: sheet.costPerSheet || entry.unitCost || 0,
+      };
+    }
+  }
+
+  return stockSheets;
+}
+
+/**
  * Convert CutlistParts to optimization Panel format
  * Uses inventory material name for grouping when available (via materialMap)
  * This ensures parts with different design materials but same inventory material
@@ -526,27 +556,39 @@ export async function runProjectEstimation(
   
   // Build stock sheets with dynamic costs
   const stockSheets: Record<string, { material: string; length: number; width: number; thickness: number; cost: number }> = {};
-  
-  // First, use config stock sheets as base (for dimensions)
+
+  // First, extract panel stock from material palette (user-configured stock sizes)
+  const paletteStock = extractPanelStock(project);
+  for (const [materialKey, sheet] of Object.entries(paletteStock)) {
+    stockSheets[materialKey] = {
+      ...sheet,
+      // Override with dynamic cost from inventory if available
+      cost: dynamicCosts[materialKey] || sheet.cost,
+    };
+  }
+
+  // Second, use config stock sheets (legacy config-based stock)
   if (config?.stockSheets) {
     for (const sheet of config.stockSheets) {
-      stockSheets[sheet.materialName] = {
-        material: sheet.materialName,
-        length: sheet.length,
-        width: sheet.width,
-        thickness: sheet.thickness,
-        // Override with dynamic cost from inventory
-        cost: dynamicCosts[sheet.materialName] || sheet.costPerSheet,
-      };
+      // Only add if not already defined from palette
+      if (!stockSheets[sheet.materialName]) {
+        stockSheets[sheet.materialName] = {
+          material: sheet.materialName,
+          length: sheet.length,
+          width: sheet.width,
+          thickness: sheet.thickness,
+          cost: dynamicCosts[sheet.materialName] || sheet.costPerSheet,
+        };
+      }
     }
   }
-  
-  // Add any materials from parts that aren't in config
+
+  // Add any materials from parts that aren't in config or palette
   // Use inventory material name for grouping (matches what partsToOptimizationPanels uses)
   for (const part of parts) {
     const mappedMaterial = materialMap.get(part.materialName);
     const inventoryMaterial = mappedMaterial?.inventoryName || part.materialName;
-    
+
     if (inventoryMaterial && !stockSheets[inventoryMaterial]) {
       stockSheets[inventoryMaterial] = {
         material: inventoryMaterial,
@@ -597,17 +639,22 @@ export async function runProjectEstimation(
 
     if (timberStock.length > 0) {
       const timberService = new TimberOptimizationService(config?.kerf || 4, config?.minimumUsableOffcut || 300);
-      const timberParts = partsByType.TIMBER.map(part => ({
-        partId: part.id,
-        partName: part.name,
-        designItemId: part.designItemId,
-        designItemName: part.designItemName,
-        length: part.length,
-        width: part.width,
-        thickness: part.thickness,
-        quantity: part.quantity,
-        materialName: part.materialName,
-      }));
+      // Map timber parts using inventory material names for matching with stock
+      const timberParts = partsByType.TIMBER.map(part => {
+        const mappedMaterial = materialMap.get(part.materialName);
+        return {
+          partId: part.id,
+          partName: part.name,
+          designItemId: part.designItemId,
+          designItemName: part.designItemName,
+          length: part.length,
+          width: part.width,
+          thickness: part.thickness,
+          quantity: part.quantity,
+          // Use inventory material name for matching with stock
+          materialName: mappedMaterial?.inventoryName || part.materialName,
+        };
+      });
 
       timberSummary = await timberService.estimateTimber(timberParts, timberStock);
       timberCost = timberSummary.reduce((sum, s) => sum + s.estimatedCost, 0);
@@ -625,16 +672,21 @@ export async function runProjectEstimation(
 
     if (linearStock.length > 0) {
       const linearService = new LinearStockOptimizationService(config?.kerf || 4, config?.minimumUsableOffcut || 300);
-      const linearParts = [...partsByType.METAL_BAR, ...partsByType.ALUMINIUM].map(part => ({
-        partId: part.id,
-        partName: part.name,
-        designItemId: part.designItemId,
-        designItemName: part.designItemName,
-        length: part.length,
-        quantity: part.quantity,
-        materialName: part.materialName,
-        profile: `${part.thickness}x${part.width}`, // TODO: Get actual profile from material palette
-      }));
+      // Map linear parts using inventory material names for matching with stock
+      const linearParts = [...partsByType.METAL_BAR, ...partsByType.ALUMINIUM].map(part => {
+        const mappedMaterial = materialMap.get(part.materialName);
+        return {
+          partId: part.id,
+          partName: part.name,
+          designItemId: part.designItemId,
+          designItemName: part.designItemName,
+          length: part.length,
+          quantity: part.quantity,
+          // Use inventory material name for matching with stock
+          materialName: mappedMaterial?.inventoryName || part.materialName,
+          profile: `${part.thickness}x${part.width}`, // TODO: Get actual profile from material palette
+        };
+      });
 
       linearStockSummary = await linearService.estimateLinearStock(linearParts, linearStock);
       linearStockCost = linearStockSummary.reduce((sum, s) => sum + s.estimatedCost, 0);
@@ -648,18 +700,23 @@ export async function runProjectEstimation(
 
     if (glassStock.length > 0) {
       const glassService = new GlassOptimizationService(config?.kerf || 4);
-      const glassParts = partsByType.GLASS.map(part => ({
-        partId: part.id,
-        partName: part.name,
-        designItemId: part.designItemId,
-        designItemName: part.designItemName,
-        length: part.length,
-        width: part.width,
-        thickness: part.thickness,
-        quantity: part.quantity,
-        materialName: part.materialName,
-        grain: part.grainDirection === 'none' ? 0 : 1,
-      }));
+      // Map glass parts using inventory material names for matching with stock
+      const glassParts = partsByType.GLASS.map(part => {
+        const mappedMaterial = materialMap.get(part.materialName);
+        return {
+          partId: part.id,
+          partName: part.name,
+          designItemId: part.designItemId,
+          designItemName: part.designItemName,
+          length: part.length,
+          width: part.width,
+          thickness: part.thickness,
+          quantity: part.quantity,
+          // Use inventory material name for matching with stock
+          materialName: mappedMaterial?.inventoryName || part.materialName,
+          grain: part.grainDirection === 'none' ? 0 : 1,
+        };
+      });
 
       const glassSummary = await glassService.estimateGlass(glassParts, glassStock);
       // Add glass to sheet summary
@@ -853,25 +910,39 @@ export async function runProjectProduction(
   
   // Build stock sheets with dynamic costs
   const stockSheets: Record<string, { material: string; length: number; width: number; thickness: number; cost: number }> = {};
-  
+
+  // First, extract panel stock from material palette (user-configured stock sizes)
+  const paletteStock = extractPanelStock(project);
+  for (const [materialKey, sheet] of Object.entries(paletteStock)) {
+    stockSheets[materialKey] = {
+      ...sheet,
+      // Override with dynamic cost from inventory if available
+      cost: dynamicCosts[materialKey] || sheet.cost,
+    };
+  }
+
+  // Second, use config stock sheets (legacy config-based stock)
   if (config?.stockSheets) {
     for (const sheet of config.stockSheets) {
-      stockSheets[sheet.materialName] = {
-        material: sheet.materialName,
-        length: sheet.length,
-        width: sheet.width,
-        thickness: sheet.thickness,
-        cost: dynamicCosts[sheet.materialName] || sheet.costPerSheet,
-      };
+      // Only add if not already defined from palette
+      if (!stockSheets[sheet.materialName]) {
+        stockSheets[sheet.materialName] = {
+          material: sheet.materialName,
+          length: sheet.length,
+          width: sheet.width,
+          thickness: sheet.thickness,
+          cost: dynamicCosts[sheet.materialName] || sheet.costPerSheet,
+        };
+      }
     }
   }
-  
-  // Add any materials from parts that aren't in config
+
+  // Add any materials from parts that aren't in config or palette
   // Use inventory material name for grouping (matches what partsToOptimizationPanels uses)
   for (const part of parts) {
     const mappedMaterial = materialMap.get(part.materialName);
     const inventoryMaterial = mappedMaterial?.inventoryName || part.materialName;
-    
+
     if (inventoryMaterial && !stockSheets[inventoryMaterial]) {
       stockSheets[inventoryMaterial] = {
         material: inventoryMaterial,
@@ -882,7 +953,7 @@ export async function runProjectProduction(
       };
     }
   }
-  
+
   // ============================================
   // Group parts by material type and run type-specific optimization
   // ============================================
@@ -915,17 +986,22 @@ export async function runProjectProduction(
 
     if (timberStock.length > 0) {
       const timberService = new TimberOptimizationService(config?.kerf || 4, config?.minimumUsableOffcut || 300);
-      const timberParts = partsByType.TIMBER.map(part => ({
-        partId: part.id,
-        partName: part.name,
-        designItemId: part.designItemId,
-        designItemName: part.designItemName,
-        length: part.length,
-        width: part.width,
-        thickness: part.thickness,
-        quantity: part.quantity,
-        materialName: part.materialName,
-      }));
+      // Map timber parts using inventory material names for matching with stock
+      const timberParts = partsByType.TIMBER.map(part => {
+        const mappedMaterial = materialMap.get(part.materialName);
+        return {
+          partId: part.id,
+          partName: part.name,
+          designItemId: part.designItemId,
+          designItemName: part.designItemName,
+          length: part.length,
+          width: part.width,
+          thickness: part.thickness,
+          quantity: part.quantity,
+          // Use inventory material name for matching with stock
+          materialName: mappedMaterial?.inventoryName || part.materialName,
+        };
+      });
 
       timberCuttingResults = await timberService.optimizeTimber(timberParts, timberStock, config?.targetYield || 85);
 
@@ -945,16 +1021,21 @@ export async function runProjectProduction(
 
     if (linearStock.length > 0) {
       const linearService = new LinearStockOptimizationService(config?.kerf || 4, config?.minimumUsableOffcut || 300);
-      const linearParts = [...partsByType.METAL_BAR, ...partsByType.ALUMINIUM].map(part => ({
-        partId: part.id,
-        partName: part.name,
-        designItemId: part.designItemId,
-        designItemName: part.designItemName,
-        length: part.length,
-        quantity: part.quantity,
-        materialName: part.materialName,
-        profile: `${part.thickness}x${part.width}`, // TODO: Get actual profile from material palette
-      }));
+      // Map linear parts using inventory material names for matching with stock
+      const linearParts = [...partsByType.METAL_BAR, ...partsByType.ALUMINIUM].map(part => {
+        const mappedMaterial = materialMap.get(part.materialName);
+        return {
+          partId: part.id,
+          partName: part.name,
+          designItemId: part.designItemId,
+          designItemName: part.designItemName,
+          length: part.length,
+          quantity: part.quantity,
+          // Use inventory material name for matching with stock
+          materialName: mappedMaterial?.inventoryName || part.materialName,
+          profile: `${part.thickness}x${part.width}`, // TODO: Get actual profile from material palette
+        };
+      });
 
       linearStockCuttingResults = await linearService.optimizeLinearStock(linearParts, linearStock, config?.targetYield || 85);
 
@@ -971,18 +1052,23 @@ export async function runProjectProduction(
 
     if (glassStock.length > 0) {
       const glassService = new GlassOptimizationService(config?.kerf || 4);
-      const glassParts = partsByType.GLASS.map(part => ({
-        partId: part.id,
-        partName: part.name,
-        designItemId: part.designItemId,
-        designItemName: part.designItemName,
-        length: part.length,
-        width: part.width,
-        thickness: part.thickness,
-        quantity: part.quantity,
-        materialName: part.materialName,
-        grain: part.grainDirection === 'none' ? 0 : 1,
-      }));
+      // Map glass parts using inventory material names for matching with stock
+      const glassParts = partsByType.GLASS.map(part => {
+        const mappedMaterial = materialMap.get(part.materialName);
+        return {
+          partId: part.id,
+          partName: part.name,
+          designItemId: part.designItemId,
+          designItemName: part.designItemName,
+          length: part.length,
+          width: part.width,
+          thickness: part.thickness,
+          quantity: part.quantity,
+          // Use inventory material name for matching with stock
+          materialName: mappedMaterial?.inventoryName || part.materialName,
+          grain: part.grainDirection === 'none' ? 0 : 1,
+        };
+      });
 
       const glassSheets = await glassService.optimizeGlass(glassParts, glassStock, config?.targetYield || 75);
       nestingSheets.push(...glassSheets);

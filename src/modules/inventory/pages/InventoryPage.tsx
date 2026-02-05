@@ -1,6 +1,7 @@
 /**
  * InventoryPage Component
  * Main page for unified inventory management with tabbed navigation
+ * Products (finished goods for retail/projects) and Materials (raw materials for manufacturing)
  */
 
 import { useState, useCallback } from 'react';
@@ -8,30 +9,56 @@ import { useAuth } from '@/contexts/AuthContext';
 import { InventoryList } from '../components/InventoryList';
 import { InventoryItemModal } from '../components/InventoryItemModal';
 import { InventoryItemDetail } from '../components/InventoryItemDetail';
+import { ProductsTab } from '../components/ProductsTab';
+import { MaterialsTab } from '../components/MaterialsTab';
+import { SyncToShopifyDialog } from '../components/SyncToShopifyDialog';
+import { AddToProjectDialog } from '../components/AddToProjectDialog';
 import StockLevelsByLocation from '../components/StockLevelsByLocation';
 import WarehouseManager from '../components/WarehouseManager';
-import type { InventoryListItem } from '../types';
+import type { InventoryListItem, InventoryItem } from '../types';
 import { db } from '@/firebase/config';
-import { collection, addDoc, onSnapshot, serverTimestamp, doc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 
-type InventoryTab = 'items' | 'stock-levels' | 'warehouses';
+type InventoryTab = 'products' | 'materials' | 'all-items' | 'stock-levels' | 'warehouses';
 
 const TABS: { id: InventoryTab; label: string }[] = [
-  { id: 'items', label: 'Items' },
+  { id: 'products', label: 'Products' },
+  { id: 'materials', label: 'Materials' },
+  { id: 'all-items', label: 'All Items' },
   { id: 'stock-levels', label: 'Stock Levels' },
   { id: 'warehouses', label: 'Warehouses' },
 ];
 
 export function InventoryPage() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<InventoryTab>('items');
+  const [activeTab, setActiveTab] = useState<InventoryTab>('products');
   const [modalOpen, setModalOpen] = useState(false);
   const [editItemId, setEditItemId] = useState<string | undefined>();
   const [detailItem, setDetailItem] = useState<InventoryListItem | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Dialog state for Products tab
+  const [shopifyDialogItem, setShopifyDialogItem] = useState<InventoryItem | null>(null);
+  const [projectDialogItem, setProjectDialogItem] = useState<InventoryItem | null>(null);
+
   const handleViewItem = useCallback((item: InventoryListItem) => {
     setDetailItem(item);
+  }, []);
+
+  // Fetch full item data and open Shopify dialog
+  const handleSyncToShopify = useCallback(async (listItem: InventoryListItem) => {
+    const itemDoc = await getDoc(doc(db, 'unifiedInventory', listItem.id));
+    if (itemDoc.exists()) {
+      setShopifyDialogItem({ id: itemDoc.id, ...itemDoc.data() } as InventoryItem);
+    }
+  }, []);
+
+  // Fetch full item data and open Project dialog
+  const handleAddToProject = useCallback(async (listItem: InventoryListItem) => {
+    const itemDoc = await getDoc(doc(db, 'unifiedInventory', listItem.id));
+    if (itemDoc.exists()) {
+      setProjectDialogItem({ id: itemDoc.id, ...itemDoc.data() } as InventoryItem);
+    }
   }, []);
 
   // Early return AFTER all hooks
@@ -146,7 +173,69 @@ export function InventoryPage() {
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'items' && (
+      {activeTab === 'products' && (
+        <>
+          <ProductsTab
+            key={refreshKey}
+            onItemClick={handleViewItem}
+            onAddItem={handleAddItem}
+            onSyncToShopify={handleSyncToShopify}
+            onAddToProject={handleAddToProject}
+          />
+
+          <InventoryItemModal
+            isOpen={modalOpen}
+            onClose={handleModalClose}
+            onSaved={handleModalSaved}
+            itemId={editItemId}
+            userId={user.uid}
+          />
+
+          {detailItem && (
+            <InventoryItemDetail
+              itemId={detailItem.id}
+              onClose={handleDetailClose}
+              onEdit={handleDetailEdit}
+            />
+          )}
+        </>
+      )}
+
+      {activeTab === 'materials' && (
+        <>
+          <MaterialsTab
+            key={refreshKey}
+            onItemClick={handleViewItem}
+            onAddItem={handleAddItem}
+            onLinkToMaterial={(item) => {
+              // TODO: Open MaterialLinkManager
+              console.log('Link to material:', item);
+            }}
+            onManageSupplierPricing={(item) => {
+              // TODO: Open SupplierPricingManager
+              console.log('Manage supplier pricing:', item);
+            }}
+          />
+
+          <InventoryItemModal
+            isOpen={modalOpen}
+            onClose={handleModalClose}
+            onSaved={handleModalSaved}
+            itemId={editItemId}
+            userId={user.uid}
+          />
+
+          {detailItem && (
+            <InventoryItemDetail
+              itemId={detailItem.id}
+              onClose={handleDetailClose}
+              onEdit={handleDetailEdit}
+            />
+          )}
+        </>
+      )}
+
+      {activeTab === 'all-items' && (
         <>
           <InventoryList
             key={refreshKey}
@@ -181,6 +270,21 @@ export function InventoryPage() {
       {activeTab === 'warehouses' && (
         <WarehouseManager />
       )}
+
+      {/* Dialogs for Products tab */}
+      <SyncToShopifyDialog
+        open={!!shopifyDialogItem}
+        onClose={() => setShopifyDialogItem(null)}
+        item={shopifyDialogItem}
+        onSynced={() => setRefreshKey((k) => k + 1)}
+      />
+
+      <AddToProjectDialog
+        open={!!projectDialogItem}
+        onClose={() => setProjectDialogItem(null)}
+        item={projectDialogItem}
+        onLinked={() => setRefreshKey((k) => k + 1)}
+      />
     </div>
   );
 }

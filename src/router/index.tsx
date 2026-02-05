@@ -71,6 +71,7 @@ const ClipperPage = lazy(() => import('@/app/pages/ClipperPage'));
 const InventoryPage = lazy(() => import('@/modules/inventory/pages/InventoryPage'));
 const ManufacturingModule = lazy(() => import('@/modules/manufacturing/ManufacturingModule'));
 const FeatureLibraryPage = lazy(() => import('@/modules/design-manager/components/feature-library/FeatureLibraryPage'));
+const SuppliersPage = lazy(() => import('@/modules/suppliers/pages/SuppliersPage'));
 
 // WhatsApp Communication
 const WhatsAppInboxPage = lazy(() => import('@/modules/whatsapp/pages/WhatsAppInboxPage'));
@@ -259,6 +260,14 @@ export const router = createBrowserRouter([
       {
         path: 'manufacturing/*',
         element: <PageWrapper><ManufacturingModule /></PageWrapper>,
+      },
+
+      // ========================================
+      // GLOBAL SHARED ROUTES (Available across all subsidiaries)
+      // ========================================
+      {
+        path: 'suppliers',
+        element: <PageWrapper><SuppliersPage /></PageWrapper>,
       },
 
       // ========================================

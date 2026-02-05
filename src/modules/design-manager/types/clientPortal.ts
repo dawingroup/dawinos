@@ -387,12 +387,13 @@ export interface ProjectDeliverable {
 /**
  * Approval item type
  */
-export type ApprovalItemType = 
+export type ApprovalItemType =
   | 'material'          // Sheet materials, etc.
   | 'standard_part'     // Standard parts from Katana
   | 'special_part'      // Special/custom parts
   | 'procurement'       // Procured items
-  | 'design_change';    // Design modifications
+  | 'design_change'     // Design modifications
+  | 'design_option';    // Design options with inspirations
 
 /**
  * Approval item status
@@ -457,7 +458,29 @@ export interface ClientApprovalItem {
     unitCost: number;
     imageUrl?: string;
   }>;
-  
+
+  // Design option specific fields
+  designOption?: {
+    category: string;
+    inspirations: Array<{
+      id: string;
+      clipId?: string;
+      imageUrl: string;
+      thumbnailUrl?: string;
+      title: string;
+      description?: string;
+      sourceUrl?: string;
+    }>;
+    isRecommended?: boolean;
+    comparisonNotes?: string;
+  };
+  /** Whether this is part of an option group */
+  isOptionGroup?: boolean;
+  /** Source design option ID */
+  sourceOptionId?: string;
+  /** Source option group ID */
+  sourceGroupId?: string;
+
   // Approval workflow
   status: ApprovalItemStatus;
   priority: 'low' | 'medium' | 'high' | 'critical';

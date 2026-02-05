@@ -3,3 +3,4 @@ export * from './inventoryPriceService';
 export * from './priceOverrideService';
 export * from './warehouseService';
 export * from './stockLevelService';
+export * from './materialInventoryLinkService';

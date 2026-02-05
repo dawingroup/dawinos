@@ -4,10 +4,10 @@
  */
 
 import { useState, useEffect } from 'react';
-import { 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
+import {
+  CheckCircle,
+  XCircle,
+  Clock,
   AlertTriangle,
   Package,
   Layers,
@@ -15,6 +15,8 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  Lightbulb,
+  Star,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/core/components/ui/card';
 import { Button } from '@/core/components/ui/button';
@@ -44,6 +46,7 @@ const TYPE_CONFIG: Record<ApprovalItemType, { label: string; icon: typeof Packag
   special_part: { label: 'Special Part', icon: Wrench, color: 'bg-purple-100 text-purple-800' },
   procurement: { label: 'Procurement', icon: Package, color: 'bg-orange-100 text-orange-800' },
   design_change: { label: 'Design Change', icon: AlertTriangle, color: 'bg-yellow-100 text-yellow-800' },
+  design_option: { label: 'Design Option', icon: Lightbulb, color: 'bg-yellow-100 text-yellow-700' },
 };
 
 const STATUS_CONFIG: Record<ApprovalItemStatus, { label: string; icon: typeof Clock; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -249,6 +252,57 @@ export default function ApprovalItemsList({
                           {/* Description */}
                           {item.description && (
                             <p className="text-sm">{item.description}</p>
+                          )}
+
+                          {/* Design Option: Inspirations Gallery */}
+                          {item.type === 'design_option' && item.designOption?.inspirations && item.designOption.inspirations.length > 0 && (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">Inspirations</span>
+                                {item.designOption.isRecommended && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs rounded-full font-medium">
+                                    <Star className="h-3 w-3 fill-yellow-500" />
+                                    Recommended
+                                  </span>
+                                )}
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {item.designOption.inspirations.map((insp) => (
+                                  <div
+                                    key={insp.id}
+                                    className="relative group rounded-lg overflow-hidden border border-border bg-background"
+                                  >
+                                    <div className="aspect-square bg-muted">
+                                      <img
+                                        src={insp.thumbnailUrl || insp.imageUrl}
+                                        alt={insp.title}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    </div>
+                                    <div className="p-2">
+                                      <p className="text-xs font-medium truncate">{insp.title}</p>
+                                      {insp.sourceUrl && (
+                                        <a
+                                          href={insp.sourceUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-[10px] text-primary hover:underline flex items-center gap-0.5"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <ExternalLink className="h-2.5 w-2.5" />
+                                          Source
+                                        </a>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              {item.designOption.comparisonNotes && (
+                                <p className="text-xs text-muted-foreground italic">
+                                  Note: {item.designOption.comparisonNotes}
+                                </p>
+                              )}
+                            </div>
                           )}
 
                           {/* Material Details */}

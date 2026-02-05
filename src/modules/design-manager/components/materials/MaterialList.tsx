@@ -1,14 +1,16 @@
 /**
  * MaterialList Component
- * Display and manage materials at any tier
+ * Display and manage materials at any tier with inventory integration
  */
 
 import { useState } from 'react';
-import { Plus, Search, Edit2, Trash2, Package, Filter } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Package, Filter, Link2, Link2Off, Boxes, AlertTriangle } from 'lucide-react';
 import { useMaterials, useMaterialMutations } from '../../hooks/useMaterials';
+import { useMaterialsWithInventory, useMaterialInventoryLink } from '@/modules/inventory/hooks/useMaterialInventoryLink';
 import { MaterialForm } from './MaterialForm';
+import { InventoryLinkModal } from './InventoryLinkModal';
 import { MATERIAL_CATEGORIES } from '../../types/materials';
-import type { MaterialTier, MaterialCategory, MaterialFormData, Material } from '../../types/materials';
+import type { MaterialTier, MaterialCategory, MaterialFormData, Material, MaterialWithInventory } from '../../types/materials';
 import { getMaterial } from '../../services/materialService';
 
 interface MaterialListProps {
@@ -21,19 +23,42 @@ interface MaterialListProps {
 export function MaterialList({ tier, scopeId, userId, title }: MaterialListProps) {
   const { materials, loading, error } = useMaterials({ tier, scopeId });
   const { createMaterial, updateMaterial, deleteMaterial, creating, updating, deleting } = useMaterialMutations(tier, scopeId, userId);
-  
+
+  // Inventory integration
+  const { resolved: materialsWithInventory } = useMaterialsWithInventory(materials as Material[]);
+  const { link, unlink, linking, unlinking } = useMaterialInventoryLink(userId);
+
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<MaterialCategory | 'all'>('all');
+  const [showLinkedOnly, setShowLinkedOnly] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [linkingMaterial, setLinkingMaterial] = useState<Material | null>(null);
 
-  const filteredMaterials = materials.filter((m) => {
-    const matchesSearch = !search || 
+  // Merge inventory data with materials - create a map for quick lookup
+  const inventoryMap = new Map(materialsWithInventory.map((m) => [m.id, m]));
+
+  // Use materials list with inventory data merged in
+  type DisplayMaterial = typeof materials[number] & Partial<MaterialWithInventory>;
+  const displayMaterials: DisplayMaterial[] = materials.map((m) => {
+    const withInventory = inventoryMap.get(m.id);
+    return {
+      ...m,
+      inventory: withInventory?.inventory,
+      suppliers: withInventory?.suppliers,
+      inventoryItemId: withInventory?.inventoryItemId,
+      inventoryItemSku: withInventory?.inventoryItemSku,
+    };
+  });
+
+  const filteredMaterials = displayMaterials.filter((m) => {
+    const matchesSearch = !search ||
       m.name.toLowerCase().includes(search.toLowerCase()) ||
       m.code.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = categoryFilter === 'all' || m.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+    const matchesLinked = !showLinkedOnly || !!(m as DisplayMaterial).inventoryItemId;
+    return matchesSearch && matchesCategory && matchesLinked;
   });
 
   const handleCreate = async (data: MaterialFormData) => {
@@ -57,6 +82,25 @@ export function MaterialList({ tier, scopeId, userId, title }: MaterialListProps
   const handleDelete = async (materialId: string) => {
     await deleteMaterial(materialId);
     setDeleteConfirm(null);
+  };
+
+  const handleLinkToInventory = async (inventoryItemId: string, inventoryItemSku: string) => {
+    if (!linkingMaterial) return;
+    await link(linkingMaterial.id, tier, scopeId, inventoryItemId, inventoryItemSku);
+    setLinkingMaterial(null);
+  };
+
+  const handleUnlinkFromInventory = async (material: DisplayMaterial) => {
+    if (!material.inventoryItemId) return;
+    if (!confirm(`Unlink "${material.name}" from inventory item ${material.inventoryItemSku}?`)) return;
+    await unlink(material.id, tier, scopeId, material.inventoryItemId);
+  };
+
+  const getStockStatus = (inStock: number | undefined) => {
+    if (inStock === undefined) return null;
+    if (inStock <= 0) return { label: 'Out', color: 'text-red-600 bg-red-50', icon: AlertTriangle };
+    if (inStock < 10) return { label: 'Low', color: 'text-amber-600 bg-amber-50', icon: AlertTriangle };
+    return { label: `${inStock}`, color: 'text-green-600 bg-green-50', icon: Boxes };
   };
 
   const tierLabel = tier === 'global' ? 'Global' : tier === 'customer' ? 'Customer' : 'Project';
@@ -102,6 +146,16 @@ export function MaterialList({ tier, scopeId, userId, title }: MaterialListProps
             ))}
           </select>
         </div>
+        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showLinkedOnly}
+            onChange={(e) => setShowLinkedOnly(e.target.checked)}
+            className="rounded border-gray-300 text-primary focus:ring-primary"
+          />
+          <Link2 className="h-4 w-4" />
+          Linked Only
+        </label>
       </div>
 
       {/* Error */}
@@ -134,78 +188,121 @@ export function MaterialList({ tier, scopeId, userId, title }: MaterialListProps
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Thickness</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Unit Cost</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Inventory</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredMaterials.map((material) => (
-                <tr key={material.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-mono text-sm text-gray-600">{material.code}</td>
-                  <td className="px-4 py-3 font-medium text-gray-900">{material.name}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1 text-sm text-gray-600">
-                      {MATERIAL_CATEGORIES[material.category]?.icon}
-                      {MATERIAL_CATEGORIES[material.category]?.label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm text-gray-600">
-                    {material.thickness ? `${material.thickness}mm` : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm text-gray-600">
-                    {material.unitCost 
-                      ? `${material.currency} ${material.unitCost.toLocaleString()}`
-                      : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      material.status === 'active' 
-                        ? 'bg-green-100 text-green-700'
-                        : material.status === 'discontinued'
-                        ? 'bg-gray-100 text-gray-600'
-                        : 'bg-amber-100 text-amber-700'
-                    }`}>
-                      {material.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => handleEdit(material.id)}
-                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
-                        title="Edit"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      {deleteConfirm === material.id ? (
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleDelete(material.id)}
-                            disabled={deleting}
-                            className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirm(null)}
-                            className="px-2 py-1 text-xs bg-gray-200 text-gray-600 rounded hover:bg-gray-300"
-                          >
-                            Cancel
-                          </button>
+              {filteredMaterials.map((material) => {
+                const matWithInv = material as DisplayMaterial;
+                const stockStatus = matWithInv.inventory ? getStockStatus(matWithInv.inventory.inStock) : null;
+                const hasInventoryLink = !!matWithInv.inventoryItemId;
+
+                return (
+                  <tr key={material.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-mono text-sm text-gray-600">{material.code}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900">{material.name}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1 text-sm text-gray-600">
+                        {MATERIAL_CATEGORIES[material.category]?.icon}
+                        {MATERIAL_CATEGORIES[material.category]?.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm text-gray-600">
+                      {material.thickness ? `${material.thickness}mm` : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm text-gray-600">
+                      {matWithInv.inventory?.costPerUnit
+                        ? `${matWithInv.inventory.currency} ${matWithInv.inventory.costPerUnit.toLocaleString()}`
+                        : material.unitCost
+                        ? `${material.currency} ${material.unitCost.toLocaleString()}`
+                        : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {hasInventoryLink ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-xs text-gray-500 font-mono">{matWithInv.inventoryItemSku}</span>
+                          {stockStatus && (
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${stockStatus.color}`}>
+                              <stockStatus.icon className="h-3 w-3" />
+                              {stockStatus.label}
+                            </span>
+                          )}
                         </div>
                       ) : (
-                        <button
-                          onClick={() => setDeleteConfirm(material.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        <span className="text-xs text-gray-400">Not linked</span>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        material.status === 'active'
+                          ? 'bg-green-100 text-green-700'
+                          : material.status === 'discontinued'
+                          ? 'bg-gray-100 text-gray-600'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {material.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {hasInventoryLink ? (
+                          <button
+                            onClick={() => handleUnlinkFromInventory(matWithInv)}
+                            disabled={unlinking}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                            title="Unlink from Inventory"
+                          >
+                            <Link2Off className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setLinkingMaterial(matWithInv as Material)}
+                            disabled={linking}
+                            className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/10 rounded"
+                            title="Link to Inventory"
+                          >
+                            <Link2 className="h-4 w-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleEdit(material.id)}
+                          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+                          title="Edit"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        {deleteConfirm === material.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleDelete(material.id)}
+                              disabled={deleting}
+                              className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirm(null)}
+                              className="px-2 py-1 text-xs bg-gray-200 text-gray-600 rounded hover:bg-gray-300"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteConfirm(material.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -246,6 +343,16 @@ export function MaterialList({ tier, scopeId, userId, title }: MaterialListProps
             </div>
           </div>
         </div>
+      )}
+
+      {/* Link to Inventory Dialog */}
+      {linkingMaterial && (
+        <InventoryLinkModal
+          isOpen={!!linkingMaterial}
+          onClose={() => setLinkingMaterial(null)}
+          material={linkingMaterial}
+          onLink={handleLinkToInventory}
+        />
       )}
     </div>
   );

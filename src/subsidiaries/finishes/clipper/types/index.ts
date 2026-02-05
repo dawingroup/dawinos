@@ -131,3 +131,14 @@ export interface ClipStats {
   pending: number;
   byProject: Record<string, number>;
 }
+
+/**
+ * Reverse Image Search Match
+ * Result from Google Vision API reverse image search
+ */
+export interface ReverseSearchMatch {
+  url: string;
+  pageUrl?: string;
+  title?: string;
+  score?: number;
+}

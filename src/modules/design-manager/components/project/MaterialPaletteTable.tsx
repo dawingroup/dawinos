@@ -4,12 +4,12 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { 
-  Package, 
-  Link, 
-  Unlink, 
-  RefreshCw, 
-  Search, 
+import {
+  Package,
+  Link,
+  Unlink,
+  RefreshCw,
+  Search,
   Sparkles,
   ChevronDown,
   ChevronRight,
@@ -18,17 +18,19 @@ import {
   Clock,
   DollarSign,
   Loader2,
+  Settings2,
 } from 'lucide-react';
 import type { MaterialPalette, MaterialPaletteEntry, OptimizationStockSheet } from '@/shared/types';
-import { 
-  harvestMaterials, 
-  mapMaterialToInventory, 
+import {
+  harvestMaterials,
+  mapMaterialToInventory,
   unmapMaterial,
   getPaletteStats,
   allMaterialsMapped,
 } from '../../services/materialHarvester';
 import { subscribeToInventory } from '@/modules/inventory/services/inventoryService';
 import type { InventoryListItem } from '@/modules/inventory/types';
+import { StockConfigurationModal, type StockConfigResult } from './StockConfigurationModal';
 
 // ============================================
 // Types
@@ -71,6 +73,10 @@ export function MaterialPaletteTable({
   const [priceOverride, setPriceOverride] = useState<string>('');
   const [useOverride, setUseOverride] = useState(false);
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<InventoryListItem | null>(null);
+
+  // Stock configuration state
+  const [showStockConfigModal, setShowStockConfigModal] = useState(false);
+  const [pendingStockConfig, setPendingStockConfig] = useState<StockConfigResult | null>(null);
   
   // Subscribe to Katana inventory when modal opens
   useEffect(() => {
@@ -104,6 +110,7 @@ export function MaterialPaletteTable({
       setUseOverride(false);
       setSelectedInventoryItem(null);
       setInventorySearch('');
+      setPendingStockConfig(null);
     }
   }, [showMappingModal]);
   
@@ -146,21 +153,27 @@ export function MaterialPaletteTable({
     // Use override price if explicitly provided, otherwise let backend auto-fetch from inventory
     // This ensures we always use the latest price from Katana-synced inventory
     const unitCost = useOverride && overridePrice ? overridePrice : undefined;
-    
+
     // Get the display cost for stock sheets (use inventory price or override)
     const displayCost = overridePrice || inventoryItem.costPerUnit || 0;
-    
-    // Create stock sheets from inventory item dimensions
-    const stockSheets: OptimizationStockSheet[] = [{
-      id: `ss-${inventoryItem.id}`,
-      materialId: inventoryItem.id,
-      materialName: inventoryItem.displayName || inventoryItem.name,
-      length: DEFAULT_SHEET_DIMENSIONS.length,
-      width: DEFAULT_SHEET_DIMENSIONS.width,
-      thickness: inventoryItem.thickness || selectedEntry.thickness,
-      quantity: inventoryItem.inStock || 0,
-      costPerSheet: displayCost,
-    }];
+
+    // Use configured stock if available, otherwise create default based on material type
+    let stockSheets: OptimizationStockSheet[] = pendingStockConfig?.stockSheets || [];
+
+    // If no stock config, create default stock sheet for panel materials
+    if (stockSheets.length === 0 && !pendingStockConfig?.glassStock?.length &&
+        !pendingStockConfig?.timberStock?.length && !pendingStockConfig?.linearStock?.length) {
+      stockSheets = [{
+        id: `ss-${inventoryItem.id}`,
+        materialId: inventoryItem.id,
+        materialName: inventoryItem.displayName || inventoryItem.name,
+        length: DEFAULT_SHEET_DIMENSIONS.length,
+        width: DEFAULT_SHEET_DIMENSIONS.width,
+        thickness: inventoryItem.thickness || selectedEntry.thickness,
+        quantity: inventoryItem.inStock || 0,
+        costPerSheet: displayCost,
+      }];
+    }
 
     try {
       await mapMaterialToInventory(
@@ -171,7 +184,10 @@ export function MaterialPaletteTable({
         inventoryItem.sku,
         unitCost, // undefined = auto-fetch from inventory
         stockSheets,
-        userId
+        userId,
+        pendingStockConfig?.glassStock,
+        pendingStockConfig?.timberStock,
+        pendingStockConfig?.linearStock
       );
       setShowMappingModal(false);
       setSelectedEntry(null);
@@ -414,13 +430,54 @@ export function MaterialPaletteTable({
                               )}
                             </ul>
                           </div>
+                          {/* Panel/Sheet Stock */}
                           {entry.stockSheets.length > 0 && (
                             <div>
                               <h4 className="font-medium text-gray-700 mb-2">Stock Sheets</h4>
                               <ul className="space-y-1">
                                 {entry.stockSheets.map((sheet) => (
                                   <li key={sheet.id} className="text-gray-600">
-                                    {sheet.length}x{sheet.width}mm @ {sheet.costPerSheet?.toLocaleString()} UGX
+                                    {sheet.length}×{sheet.width}mm @ {sheet.costPerSheet?.toLocaleString()} UGX
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {/* Glass Stock */}
+                          {entry.glassStock && entry.glassStock.length > 0 && (
+                            <div>
+                              <h4 className="font-medium text-gray-700 mb-2">Glass Stock</h4>
+                              <ul className="space-y-1">
+                                {entry.glassStock.map((glass) => (
+                                  <li key={glass.id} className="text-gray-600">
+                                    {glass.length}×{glass.width}×{glass.thickness}mm ({glass.glassType}) @ {glass.costPerSheet?.toLocaleString()} UGX
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {/* Timber Stock */}
+                          {entry.timberStock && entry.timberStock.length > 0 && (
+                            <div>
+                              <h4 className="font-medium text-gray-700 mb-2">Timber Stock</h4>
+                              <ul className="space-y-1">
+                                {entry.timberStock.map((timber) => (
+                                  <li key={timber.id} className="text-gray-600">
+                                    {timber.thickness}×{timber.width}mm • Lengths: {timber.availableLengths.map(l => `${l}mm`).join(', ')}
+                                    {timber.species && ` (${timber.species})`}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {/* Linear Stock (Metal Bars/Aluminium) */}
+                          {entry.linearStock && entry.linearStock.length > 0 && (
+                            <div>
+                              <h4 className="font-medium text-gray-700 mb-2">Linear Stock</h4>
+                              <ul className="space-y-1">
+                                {entry.linearStock.map((linear) => (
+                                  <li key={linear.id} className="text-gray-600">
+                                    {linear.profile} ({linear.material}) • Lengths: {linear.availableLengths.map(l => `${l}mm`).join(', ')}
                                   </li>
                                 ))}
                               </ul>
@@ -599,22 +656,30 @@ export function MaterialPaletteTable({
             <div className="px-4 py-3 border-t border-gray-200 flex justify-between items-center">
               <div className="text-sm text-gray-500">
                 {selectedInventoryItem && (
-                  <>
-                    Selected: <strong>{selectedInventoryItem.displayName || selectedInventoryItem.name}</strong>
-                    {useOverride && priceOverride ? (
-                      <span className="ml-2 text-blue-600">
-                        @ {Number(priceOverride).toLocaleString()} UGX (override)
-                      </span>
-                    ) : selectedInventoryItem.costPerUnit ? (
-                      <span className="ml-2 text-green-600">
-                        @ {selectedInventoryItem.costPerUnit.toLocaleString()} UGX (from inventory)
-                      </span>
-                    ) : (
-                      <span className="ml-2 text-gray-500">
-                        (price will be fetched from inventory)
+                  <div className="flex items-center gap-3">
+                    <span>
+                      Selected: <strong>{selectedInventoryItem.displayName || selectedInventoryItem.name}</strong>
+                      {useOverride && priceOverride ? (
+                        <span className="ml-2 text-blue-600">
+                          @ {Number(priceOverride).toLocaleString()} UGX (override)
+                        </span>
+                      ) : selectedInventoryItem.costPerUnit ? (
+                        <span className="ml-2 text-green-600">
+                          @ {selectedInventoryItem.costPerUnit.toLocaleString()} UGX (from inventory)
+                        </span>
+                      ) : (
+                        <span className="ml-2 text-gray-500">
+                          (price will be fetched from inventory)
+                        </span>
+                      )}
+                    </span>
+                    {pendingStockConfig && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                        <CheckCircle className="w-3 h-3" />
+                        Stock configured
                       </span>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
               <div className="flex gap-2">
@@ -626,6 +691,14 @@ export function MaterialPaletteTable({
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
                 >
                   Cancel
+                </button>
+                <button
+                  onClick={() => setShowStockConfigModal(true)}
+                  disabled={!selectedInventoryItem}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  <Settings2 className="w-4 h-4" />
+                  Configure Stock Sizes
                 </button>
                 <button
                   onClick={() => {
@@ -643,6 +716,20 @@ export function MaterialPaletteTable({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Stock Configuration Modal */}
+      {showStockConfigModal && selectedEntry && (
+        <StockConfigurationModal
+          isOpen={showStockConfigModal}
+          onClose={() => setShowStockConfigModal(false)}
+          entry={selectedEntry}
+          inventoryItem={selectedInventoryItem}
+          onSave={(config) => {
+            setPendingStockConfig(config);
+            setShowStockConfigModal(false);
+          }}
+        />
       )}
     </div>
   );

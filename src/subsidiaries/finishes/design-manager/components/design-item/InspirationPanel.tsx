@@ -5,12 +5,12 @@
  */
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { 
-  Image, 
-  ExternalLink, 
-  Link2, 
-  X, 
-  Sparkles, 
+import {
+  Image,
+  ExternalLink,
+  Link2,
+  X,
+  Sparkles,
   Lightbulb,
   Puzzle,
   ShoppingCart,
@@ -22,11 +22,13 @@ import {
   Package,
   Tag,
   ChevronRight,
-  Plus
+  Plus,
+  Upload
 } from 'lucide-react';
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteField, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/shared/services/firebase';
 import type { DesignClip, ClipType, ClipAIAnalysis } from '@/subsidiaries/finishes/clipper/types';
+import { ManualUploadDialog } from '@/subsidiaries/finishes/clipper/components/ManualUploadDialog';
 
 // Clip type configuration
 const CLIP_TYPE_CONFIG: Record<ClipType, { icon: React.ElementType; label: string; color: string; bgColor: string }> = {
@@ -59,6 +61,7 @@ export function InspirationPanel({
   const [linkedClips, setLinkedClips] = useState<DesignClip[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedClip, setSelectedClip] = useState<DesignClip | null>(null);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
 
   // Subscribe to clips linked to this design item
   useEffect(() => {
@@ -120,24 +123,33 @@ export function InspirationPanel({
               </span>
             )}
           </h4>
-          {onOpenGallery && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={onOpenGallery}
+              onClick={() => setIsUploadOpen(true)}
               className="text-xs text-[#1d1d1f] hover:underline flex items-center gap-1"
             >
-              <Plus className="w-3 h-3" />
-              Add
+              <Upload className="w-3 h-3" />
+              Upload
             </button>
-          )}
+            {onOpenGallery && (
+              <button
+                onClick={onOpenGallery}
+                className="text-xs text-[#1d1d1f] hover:underline flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" />
+                Add
+              </button>
+            )}
+          </div>
         </div>
 
         {linkedClips.length === 0 ? (
           <button
-            onClick={onOpenGallery}
+            onClick={() => setIsUploadOpen(true)}
             className="w-full p-3 border-2 border-dashed border-gray-200 rounded-lg text-center hover:border-gray-300 hover:bg-gray-50 transition-colors"
           >
-            <Image className="w-6 h-6 text-gray-300 mx-auto mb-1" />
-            <p className="text-xs text-gray-500">Add inspiration clips</p>
+            <Upload className="w-6 h-6 text-gray-300 mx-auto mb-1" />
+            <p className="text-xs text-gray-500">Upload inspiration photo</p>
           </button>
         ) : (
           <div className="flex gap-2 overflow-x-auto pb-2">
@@ -172,12 +184,20 @@ export function InspirationPanel({
 
         {/* Quick Detail Modal */}
         {selectedClip && (
-          <ClipDetailModal 
-            clip={selectedClip} 
+          <ClipDetailModal
+            clip={selectedClip}
             onClose={() => setSelectedClip(null)}
             onUnlink={() => handleUnlinkClip(selectedClip.id)}
           />
         )}
+
+        {/* Manual Upload Dialog */}
+        <ManualUploadDialog
+          open={isUploadOpen}
+          onClose={() => setIsUploadOpen(false)}
+          projectId={projectId}
+          designItemId={designItemId}
+        />
       </div>
     );
   }
@@ -192,14 +212,23 @@ export function InspirationPanel({
           <p className="text-sm text-gray-500 mt-1">
             Link clips from your library to use as design reference
           </p>
-          {onOpenGallery && (
+          <div className="mt-3 flex items-center justify-center gap-2">
             <button
-              onClick={onOpenGallery}
-              className="mt-3 px-4 py-2 bg-[#1d1d1f] text-white rounded-lg text-sm font-medium hover:bg-[#424245]"
+              onClick={() => setIsUploadOpen(true)}
+              className="px-4 py-2 bg-[#1d1d1f] text-white rounded-lg text-sm font-medium hover:bg-[#424245] flex items-center gap-2"
             >
-              Browse Clips
+              <Upload className="w-4 h-4" />
+              Upload Photo
             </button>
-          )}
+            {onOpenGallery && (
+              <button
+                onClick={onOpenGallery}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50"
+              >
+                Browse Clips
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -226,12 +255,20 @@ export function InspirationPanel({
 
       {/* Detail Modal */}
       {selectedClip && (
-        <ClipDetailModal 
-          clip={selectedClip} 
+        <ClipDetailModal
+          clip={selectedClip}
           onClose={() => setSelectedClip(null)}
           onUnlink={() => handleUnlinkClip(selectedClip.id)}
         />
       )}
+
+      {/* Manual Upload Dialog */}
+      <ManualUploadDialog
+        open={isUploadOpen}
+        onClose={() => setIsUploadOpen(false)}
+        projectId={projectId}
+        designItemId={designItemId}
+      />
     </div>
   );
 }

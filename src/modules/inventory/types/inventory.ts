@@ -58,6 +58,11 @@ export type InventoryStatus = 'active' | 'discontinued' | 'out-of-stock';
 export type InventoryClassification = 'material' | 'product';
 
 /**
+ * Shopify sync status for products
+ */
+export type ShopifySyncStatus = 'not_synced' | 'syncing' | 'synced' | 'error';
+
+/**
  * Price history entry for tracking changes
  */
 export interface PriceHistoryEntry {
@@ -99,6 +104,42 @@ export interface KatanaSyncInfo {
 }
 
 /**
+ * Supplier-specific pricing for an inventory item
+ * Supports multiple suppliers per item with pricing, lead times, and preferences
+ */
+export interface SupplierInventoryPricing {
+  supplierId: string;
+  supplierName: string;
+  supplierCode?: string;
+  unitPrice: number;
+  currency: string;
+  unit: InventoryUnit;
+  minimumOrder?: number;
+  leadTimeDays?: number;
+  effectiveDate?: Timestamp;
+  expiryDate?: Timestamp;
+  notes?: string;
+  isPreferred: boolean;        // Is this the preferred supplier?
+  lastQuotedAt?: Timestamp;
+  addedAt: Timestamp;
+  addedBy: string;
+}
+
+/**
+ * Form data for adding/editing supplier pricing
+ */
+export interface SupplierPricingFormData {
+  supplierId: string;
+  supplierName: string;
+  supplierCode?: string;
+  unitPrice: number;
+  currency: string;
+  minimumOrder?: number;
+  leadTimeDays?: number;
+  notes?: string;
+}
+
+/**
  * Material dimensions (for sheet goods)
  */
 export interface InventoryDimensions {
@@ -129,6 +170,17 @@ export interface InventoryItem {
   preferredSupplierName?: string;
   shopifyProductId?: string;
   shopifyVariantId?: string;
+  shopifySyncStatus?: ShopifySyncStatus;
+  shopifyLastSyncAt?: Timestamp;
+
+  // === PROJECT LINKS (for products) ===
+  linkedProjectIds?: string[];
+
+  // === MULTI-SUPPLIER SUPPORT ===
+  supplierPricing?: SupplierInventoryPricing[];
+
+  // === MATERIAL LINKS (reverse lookup) ===
+  linkedMaterialIds?: string[];
 
   // === SOURCE TRACKING ===
   source: InventorySource;
@@ -186,6 +238,8 @@ export interface InventoryItemFormData {
     unit: InventoryUnit;
   };
   status: InventoryStatus;
+  // Multi-supplier pricing
+  supplierPricing?: SupplierPricingFormData[];
 }
 
 /**

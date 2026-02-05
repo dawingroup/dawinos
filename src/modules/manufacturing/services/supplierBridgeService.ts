@@ -1,79 +1,87 @@
 /**
  * Supplier Bridge Service
- * Bridges the advisory/matflow supplier system to the manufacturing module
+ * Bridges the unified supplier module to the manufacturing module
  * Provides supplier search, lookup, and fuzzy resolution for manufacturing contexts
+ *
+ * Now uses the unified supplier module from src/modules/suppliers/
  */
 
 import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-} from 'firebase/firestore';
-import { db } from '@/shared/services/firebase';
-import type { Supplier } from '@/subsidiaries/advisory/matflow/types/supplier';
-import type { MaterialRate } from '@/subsidiaries/advisory/matflow/services/supplier-service';
+  getSupplier,
+  getActiveSuppliers as getActiveSuppliersFromModule,
+  getSuppliers,
+  searchSuppliers as searchSuppliersFromModule,
+  getSuppliersByMaterial as getSuppliersByMaterialFromModule,
+  getSuppliersByCategory as getSuppliersByCategoryFromModule,
+} from '@/modules/suppliers';
+import type { Supplier, MaterialRate, SubsidiaryId } from '@/modules/suppliers';
 
-const SUPPLIERS_COLLECTION = 'advisoryPlatform/matflow/suppliers';
+// Re-export types for backwards compatibility
+export type { Supplier, MaterialRate, SubsidiaryId };
+
+// Default subsidiary if not specified
+const DEFAULT_SUBSIDIARY: SubsidiaryId = 'finishes';
 
 // ============================================
-// Supplier Lookup
+// Supplier Lookup (delegated to unified module)
 // ============================================
 
 /**
- * Get a supplier by ID from the matflow collection
+ * Get a supplier by ID
  */
-export async function getSupplierById(supplierId: string): Promise<Supplier | null> {
-  const docRef = doc(db, SUPPLIERS_COLLECTION, supplierId);
-  const snap = await getDoc(docRef);
-  if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() } as Supplier;
+export async function getSupplierById(
+  supplierId: string,
+  _subsidiaryId: string = DEFAULT_SUBSIDIARY
+): Promise<Supplier | null> {
+  return getSupplier(supplierId);
 }
 
 /**
- * Get all active suppliers
+ * Get all active suppliers for a subsidiary
  */
-export async function getActiveSuppliers(): Promise<Supplier[]> {
-  const q = query(
-    collection(db, SUPPLIERS_COLLECTION),
-    where('status', '==', 'active'),
-    orderBy('name', 'asc'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Supplier));
+export async function getActiveSuppliers(
+  subsidiaryId: string = DEFAULT_SUBSIDIARY
+): Promise<Supplier[]> {
+  return getActiveSuppliersFromModule(subsidiaryId as SubsidiaryId);
+}
+
+/**
+ * Get all suppliers (active and inactive) for a subsidiary
+ */
+export async function getAllSuppliers(
+  subsidiaryId: string = DEFAULT_SUBSIDIARY
+): Promise<Supplier[]> {
+  return getSuppliers({ subsidiaryId: subsidiaryId as SubsidiaryId });
 }
 
 /**
  * Search suppliers by name, code, or contact person
  */
-export async function searchSuppliers(searchTerm: string): Promise<Supplier[]> {
-  const suppliers = await getActiveSuppliers();
-  const term = searchTerm.toLowerCase().trim();
-  if (!term) return suppliers;
-
-  return suppliers.filter(
-    (s) =>
-      s.name.toLowerCase().includes(term) ||
-      s.code.toLowerCase().includes(term) ||
-      s.contactPerson?.toLowerCase().includes(term) ||
-      s.tradeName?.toLowerCase().includes(term),
-  );
+export async function searchSuppliers(
+  searchTerm: string,
+  subsidiaryId: string = DEFAULT_SUBSIDIARY
+): Promise<Supplier[]> {
+  return searchSuppliersFromModule(searchTerm, subsidiaryId as SubsidiaryId);
 }
 
 /**
  * Get suppliers that supply a specific material
  */
-export async function getSuppliersByMaterial(materialId: string): Promise<Supplier[]> {
-  const q = query(
-    collection(db, SUPPLIERS_COLLECTION),
-    where('materials', 'array-contains', materialId),
-    where('status', '==', 'active'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Supplier));
+export async function getSuppliersByMaterial(
+  materialId: string,
+  subsidiaryId: string = DEFAULT_SUBSIDIARY
+): Promise<Supplier[]> {
+  return getSuppliersByMaterialFromModule(materialId, subsidiaryId as SubsidiaryId);
+}
+
+/**
+ * Get suppliers by category
+ */
+export async function getSuppliersByCategory(
+  category: string,
+  subsidiaryId: string = DEFAULT_SUBSIDIARY
+): Promise<Supplier[]> {
+  return getSuppliersByCategoryFromModule(category, subsidiaryId as SubsidiaryId);
 }
 
 // ============================================
@@ -86,11 +94,13 @@ export async function getSuppliersByMaterial(materialId: string): Promise<Suppli
  */
 export async function getSupplierMaterialRates(
   supplierId: string,
+  _subsidiaryId: string = DEFAULT_SUBSIDIARY
 ): Promise<MaterialRate[]> {
-  const supplier = await getSupplierById(supplierId);
+  const supplier = await getSupplier(supplierId);
   if (!supplier) return [];
 
-  const ratesMap = (supplier as any).materialRates as Record<string, MaterialRate> | undefined;
+  const ratesMap = (supplier as unknown as { materialRates?: Record<string, MaterialRate> })
+    .materialRates;
   if (!ratesMap) return [];
 
   return Object.values(ratesMap);
@@ -98,20 +108,22 @@ export async function getSupplierMaterialRates(
 
 // ============================================
 // Fuzzy Supplier Resolution
+// (Manufacturing-specific functionality)
 // ============================================
 
 /**
- * Attempt to resolve a plain-text supplier name to a matflow supplier record.
+ * Attempt to resolve a plain-text supplier name to a supplier record.
  * Used during design-to-manufacturing handover to link special parts to known suppliers.
  *
  * Returns the best match if similarity is above threshold, null otherwise.
  */
 export async function resolveSupplierFromText(
   supplierText: string,
+  subsidiaryId: string = DEFAULT_SUBSIDIARY
 ): Promise<{ supplierId: string; supplierName: string } | null> {
   if (!supplierText?.trim()) return null;
 
-  const suppliers = await getActiveSuppliers();
+  const suppliers = await getActiveSuppliers(subsidiaryId);
   const needle = supplierText.toLowerCase().trim();
 
   let bestMatch: Supplier | null = null;
@@ -185,4 +197,22 @@ function lcs(a: string, b: string): number {
   }
 
   return prev[n];
+}
+
+// ============================================
+// Subsidiary Info
+// ============================================
+
+/**
+ * Get available subsidiary IDs that have supplier collections
+ */
+export function getAvailableSubsidiaries(): string[] {
+  return ['finishes', 'advisory', 'matflow'];
+}
+
+/**
+ * Check if a subsidiary has a supplier collection
+ */
+export function hasSupplierCollection(subsidiaryId: string): boolean {
+  return ['finishes', 'advisory', 'matflow'].includes(subsidiaryId);
 }

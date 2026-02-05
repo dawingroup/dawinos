@@ -1,64 +1,65 @@
 /**
  * Manufacturing Order Detail Page
  * Full MO view with BOM, parts, stage tracker, and actions
+ * Styled to match DawinOS Finishes design system
  */
 
 import { useState } from 'react';
-import {
-  Box,
-  Typography,
-  Grid,
-  Card,
-  CardContent,
-  Button,
-  Chip,
-  Stepper,
-  Step,
-  StepLabel,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  CircularProgress,
-  Divider,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  IconButton,
-} from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import SkipNextIcon from '@mui/icons-material/SkipNext';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import PauseIcon from '@mui/icons-material/Pause';
-import CancelIcon from '@mui/icons-material/Cancel';
-import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
-import InventoryIcon from '@mui/icons-material/Inventory';
-import VerifiedIcon from '@mui/icons-material/Verified';
-import EditIcon from '@mui/icons-material/Edit';
-import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete';
-import SaveIcon from '@mui/icons-material/Save';
 import { useParams, Link } from 'react-router-dom';
+import {
+  Play,
+  SkipForward,
+  CheckCircle,
+  Pause,
+  XCircle,
+  ShoppingCart,
+  Package,
+  BadgeCheck,
+  Pencil,
+  Plus,
+  Trash2,
+  Save,
+  ArrowLeft,
+  AlertTriangle,
+  X,
+} from 'lucide-react';
 import { useManufacturingOrder } from '../hooks/useManufacturingOrder';
 import { useProcurementRequirements } from '../hooks/useProcurementRequirements';
 import { useWarehouses } from '@/modules/inventory/hooks/useWarehouses';
 import { MO_STAGES, MO_STAGE_LABELS, MO_STATUS_LABELS } from '../types';
-import type { BOMEntry } from '../types';
+import type { BOMEntry, ManufacturingOrderStatus } from '../types';
 import { PROCUREMENT_STATUS_LABELS } from '../types/procurement';
+import type { ProcurementRequirementStatus } from '../types/procurement';
 import { useAuth } from '@/shared/hooks/useAuth';
 import { MaterialConsumptionDialog } from '../components/mo/MaterialConsumptionDialog';
 import { QCInspectionDialog } from '../components/mo/QCInspectionDialog';
 import { updateDoc, doc } from 'firebase/firestore';
 import { db } from '@/shared/services/firebase';
+
+const STATUS_CONFIG: Record<ManufacturingOrderStatus, { bg: string; text: string }> = {
+  draft: { bg: 'bg-gray-100', text: 'text-gray-700' },
+  'pending-approval': { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  approved: { bg: 'bg-blue-100', text: 'text-blue-700' },
+  'in-progress': { bg: 'bg-indigo-100', text: 'text-indigo-700' },
+  'on-hold': { bg: 'bg-red-100', text: 'text-red-700' },
+  completed: { bg: 'bg-green-100', text: 'text-green-700' },
+  cancelled: { bg: 'bg-gray-100', text: 'text-gray-500' },
+};
+
+const PRIORITY_CONFIG = {
+  low: { bg: 'bg-gray-100', text: 'text-gray-600' },
+  medium: { bg: 'bg-blue-100', text: 'text-blue-700' },
+  high: { bg: 'bg-amber-100', text: 'text-amber-700' },
+  urgent: { bg: 'bg-red-100', text: 'text-red-700' },
+};
+
+const PROCUREMENT_STATUS_CONFIG: Record<ProcurementRequirementStatus, { bg: string; text: string }> = {
+  pending: { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  'added-to-po': { bg: 'bg-indigo-100', text: 'text-indigo-700' },
+  ordered: { bg: 'bg-blue-100', text: 'text-blue-700' },
+  received: { bg: 'bg-green-100', text: 'text-green-700' },
+  cancelled: { bg: 'bg-gray-100', text: 'text-gray-500' },
+};
 
 export default function ManufacturingOrderDetailPage() {
   const { moId } = useParams<{ moId: string }>();
@@ -91,21 +92,25 @@ export default function ManufacturingOrderDetailPage() {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex items-center justify-center py-16">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
     );
   }
 
   if (!order) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">Manufacturing order not found</Alert>
-      </Box>
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+          Manufacturing order not found
+        </div>
+      </div>
     );
   }
 
   const currentStageIndex = MO_STAGES.indexOf(order.currentStage);
+  const statusConfig = STATUS_CONFIG[order.status];
+  const priorityConfig = PRIORITY_CONFIG[order.priority];
 
   const handleApprove = async () => {
     if (!approveWarehouseId) return;
@@ -164,638 +169,817 @@ export default function ManufacturingOrderDetailPage() {
     setActionLoading(false);
   };
 
+  const handleSaveBom = async () => {
+    setBomSaving(true);
+    try {
+      const recalculated = editedBom.map((e) => ({
+        ...e,
+        totalCost: e.quantityRequired * e.unitCost,
+      }));
+      await updateDoc(doc(db, 'manufacturingOrders', order.id), {
+        bom: recalculated,
+        'costSummary.materialCost': recalculated.reduce((s, e) => s + e.totalCost, 0),
+        'costSummary.totalCost':
+          recalculated.reduce((s, e) => s + e.totalCost, 0) + order.costSummary.laborCost,
+        updatedAt: new Date(),
+        updatedBy: user?.uid ?? '',
+      });
+      setBomEditing(false);
+    } catch (e) {
+      setShortageAlert((e as Error).message);
+    } finally {
+      setBomSaving(false);
+    }
+  };
+
   return (
-    <Box sx={{ p: 3 }}>
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h5">{order.moNumber}</Typography>
-          <Typography variant="body1" color="text.secondary">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link
+            to="/manufacturing/orders"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5 text-gray-500" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{order.moNumber}</h1>
             {order.projectId && order.designItemId ? (
               <Link
                 to={`/design/project/${order.projectId}/item/${order.designItemId}`}
-                style={{ color: 'inherit', textDecoration: 'none' }}
-                onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
-                onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
+                className="text-muted-foreground hover:underline"
               >
                 {order.designItemName} — {order.projectCode}
               </Link>
             ) : (
-              <>{order.designItemName} — {order.projectCode}</>
+              <p className="text-muted-foreground">
+                {order.designItemName} — {order.projectCode}
+              </p>
             )}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Chip label={MO_STATUS_LABELS[order.status]} color="primary" />
-          <Chip
-            label={order.priority}
-            variant="outlined"
-            color={order.priority === 'urgent' ? 'error' : order.priority === 'high' ? 'warning' : 'default'}
-          />
-        </Box>
-      </Box>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`px-3 py-1 text-sm font-medium rounded-full ${statusConfig.bg} ${statusConfig.text}`}>
+            {MO_STATUS_LABELS[order.status]}
+          </span>
+          <span className={`px-3 py-1 text-sm font-medium rounded-full ${priorityConfig.bg} ${priorityConfig.text}`}>
+            {order.priority.charAt(0).toUpperCase() + order.priority.slice(1)}
+          </span>
+        </div>
+      </div>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {/* Error Alert */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+          {error}
+        </div>
+      )}
+
+      {/* Shortage Alert */}
       {shortageAlert && (
-        <Alert severity="warning" sx={{ mb: 2, whiteSpace: 'pre-line' }} onClose={() => setShortageAlert(null)}>
-          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Material Shortages Detected</Typography>
-          {shortageAlert}
-        </Alert>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h4 className="font-medium text-yellow-800 mb-1">Material Shortages Detected</h4>
+            <p className="text-yellow-700 whitespace-pre-line text-sm">{shortageAlert}</p>
+          </div>
+          <button onClick={() => setShortageAlert(null)} className="text-yellow-600 hover:text-yellow-800">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       )}
 
       {/* Stage Tracker */}
-      <Card variant="outlined" sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" sx={{ mb: 2 }}>Production Stage</Typography>
-          <Stepper activeStep={currentStageIndex} alternativeLabel>
-            {MO_STAGES.map((stage, index) => (
-              <Step key={stage} completed={index < currentStageIndex}>
-                <StepLabel>{MO_STAGE_LABELS[stage]}</StepLabel>
-              </Step>
-            ))}
-          </Stepper>
-        </CardContent>
-      </Card>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Production Stage</h2>
+        <div className="flex items-center justify-between">
+          {MO_STAGES.map((stage, index) => {
+            const isCompleted = index < currentStageIndex;
+            const isCurrent = index === currentStageIndex;
+            return (
+              <div key={stage} className="flex-1 flex flex-col items-center relative">
+                {/* Connector line */}
+                {index > 0 && (
+                  <div
+                    className={`absolute left-0 top-4 w-1/2 h-0.5 -translate-x-1/2 ${
+                      isCompleted ? 'bg-primary' : 'bg-gray-200'
+                    }`}
+                  />
+                )}
+                {index < MO_STAGES.length - 1 && (
+                  <div
+                    className={`absolute right-0 top-4 w-1/2 h-0.5 translate-x-1/2 ${
+                      isCompleted ? 'bg-primary' : 'bg-gray-200'
+                    }`}
+                  />
+                )}
+                {/* Circle */}
+                <div
+                  className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                    isCompleted
+                      ? 'bg-primary text-white'
+                      : isCurrent
+                        ? 'bg-primary/20 text-primary border-2 border-primary'
+                        : 'bg-gray-100 text-gray-400'
+                  }`}
+                >
+                  {isCompleted ? <CheckCircle className="h-4 w-4" /> : index + 1}
+                </div>
+                {/* Label */}
+                <span
+                  className={`mt-2 text-xs font-medium ${
+                    isCompleted || isCurrent ? 'text-gray-900' : 'text-gray-400'
+                  }`}
+                >
+                  {MO_STAGE_LABELS[stage]}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Actions */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
+      <div className="flex flex-wrap gap-2">
         {order.status === 'draft' && (
-          <Button
-            variant="contained"
-            color="success"
-            startIcon={actionLoading ? <CircularProgress size={16} /> : <CheckCircleIcon />}
+          <button
             onClick={() => {
               setApproveWarehouseId(warehouses[0]?.id ?? '');
               setShowApproveDialog(true);
             }}
             disabled={actionLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
           >
+            {actionLoading ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+            ) : (
+              <CheckCircle className="h-4 w-4" />
+            )}
             Approve & Reserve Materials
-          </Button>
+          </button>
         )}
         {order.status === 'approved' && (
-          <Button
-            variant="contained"
-            startIcon={<PlayArrowIcon />}
+          <button
             onClick={async () => {
               setActionLoading(true);
               await actions.startProduction();
               setActionLoading(false);
             }}
             disabled={actionLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
+            <Play className="h-4 w-4" />
             Start Production
-          </Button>
+          </button>
         )}
         {order.status === 'in-progress' && order.currentStage !== 'ready' && (
-          <Button
-            variant="contained"
-            startIcon={<SkipNextIcon />}
+          <button
             onClick={() => setShowAdvanceDialog(true)}
             disabled={actionLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
+            <SkipForward className="h-4 w-4" />
             Advance Stage
-          </Button>
+          </button>
         )}
         {order.status === 'in-progress' && (
-          <Button
-            variant="outlined"
-            color="warning"
-            startIcon={<PauseIcon />}
+          <button
             onClick={() => setShowHoldDialog(true)}
             disabled={actionLoading}
+            className="flex items-center gap-2 px-4 py-2 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50 transition-colors disabled:opacity-50"
           >
+            <Pause className="h-4 w-4" />
             Put on Hold
-          </Button>
+          </button>
         )}
         {order.status === 'on-hold' && (
-          <Button
-            variant="contained"
-            startIcon={<PlayArrowIcon />}
+          <button
             onClick={async () => {
               setActionLoading(true);
               await actions.resume();
               setActionLoading(false);
             }}
             disabled={actionLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
+            <Play className="h-4 w-4" />
             Resume
-          </Button>
+          </button>
         )}
         {order.status === 'in-progress' && (
-          <Button
-            variant="outlined"
-            startIcon={<InventoryIcon />}
+          <button
             onClick={() => setShowConsumeDialog(true)}
             disabled={actionLoading}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
+            <Package className="h-4 w-4" />
             Consume Materials
-          </Button>
+          </button>
         )}
         {order.status === 'in-progress' && order.currentStage === 'qc' && (
-          <Button
-            variant="outlined"
-            color="success"
-            startIcon={<VerifiedIcon />}
+          <button
             onClick={() => setShowQCDialog(true)}
             disabled={actionLoading}
+            className="flex items-center gap-2 px-4 py-2 border border-green-300 text-green-700 rounded-lg hover:bg-green-50 transition-colors disabled:opacity-50"
           >
+            <BadgeCheck className="h-4 w-4" />
             Record QC
-          </Button>
+          </button>
         )}
         {!['completed', 'cancelled'].includes(order.status) && (
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<CancelIcon />}
+          <button
             onClick={() => setShowCancelDialog(true)}
             disabled={actionLoading}
+            className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
           >
+            <XCircle className="h-4 w-4" />
             Cancel Order
-          </Button>
+          </button>
         )}
-      </Box>
+      </div>
 
-      <Grid container spacing={3}>
-        {/* BOM Table */}
-        <Grid size={12}>
-          <Card variant="outlined">
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">Bill of Materials</Typography>
-                {['draft', 'approved'].includes(order.status) && !bomEditing && (
-                  <Button
-                    size="small"
-                    startIcon={<EditIcon />}
-                    onClick={() => {
-                      setEditedBom(order.bom.map((e) => ({ ...e })));
-                      setBomEditing(true);
-                    }}
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* BOM Table - Full Width */}
+        <div className="lg:col-span-12">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-lg font-semibold text-gray-900">Bill of Materials</h2>
+              {['draft', 'approved'].includes(order.status) && !bomEditing && (
+                <button
+                  onClick={() => {
+                    setEditedBom(order.bom.map((e) => ({ ...e })));
+                    setBomEditing(true);
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit BOM
+                </button>
+              )}
+              {bomEditing && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() =>
+                      setEditedBom((prev) => [
+                        ...prev,
+                        {
+                          id: `BOM-${Date.now()}`,
+                          inventoryItemId: '',
+                          sku: '',
+                          itemName: '',
+                          category: '',
+                          quantityRequired: 0,
+                          unit: 'pcs',
+                          unitCost: 0,
+                          totalCost: 0,
+                        },
+                      ])
+                    }
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                   >
-                    Edit BOM
-                  </Button>
-                )}
-                {bomEditing && (
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button
-                      size="small"
-                      startIcon={<AddIcon />}
-                      onClick={() => {
-                        setEditedBom((prev) => [
-                          ...prev,
-                          {
-                            id: `BOM-${Date.now()}`,
-                            inventoryItemId: '',
-                            sku: '',
-                            itemName: '',
-                            category: '',
-                            quantityRequired: 0,
-                            unit: 'pcs',
-                            unitCost: 0,
-                            totalCost: 0,
-                          },
-                        ]);
-                      }}
-                    >
-                      Add Entry
-                    </Button>
-                    <Button
-                      size="small"
-                      onClick={() => setBomEditing(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      startIcon={bomSaving ? <CircularProgress size={14} /> : <SaveIcon />}
-                      disabled={bomSaving}
-                      onClick={async () => {
-                        setBomSaving(true);
-                        try {
-                          const recalculated = editedBom.map((e) => ({
-                            ...e,
-                            totalCost: e.quantityRequired * e.unitCost,
-                          }));
-                          await updateDoc(doc(db, 'manufacturingOrders', order.id), {
-                            bom: recalculated,
-                            'costSummary.materialCost': recalculated.reduce((s, e) => s + e.totalCost, 0),
-                            'costSummary.totalCost':
-                              recalculated.reduce((s, e) => s + e.totalCost, 0) + order.costSummary.laborCost,
-                            updatedAt: new Date(),
-                            updatedBy: user?.uid ?? '',
-                          });
-                          setBomEditing(false);
-                        } catch (e) {
-                          setShortageAlert((e as Error).message);
-                        } finally {
-                          setBomSaving(false);
-                        }
-                      }}
-                    >
-                      Save BOM
-                    </Button>
-                  </Box>
-                )}
-              </Box>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Item</TableCell>
-                      <TableCell>Category</TableCell>
-                      <TableCell>Supplier</TableCell>
-                      <TableCell align="right">Qty Required</TableCell>
-                      <TableCell>Unit</TableCell>
-                      <TableCell align="right">Unit Cost</TableCell>
-                      <TableCell align="right">Total Cost</TableCell>
-                      {bomEditing && <TableCell sx={{ width: 50 }} />}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {bomEditing ? (
-                      editedBom.map((entry, idx) => (
-                        <TableRow key={entry.id}>
-                          <TableCell>
-                            <TextField
-                              size="small"
-                              value={entry.itemName}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditedBom((prev) => prev.map((b, i) => i === idx ? { ...b, itemName: val } : b));
-                              }}
-                              fullWidth
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              size="small"
-                              value={entry.category}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditedBom((prev) => prev.map((b, i) => i === idx ? { ...b, category: val } : b));
-                              }}
-                              sx={{ width: 120 }}
-                            />
-                          </TableCell>
-                          <TableCell>{entry.supplierName ?? '—'}</TableCell>
-                          <TableCell align="right">
-                            <TextField
-                              size="small"
-                              type="number"
-                              value={entry.quantityRequired}
-                              onChange={(e) => {
-                                const val = parseFloat(e.target.value) || 0;
-                                setEditedBom((prev) => prev.map((b, i) => i === idx ? { ...b, quantityRequired: val, totalCost: val * b.unitCost } : b));
-                              }}
-                              sx={{ width: 80 }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              size="small"
-                              value={entry.unit}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditedBom((prev) => prev.map((b, i) => i === idx ? { ...b, unit: val } : b));
-                              }}
-                              sx={{ width: 70 }}
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            <TextField
-                              size="small"
-                              type="number"
-                              value={entry.unitCost}
-                              onChange={(e) => {
-                                const val = parseFloat(e.target.value) || 0;
-                                setEditedBom((prev) => prev.map((b, i) => i === idx ? { ...b, unitCost: val, totalCost: b.quantityRequired * val } : b));
-                              }}
-                              sx={{ width: 100 }}
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            {(entry.quantityRequired * entry.unitCost).toLocaleString()}
-                          </TableCell>
-                          <TableCell>
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => setEditedBom((prev) => prev.filter((_, i) => i !== idx))}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                    <Plus className="h-4 w-4" />
+                    Add Entry
+                  </button>
+                  <button
+                    onClick={() => setBomEditing(false)}
+                    className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveBom}
+                    disabled={bomSaving}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  >
+                    {bomSaving ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
                     ) : (
-                      order.bom.map((entry) => (
-                        <TableRow key={entry.id}>
-                          <TableCell>{entry.itemName}</TableCell>
-                          <TableCell>{entry.category}</TableCell>
-                          <TableCell>{entry.supplierName ?? '—'}</TableCell>
-                          <TableCell align="right">{entry.quantityRequired}</TableCell>
-                          <TableCell>{entry.unit}</TableCell>
-                          <TableCell align="right">{entry.unitCost.toLocaleString()}</TableCell>
-                          <TableCell align="right">{entry.totalCost.toLocaleString()}</TableCell>
-                        </TableRow>
-                      ))
+                      <Save className="h-4 w-4" />
                     )}
-                    {(bomEditing ? editedBom : order.bom).length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={bomEditing ? 8 : 7} align="center">
-                          <Typography color="text.secondary">No BOM entries</Typography>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
+                    Save BOM
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Item
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Category
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Supplier
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Qty Required
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Unit
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Unit Cost
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Total Cost
+                    </th>
+                    {bomEditing && <th className="px-4 py-3 w-12" />}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {bomEditing ? (
+                    editedBom.map((entry, idx) => (
+                      <tr key={entry.id}>
+                        <td className="px-4 py-3">
+                          <input
+                            type="text"
+                            value={entry.itemName}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEditedBom((prev) =>
+                                prev.map((b, i) => (i === idx ? { ...b, itemName: val } : b)),
+                              );
+                            }}
+                            className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <input
+                            type="text"
+                            value={entry.category}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEditedBom((prev) =>
+                                prev.map((b, i) => (i === idx ? { ...b, category: val } : b)),
+                              );
+                            }}
+                            className="w-24 px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 text-sm">
+                          {entry.supplierName ?? '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <input
+                            type="number"
+                            value={entry.quantityRequired}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setEditedBom((prev) =>
+                                prev.map((b, i) =>
+                                  i === idx
+                                    ? { ...b, quantityRequired: val, totalCost: val * b.unitCost }
+                                    : b,
+                                ),
+                              );
+                            }}
+                            className="w-20 px-2 py-1 border border-gray-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <input
+                            type="text"
+                            value={entry.unit}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEditedBom((prev) =>
+                                prev.map((b, i) => (i === idx ? { ...b, unit: val } : b)),
+                              );
+                            }}
+                            className="w-16 px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <input
+                            type="number"
+                            value={entry.unitCost}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setEditedBom((prev) =>
+                                prev.map((b, i) =>
+                                  i === idx
+                                    ? { ...b, unitCost: val, totalCost: b.quantityRequired * val }
+                                    : b,
+                                ),
+                              );
+                            }}
+                            className="w-24 px-2 py-1 border border-gray-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm text-gray-900">
+                          {(entry.quantityRequired * entry.unitCost).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => setEditedBom((prev) => prev.filter((_, i) => i !== idx))}
+                            className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    order.bom.map((entry) => (
+                      <tr key={entry.id}>
+                        <td className="px-4 py-3 text-sm text-gray-900">{entry.itemName}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{entry.category}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {entry.supplierName ?? '—'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                          {entry.quantityRequired}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{entry.unit}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                          {entry.unitCost.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                          {entry.totalCost.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                  {(bomEditing ? editedBom : order.bom).length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={bomEditing ? 8 : 7}
+                        className="px-4 py-8 text-center text-gray-500"
+                      >
+                        No BOM entries
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
 
         {/* Cost Summary */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>Cost Summary</Typography>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography color="text.secondary">Materials</Typography>
-                <Typography>{order.costSummary.materialCost.toLocaleString()} {order.costSummary.currency}</Typography>
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography color="text.secondary">Labor</Typography>
-                <Typography>{order.costSummary.laborCost.toLocaleString()} {order.costSummary.currency}</Typography>
-              </Box>
-              <Divider sx={{ my: 1 }} />
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography fontWeight="bold">Total</Typography>
-                <Typography fontWeight="bold">{order.costSummary.totalCost.toLocaleString()} {order.costSummary.currency}</Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
+        <div className="lg:col-span-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Cost Summary</h2>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Materials</span>
+                <span className="text-gray-900">
+                  {order.costSummary.materialCost.toLocaleString()} {order.costSummary.currency}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Labor</span>
+                <span className="text-gray-900">
+                  {order.costSummary.laborCost.toLocaleString()} {order.costSummary.currency}
+                </span>
+              </div>
+              <hr className="my-2" />
+              <div className="flex justify-between font-semibold">
+                <span>Total</span>
+                <span>
+                  {order.costSummary.totalCost.toLocaleString()} {order.costSummary.currency}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Material Reservations */}
-        <Grid size={{ xs: 12, md: 8 }}>
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>
+        <div className="lg:col-span-8">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="p-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">
                 Material Reservations ({order.materialReservations.length})
-              </Typography>
-              {order.materialReservations.length > 0 ? (
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Item</TableCell>
-                        <TableCell align="right">Reserved</TableCell>
-                        <TableCell>Status</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {order.materialReservations.map((res) => (
-                        <TableRow key={res.id}>
-                          <TableCell>{res.inventoryItemId}</TableCell>
-                          <TableCell align="right">{res.quantityReserved}</TableCell>
-                          <TableCell>
-                            <Chip
-                              label={res.status}
-                              size="small"
-                              color={res.status === 'active' ? 'success' : res.status === 'consumed' ? 'default' : 'warning'}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              ) : (
-                <Typography color="text.secondary">No materials reserved yet</Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
+              </h2>
+            </div>
+            {order.materialReservations.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Item
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Reserved
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {order.materialReservations.map((res) => (
+                      <tr key={res.id}>
+                        <td className="px-4 py-3 text-sm text-gray-900">{res.inventoryItemId}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                          {res.quantityReserved}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                              res.status === 'active'
+                                ? 'bg-green-100 text-green-700'
+                                : res.status === 'consumed'
+                                  ? 'bg-gray-100 text-gray-600'
+                                  : 'bg-yellow-100 text-yellow-700'
+                            }`}
+                          >
+                            {res.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-4 text-gray-500">No materials reserved yet</div>
+            )}
+          </div>
+        </div>
 
         {/* Procurement Requirements */}
         {procurementReqs.length > 0 && (
-          <Grid size={12}>
-            <Card variant="outlined">
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6">
-                    Procurement Requirements ({procurementReqs.length})
-                  </Typography>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<ShoppingCartIcon />}
-                    component={Link}
-                    to="/manufacturing/procurement"
-                  >
-                    Procurement Dashboard
-                  </Button>
-                </Box>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Description</TableCell>
-                        <TableCell>Supplier</TableCell>
-                        <TableCell align="right">Qty</TableCell>
-                        <TableCell align="right">Est. Cost</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell>PO</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {procurementReqs.map((req) => (
-                        <TableRow key={req.id}>
-                          <TableCell>{req.itemDescription}</TableCell>
-                          <TableCell>{req.supplierName ?? '—'}</TableCell>
-                          <TableCell align="right">{req.quantityRequired}</TableCell>
-                          <TableCell align="right">{req.estimatedTotalCost.toLocaleString()}</TableCell>
-                          <TableCell>
-                            <Chip
-                              label={PROCUREMENT_STATUS_LABELS[req.status]}
-                              size="small"
-                              color={
-                                req.status === 'pending' ? 'warning' :
-                                req.status === 'ordered' ? 'primary' :
-                                req.status === 'received' ? 'success' : 'default'
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
+          <div className="lg:col-span-12">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Procurement Requirements ({procurementReqs.length})
+                </h2>
+                <Link
+                  to="/manufacturing/procurement"
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  Procurement Dashboard
+                </Link>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Description
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Supplier
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Qty
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Est. Cost
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        PO
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {procurementReqs.map((req) => {
+                      const reqStatusConfig = PROCUREMENT_STATUS_CONFIG[req.status];
+                      return (
+                        <tr key={req.id}>
+                          <td className="px-4 py-3 text-sm text-gray-900">{req.itemDescription}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {req.supplierName ?? '—'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                            {req.quantityRequired}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                            {req.estimatedTotalCost.toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`px-2 py-0.5 text-xs font-medium rounded-full ${reqStatusConfig.bg} ${reqStatusConfig.text}`}
+                            >
+                              {PROCUREMENT_STATUS_LABELS[req.status]}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
                             {req.poId ? (
-                              <Chip
-                                label="View PO"
-                                size="small"
-                                variant="outlined"
-                                component={Link}
+                              <Link
                                 to={`/manufacturing/purchase-orders/${req.poId}`}
-                                clickable
-                              />
-                            ) : '—'}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </CardContent>
-            </Card>
-          </Grid>
+                                className="text-primary text-sm hover:underline"
+                              >
+                                View PO
+                              </Link>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Linked Purchase Orders */}
         {order.linkedPOIds && order.linkedPOIds.length > 0 && (
-          <Grid size={12}>
-            <Card variant="outlined">
-              <CardContent>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  Linked Purchase Orders ({order.linkedPOIds.length})
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  {order.linkedPOIds.map((poId) => (
-                    <Chip
-                      key={poId}
-                      label={`PO: ${poId.slice(0, 8)}...`}
-                      variant="outlined"
-                      component={Link}
-                      to={`/manufacturing/purchase-orders/${poId}`}
-                      clickable
-                    />
-                  ))}
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+          <div className="lg:col-span-12">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <h2 className="text-lg font-semibold text-gray-900 mb-3">
+                Linked Purchase Orders ({order.linkedPOIds.length})
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {order.linkedPOIds.map((poId) => (
+                  <Link
+                    key={poId}
+                    to={`/manufacturing/purchase-orders/${poId}`}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded-full hover:bg-gray-50 transition-colors"
+                  >
+                    PO: {poId.slice(0, 8)}...
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
-      </Grid>
+      </div>
 
-      {/* Approve Dialog with Warehouse Selection */}
-      <Dialog open={showApproveDialog} onClose={() => setShowApproveDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Approve & Reserve Materials</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Select the warehouse to reserve materials from for this manufacturing order.
-          </Typography>
-          <FormControl fullWidth sx={{ mt: 1 }}>
-            <InputLabel>Warehouse</InputLabel>
-            <Select
-              value={approveWarehouseId}
-              label="Warehouse"
-              onChange={(e) => setApproveWarehouseId(e.target.value)}
-            >
-              {warehouses.map((w) => (
-                <MenuItem key={w.id} value={w.id}>{w.name}</MenuItem>
-              ))}
-              {warehouses.length === 0 && (
-                <MenuItem value="" disabled>No warehouses available</MenuItem>
-              )}
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowApproveDialog(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            color="success"
-            onClick={handleApprove}
-            disabled={!approveWarehouseId || actionLoading}
-          >
-            Approve
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Approve Dialog */}
+      {showApproveDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Approve & Reserve Materials</h3>
+            </div>
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-gray-600">
+                Select the warehouse to reserve materials from for this manufacturing order.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse</label>
+                <select
+                  value={approveWarehouseId}
+                  onChange={(e) => setApproveWarehouseId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                >
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                  {warehouses.length === 0 && (
+                    <option value="" disabled>
+                      No warehouses available
+                    </option>
+                  )}
+                </select>
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-200 flex justify-end gap-2">
+              <button
+                onClick={() => setShowApproveDialog(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApprove}
+                disabled={!approveWarehouseId || actionLoading}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+              >
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Advance Stage Dialog */}
-      <Dialog open={showAdvanceDialog} onClose={() => setShowAdvanceDialog(false)}>
-        <DialogTitle>
-          Advance to {order.currentStage !== 'ready' && MO_STAGE_LABELS[MO_STAGES[currentStageIndex + 1]]}
-        </DialogTitle>
-        <DialogContent>
-          <TextField
-            label="Stage Notes (optional)"
-            multiline
-            rows={3}
-            fullWidth
-            value={stageNotes}
-            onChange={(e) => setStageNotes(e.target.value)}
-            sx={{ mt: 1 }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowAdvanceDialog(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleAdvanceStage}
-            disabled={actionLoading}
-          >
-            Advance
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {showAdvanceDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Advance to{' '}
+                {order.currentStage !== 'ready' && MO_STAGE_LABELS[MO_STAGES[currentStageIndex + 1]]}
+              </h3>
+            </div>
+            <div className="p-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Stage Notes (optional)
+              </label>
+              <textarea
+                value={stageNotes}
+                onChange={(e) => setStageNotes(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+            </div>
+            <div className="p-4 border-t border-gray-200 flex justify-end gap-2">
+              <button
+                onClick={() => setShowAdvanceDialog(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAdvanceStage}
+                disabled={actionLoading}
+                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                Advance
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hold Dialog */}
-      <Dialog open={showHoldDialog} onClose={() => setShowHoldDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Put Order on Hold</DialogTitle>
-        <DialogContent>
-          <TextField
-            label="Reason for Hold"
-            multiline
-            rows={3}
-            fullWidth
-            value={holdReason}
-            onChange={(e) => setHoldReason(e.target.value)}
-            sx={{ mt: 1 }}
-            required
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowHoldDialog(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            color="warning"
-            onClick={handleHold}
-            disabled={!holdReason.trim() || actionLoading}
-          >
-            Put on Hold
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {showHoldDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Put Order on Hold</h3>
+            </div>
+            <div className="p-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Reason for Hold <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={holdReason}
+                onChange={(e) => setHoldReason(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+            </div>
+            <div className="p-4 border-t border-gray-200 flex justify-end gap-2">
+              <button
+                onClick={() => setShowHoldDialog(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleHold}
+                disabled={!holdReason.trim() || actionLoading}
+                className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors disabled:opacity-50"
+              >
+                Put on Hold
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cancel Dialog */}
-      <Dialog open={showCancelDialog} onClose={() => setShowCancelDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Cancel Manufacturing Order</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            This will cancel the manufacturing order and release any material reservations. This action cannot be undone.
-          </Typography>
-          <TextField
-            label="Cancellation Reason"
-            multiline
-            rows={3}
-            fullWidth
-            value={cancelReason}
-            onChange={(e) => setCancelReason(e.target.value)}
-            required
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowCancelDialog(false)}>Keep Order</Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleCancel}
-            disabled={!cancelReason.trim() || actionLoading}
-          >
-            Cancel Order
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {showCancelDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Cancel Manufacturing Order</h3>
+            </div>
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-gray-600">
+                This will cancel the manufacturing order and release any material reservations. This
+                action cannot be undone.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Cancellation Reason <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-200 flex justify-end gap-2">
+              <button
+                onClick={() => setShowCancelDialog(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Keep Order
+              </button>
+              <button
+                onClick={handleCancel}
+                disabled={!cancelReason.trim() || actionLoading}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                Cancel Order
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Material Consumption Dialog */}
       {showConsumeDialog && (
@@ -818,6 +1002,6 @@ export default function ManufacturingOrderDetailPage() {
           onRecordQC={actions.recordQC}
         />
       )}
-    </Box>
+    </div>
   );
 }

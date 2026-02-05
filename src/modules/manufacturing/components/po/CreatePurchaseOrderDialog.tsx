@@ -1,9 +1,10 @@
 /**
  * Create Purchase Order Dialog
- * Standalone PO creation with supplier picker, line item builder, and landed costs
+ * Standalone PO creation with supplier picker, line item builder, and landed costs.
+ * Includes smart consolidation to combine requirements from multiple MOs.
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -32,8 +33,11 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { SupplierPicker } from './SupplierPicker';
+import { SmartConsolidationAlert } from './SmartConsolidationAlert';
 import { createPurchaseOrder } from '../../services/purchaseOrderService';
+import { useSmartConsolidationForSupplier } from '../../hooks/useSmartConsolidation';
 import type { POLineItem, LandedCosts, LandedCostDistributionMethod } from '../../types/purchaseOrder';
+import type { ProcurementRequirement } from '../../types/procurement';
 
 interface LineItemDraft {
   key: string;
@@ -64,7 +68,7 @@ interface Props {
 }
 
 export function CreatePurchaseOrderDialog({ open, onClose, onCreated, subsidiaryId, userId }: Props) {
-  const [supplierValue, setSupplierValue] = useState<{ id: string; name: string; contactPerson?: string } | null>(null);
+  const [supplierValue, setSupplierValue] = useState<{ supplierId: string; supplierName: string } | null>(null);
   const [supplierContact, setSupplierContact] = useState('');
   const [notes, setNotes] = useState('');
   const [lineItems, setLineItems] = useState<LineItemDraft[]>([emptyLineItem()]);
@@ -80,6 +84,39 @@ export function CreatePurchaseOrderDialog({ open, onClose, onCreated, subsidiary
   const [distributionMethod, setDistributionMethod] = useState<LandedCostDistributionMethod>('proportional_value');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Smart consolidation - find other MOs needing same supplier
+  const {
+    opportunity: consolidationOpportunity,
+    loading: consolidationLoading,
+  } = useSmartConsolidationForSupplier({
+    supplierId: supplierValue?.supplierId ?? null,
+    subsidiaryId,
+  });
+
+  // Handler to add requirements from consolidation to line items
+  const handleAddConsolidationRequirements = useCallback((requirements: ProcurementRequirement[]) => {
+    const newItems: LineItemDraft[] = requirements.map((req) => ({
+      key: crypto.randomUUID(),
+      description: `${req.itemDescription} (MO: ${req.moNumber})`,
+      sku: '',
+      quantity: req.quantityRequired.toString(),
+      unitCost: req.estimatedUnitCost.toString(),
+      unit: req.unit,
+      weight: '',
+    }));
+
+    // Remove empty placeholder line items and add new ones
+    setLineItems((prev) => {
+      const nonEmpty = prev.filter((li) => li.description.trim() !== '');
+      return [...nonEmpty, ...newItems];
+    });
+
+    // Update currency if needed
+    if (requirements.length > 0 && requirements[0].currency !== currency) {
+      setCurrency(requirements[0].currency);
+    }
+  }, [currency]);
 
   const resetForm = () => {
     setSupplierValue(null);
@@ -163,9 +200,9 @@ export function CreatePurchaseOrderDialog({ open, onClose, onCreated, subsidiary
 
       const poId = await createPurchaseOrder(
         {
-          supplierName: supplierValue.name,
-          supplierContact: supplierContact || supplierValue.contactPerson || undefined,
-          supplierId: supplierValue.id,
+          supplierName: supplierValue.supplierName,
+          supplierContact: supplierContact || undefined,
+          supplierId: supplierValue.supplierId,
           lineItems: poLineItems,
           landedCosts: landedCostsData,
           subsidiaryId,
@@ -195,12 +232,9 @@ export function CreatePurchaseOrderDialog({ open, onClose, onCreated, subsidiary
           <Grid size={{ xs: 12, md: 6 }}>
             <SupplierPicker
               value={supplierValue}
-              onChange={(val) => {
-                setSupplierValue(val);
-                if (val?.contactPerson) setSupplierContact(val.contactPerson);
-              }}
+              onChange={(val) => setSupplierValue(val)}
+              subsidiaryId={subsidiaryId}
               label="Select Supplier"
-              fullWidth
             />
           </Grid>
           <Grid size={{ xs: 12, md: 3 }}>
@@ -225,6 +259,13 @@ export function CreatePurchaseOrderDialog({ open, onClose, onCreated, subsidiary
             </FormControl>
           </Grid>
         </Grid>
+
+        {/* Smart Consolidation Alert - shows when supplier has other pending requirements */}
+        <SmartConsolidationAlert
+          opportunity={consolidationOpportunity}
+          loading={consolidationLoading}
+          onAddRequirements={handleAddConsolidationRequirements}
+        />
 
         {/* Line Items */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>

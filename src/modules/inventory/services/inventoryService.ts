@@ -27,7 +27,10 @@ import type {
   InventoryTier,
   InventoryStatus,
   InventorySource,
+  SupplierInventoryPricing,
+  SupplierPricingFormData,
 } from '../types';
+import { Timestamp } from 'firebase/firestore';
 
 const COLLECTION_NAME = 'inventoryItems';
 const inventoryRef = collection(db, COLLECTION_NAME);
@@ -93,6 +96,10 @@ function docToItem(id: string, data: any): InventoryItem {
     subcategory: data.subcategory,
     tags: data.tags || [],
     aliases: data.aliases || [],
+    preferredSupplierId: data.preferredSupplierId,
+    preferredSupplierName: data.preferredSupplierName,
+    supplierPricing: data.supplierPricing || [],
+    linkedMaterialIds: data.linkedMaterialIds || [],
     source: data.source || 'manual',
     katanaId: data.katanaId,
     promotedFromPartId: data.promotedFromPartId,
@@ -488,4 +495,141 @@ export async function promotePartToInventory(
 
   const docRef = await addDoc(inventoryRef, docData);
   return docRef.id;
+}
+
+// ============================================
+// Multi-Supplier Pricing Methods
+// ============================================
+
+/**
+ * Add or update supplier pricing for an inventory item
+ * If the supplier already exists in the pricing array, it will be updated
+ */
+export async function addSupplierPricing(
+  inventoryItemId: string,
+  pricing: SupplierPricingFormData,
+  userId: string,
+  setAsPreferred: boolean = false
+): Promise<void> {
+  const docRef = doc(inventoryRef, inventoryItemId);
+  const item = await getInventoryItem(inventoryItemId);
+  if (!item) throw new Error('Inventory item not found');
+
+  const newPricing: SupplierInventoryPricing = {
+    supplierId: pricing.supplierId,
+    supplierName: pricing.supplierName,
+    supplierCode: pricing.supplierCode,
+    unitPrice: pricing.unitPrice,
+    currency: pricing.currency,
+    unit: item.pricing?.unit || 'sheet',
+    minimumOrder: pricing.minimumOrder,
+    leadTimeDays: pricing.leadTimeDays,
+    notes: pricing.notes,
+    isPreferred: setAsPreferred,
+    addedAt: Timestamp.now(),
+    addedBy: userId,
+  };
+
+  // Get existing pricing array
+  let updatedPricing = item.supplierPricing || [];
+
+  // If setting as preferred, unset others
+  if (setAsPreferred) {
+    updatedPricing = updatedPricing.map((sp) => ({ ...sp, isPreferred: false }));
+  }
+
+  // Check if supplier already exists - update instead of add
+  const existingIndex = updatedPricing.findIndex((sp) => sp.supplierId === pricing.supplierId);
+  if (existingIndex >= 0) {
+    updatedPricing[existingIndex] = newPricing;
+  } else {
+    updatedPricing.push(newPricing);
+  }
+
+  await updateDoc(docRef, {
+    supplierPricing: updatedPricing,
+    // Also update preferred supplier fields if setting as preferred
+    ...(setAsPreferred
+      ? {
+          preferredSupplierId: pricing.supplierId,
+          preferredSupplierName: pricing.supplierName,
+        }
+      : {}),
+    updatedAt: serverTimestamp(),
+    updatedBy: userId,
+  });
+}
+
+/**
+ * Remove supplier pricing from an inventory item
+ */
+export async function removeSupplierPricing(
+  inventoryItemId: string,
+  supplierId: string,
+  userId: string
+): Promise<void> {
+  const docRef = doc(inventoryRef, inventoryItemId);
+  const item = await getInventoryItem(inventoryItemId);
+  if (!item) throw new Error('Inventory item not found');
+
+  const updatedPricing = (item.supplierPricing || []).filter(
+    (sp) => sp.supplierId !== supplierId
+  );
+
+  // If removing the preferred supplier, clear the preferred fields
+  const clearPreferred = item.preferredSupplierId === supplierId;
+
+  await updateDoc(docRef, {
+    supplierPricing: updatedPricing,
+    ...(clearPreferred
+      ? {
+          preferredSupplierId: null,
+          preferredSupplierName: null,
+        }
+      : {}),
+    updatedAt: serverTimestamp(),
+    updatedBy: userId,
+  });
+}
+
+/**
+ * Set a supplier as the preferred supplier for an inventory item
+ */
+export async function setPreferredSupplier(
+  inventoryItemId: string,
+  supplierId: string,
+  userId: string
+): Promise<void> {
+  const docRef = doc(inventoryRef, inventoryItemId);
+  const item = await getInventoryItem(inventoryItemId);
+  if (!item) throw new Error('Inventory item not found');
+
+  const supplierPricing = item.supplierPricing || [];
+  const supplier = supplierPricing.find((sp) => sp.supplierId === supplierId);
+  if (!supplier) throw new Error('Supplier not found in pricing list');
+
+  // Update isPreferred flag on all suppliers
+  const updatedPricing = supplierPricing.map((sp) => ({
+    ...sp,
+    isPreferred: sp.supplierId === supplierId,
+  }));
+
+  await updateDoc(docRef, {
+    supplierPricing: updatedPricing,
+    preferredSupplierId: supplierId,
+    preferredSupplierName: supplier.supplierName,
+    updatedAt: serverTimestamp(),
+    updatedBy: userId,
+  });
+}
+
+/**
+ * Get all suppliers with pricing for an inventory item
+ */
+export async function getSupplierPricingForItem(
+  inventoryItemId: string
+): Promise<SupplierInventoryPricing[]> {
+  const item = await getInventoryItem(inventoryItemId);
+  if (!item) return [];
+  return item.supplierPricing || [];
 }

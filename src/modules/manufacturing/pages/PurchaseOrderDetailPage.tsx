@@ -1,50 +1,42 @@
 /**
  * Purchase Order Detail Page
  * Full PO view with line items, landed costs, approvals, and goods receipt
+ * Styled to match DawinOS Finishes design system
  */
 
 import { useState } from 'react';
-import {
-  Box,
-  Typography,
-  Grid,
-  Card,
-  CardContent,
-  Button,
-  Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Alert,
-  CircularProgress,
-  Divider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  IconButton,
-} from '@mui/material';
-import SendIcon from '@mui/icons-material/Send';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import LockIcon from '@mui/icons-material/Lock';
-import CancelIcon from '@mui/icons-material/Cancel';
-import InventoryIcon from '@mui/icons-material/Inventory';
-import EditIcon from '@mui/icons-material/Edit';
-import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete';
-import SaveIcon from '@mui/icons-material/Save';
 import { useParams, Link } from 'react-router-dom';
+import {
+  Send,
+  CheckCircle,
+  Truck,
+  Lock,
+  XCircle,
+  Package,
+  Pencil,
+  Plus,
+  Trash2,
+  Save,
+  ArrowLeft,
+} from 'lucide-react';
 import { usePurchaseOrder } from '../hooks/usePurchaseOrder';
 import { PO_STATUS_LABELS } from '../types/purchaseOrder';
-import type { POLineItem } from '../types/purchaseOrder';
+import type { POLineItem, PurchaseOrderStatus } from '../types/purchaseOrder';
 import { useAuth } from '@/shared/hooks/useAuth';
 import { useWarehouses } from '@/modules/inventory/hooks/useWarehouses';
 import { GoodsReceiptDialog } from '../components/po/GoodsReceiptDialog';
+
+const STATUS_CONFIG: Record<PurchaseOrderStatus, { bg: string; text: string }> = {
+  draft: { bg: 'bg-gray-100', text: 'text-gray-700' },
+  'pending-approval': { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  approved: { bg: 'bg-blue-100', text: 'text-blue-700' },
+  rejected: { bg: 'bg-red-100', text: 'text-red-700' },
+  sent: { bg: 'bg-indigo-100', text: 'text-indigo-700' },
+  'partially-received': { bg: 'bg-amber-100', text: 'text-amber-700' },
+  received: { bg: 'bg-green-100', text: 'text-green-700' },
+  closed: { bg: 'bg-gray-100', text: 'text-gray-600' },
+  cancelled: { bg: 'bg-gray-100', text: 'text-gray-500' },
+};
 
 export default function PurchaseOrderDetailPage() {
   const { poId } = useParams<{ poId: string }>();
@@ -66,23 +58,29 @@ export default function PurchaseOrderDetailPage() {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex items-center justify-center py-16">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
     );
   }
 
   if (!order) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">Purchase order not found</Alert>
-      </Box>
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+          Purchase order not found
+        </div>
+      </div>
     );
   }
 
   const wrap = async (fn: () => Promise<void>) => {
     setActionLoading(true);
-    try { await fn(); } catch { /* hook handles */ }
+    try {
+      await fn();
+    } catch {
+      /* hook handles */
+    }
     setActionLoading(false);
   };
 
@@ -92,6 +90,7 @@ export default function PurchaseOrderDetailPage() {
   const canEdit = isDraft || isPending;
   const canReceive = order.status === 'sent' || order.status === 'partially-received';
   const canCancel = !['closed', 'cancelled'].includes(order.status);
+  const statusConfig = STATUS_CONFIG[order.status];
 
   // Line item editing helpers
   const startEditing = () => {
@@ -156,260 +155,321 @@ export default function PurchaseOrderDetailPage() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h5">{order.poNumber}</Typography>
-          <Typography color="text.secondary">
-            Supplier: {order.supplierName}
-            {order.supplierContact && ` — ${order.supplierContact}`}
-          </Typography>
-        </Box>
-        <Chip label={PO_STATUS_LABELS[order.status]} color="primary" />
-      </Box>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link
+            to="/manufacturing/purchase-orders"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5 text-gray-500" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{order.poNumber}</h1>
+            <p className="text-muted-foreground">
+              Supplier: {order.supplierName}
+              {order.supplierContact && ` — ${order.supplierContact}`}
+            </p>
+          </div>
+        </div>
+        <span
+          className={`px-3 py-1 text-sm font-medium rounded-full ${statusConfig.bg} ${statusConfig.text}`}
+        >
+          {PO_STATUS_LABELS[order.status]}
+        </span>
+      </div>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {/* Error Alert */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">{error}</div>
+      )}
 
       {/* Linked References */}
       {(order.linkedMOIds?.length || order.linkedProjectId) && (
-        <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="flex flex-wrap gap-2 items-center">
           {order.linkedMOIds?.map((moId) => (
-            <Chip
+            <Link
               key={moId}
-              label={`MO: ${moId.slice(0, 8)}...`}
-              size="small"
-              variant="outlined"
-              component={Link}
               to={`/manufacturing/orders/${moId}`}
-              clickable
-            />
+              className="px-3 py-1 text-sm border border-gray-300 rounded-full hover:bg-gray-50 transition-colors"
+            >
+              MO: {moId.slice(0, 8)}...
+            </Link>
           ))}
           {order.linkedProjectId && (
-            <Chip
-              label="View Project"
-              size="small"
-              variant="outlined"
-              component={Link}
+            <Link
               to={`/design/project/${order.linkedProjectId}`}
-              clickable
-            />
+              className="px-3 py-1 text-sm border border-gray-300 rounded-full hover:bg-gray-50 transition-colors"
+            >
+              View Project
+            </Link>
           )}
-        </Box>
+        </div>
       )}
 
       {/* Actions */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
+      <div className="flex flex-wrap gap-2">
         {isDraft && (
-          <Button
-            variant="contained"
-            startIcon={<SendIcon />}
+          <button
             onClick={() => wrap(() => actions.submitForApproval())}
             disabled={actionLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
+            <Send className="h-4 w-4" />
             Submit for Approval
-          </Button>
+          </button>
         )}
         {isPending && (
           <>
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<CheckCircleIcon />}
+            <button
               onClick={() => wrap(() => actions.approve(approverName))}
               disabled={actionLoading}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
             >
+              <CheckCircle className="h-4 w-4" />
               Approve
-            </Button>
-            <Button
-              variant="outlined"
-              color="error"
+            </button>
+            <button
               onClick={() => setShowRejectDialog(true)}
               disabled={actionLoading}
+              className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
             >
               Reject
-            </Button>
+            </button>
           </>
         )}
         {order.status === 'approved' && (
-          <Button
-            variant="contained"
-            startIcon={<LocalShippingIcon />}
+          <button
             onClick={() => wrap(() => actions.markSent())}
             disabled={actionLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
+            <Truck className="h-4 w-4" />
             Mark as Sent
-          </Button>
+          </button>
         )}
         {canReceive && (
-          <Button
-            variant="contained"
-            color="success"
-            startIcon={<InventoryIcon />}
+          <button
             onClick={() => setShowReceiptDialog(true)}
             disabled={actionLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
           >
+            <Package className="h-4 w-4" />
             Receive Goods
-          </Button>
+          </button>
         )}
         {['received', 'partially-received'].includes(order.status) && (
-          <Button
-            variant="outlined"
-            startIcon={<LockIcon />}
+          <button
             onClick={() => wrap(() => actions.close())}
             disabled={actionLoading}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
+            <Lock className="h-4 w-4" />
             Close PO
-          </Button>
+          </button>
         )}
         {canCancel && (
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<CancelIcon />}
+          <button
             onClick={() => setShowCancelDialog(true)}
             disabled={actionLoading}
+            className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
           >
+            <XCircle className="h-4 w-4" />
             Cancel
-          </Button>
+          </button>
         )}
-      </Box>
+      </div>
 
-      <Grid container spacing={3}>
-        {/* Line Items */}
-        <Grid size={12}>
-          <Card variant="outlined">
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">Line Items</Typography>
-                {canEdit && !editing && (
-                  <Button size="small" startIcon={<EditIcon />} onClick={startEditing}>
-                    Edit Items
-                  </Button>
-                )}
-                {editing && (
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button size="small" startIcon={<AddIcon />} onClick={addEditLine}>
-                      Add Item
-                    </Button>
-                    <Button size="small" variant="contained" startIcon={<SaveIcon />} onClick={saveLineItems} disabled={actionLoading}>
-                      Save
-                    </Button>
-                    <Button size="small" onClick={() => setEditing(false)}>
-                      Cancel
-                    </Button>
-                  </Box>
-                )}
-              </Box>
-
-              {editing ? (
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ minWidth: 180 }}>Description</TableCell>
-                        <TableCell sx={{ width: 100 }}>SKU</TableCell>
-                        <TableCell sx={{ width: 80 }} align="right">Qty</TableCell>
-                        <TableCell sx={{ width: 100 }} align="right">Unit Cost</TableCell>
-                        <TableCell sx={{ width: 100 }} align="right">Total</TableCell>
-                        <TableCell sx={{ width: 50 }} />
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {editLineItems.map((li) => (
-                        <TableRow key={li.id}>
-                          <TableCell>
-                            <TextField
-                              size="small"
-                              fullWidth
-                              value={li.description}
-                              onChange={(e) => updateEditLine(li.id, 'description', e.target.value)}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              size="small"
-                              fullWidth
-                              value={li.sku ?? ''}
-                              onChange={(e) => updateEditLine(li.id, 'sku', e.target.value)}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              size="small"
-                              type="number"
-                              fullWidth
-                              value={li.quantity}
-                              onChange={(e) => updateEditLine(li.id, 'quantity', parseFloat(e.target.value) || 0)}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              size="small"
-                              type="number"
-                              fullWidth
-                              value={li.unitCost}
-                              onChange={(e) => updateEditLine(li.id, 'unitCost', parseFloat(e.target.value) || 0)}
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography variant="body2">{li.totalCost.toLocaleString()}</Typography>
-                          </TableCell>
-                          <TableCell>
-                            {li.quantityReceived === 0 && (
-                              <IconButton size="small" color="error" onClick={() => removeEditLine(li.id)}>
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              ) : (
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Description</TableCell>
-                        <TableCell>SKU</TableCell>
-                        <TableCell align="right">Qty</TableCell>
-                        <TableCell align="right">Unit Cost</TableCell>
-                        <TableCell align="right">Total</TableCell>
-                        <TableCell align="right">Landed Alloc.</TableCell>
-                        <TableCell align="right">Effective Cost</TableCell>
-                        <TableCell align="right">Received</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {order.lineItems.map((li) => (
-                        <TableRow key={li.id}>
-                          <TableCell>{li.description}</TableCell>
-                          <TableCell>{li.sku ?? '—'}</TableCell>
-                          <TableCell align="right">{li.quantity}</TableCell>
-                          <TableCell align="right">{li.unitCost.toLocaleString()}</TableCell>
-                          <TableCell align="right">{li.totalCost.toLocaleString()}</TableCell>
-                          <TableCell align="right">{(li.landedCostAllocation ?? 0).toLocaleString()}</TableCell>
-                          <TableCell align="right">{(li.effectiveUnitCost ?? li.unitCost).toLocaleString()}</TableCell>
-                          <TableCell align="right">
-                            {li.quantityReceived}/{li.quantity}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Line Items - Full Width */}
+        <div className="lg:col-span-12">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-lg font-semibold text-gray-900">Line Items</h2>
+              {canEdit && !editing && (
+                <button
+                  onClick={startEditing}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit Items
+                </button>
               )}
-            </CardContent>
-          </Card>
-        </Grid>
+              {editing && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={addEditLine}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Item
+                  </button>
+                  <button
+                    onClick={saveLineItems}
+                    disabled={actionLoading}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  >
+                    <Save className="h-4 w-4" />
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setEditing(false)}
+                    className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {editing ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[180px]">
+                        Description
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                        SKU
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
+                        Qty
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                        Unit Cost
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                        Total
+                      </th>
+                      <th className="px-4 py-3 w-12" />
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {editLineItems.map((li) => (
+                      <tr key={li.id}>
+                        <td className="px-4 py-3">
+                          <input
+                            type="text"
+                            value={li.description}
+                            onChange={(e) => updateEditLine(li.id, 'description', e.target.value)}
+                            className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <input
+                            type="text"
+                            value={li.sku ?? ''}
+                            onChange={(e) => updateEditLine(li.id, 'sku', e.target.value)}
+                            className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <input
+                            type="number"
+                            value={li.quantity}
+                            onChange={(e) =>
+                              updateEditLine(li.id, 'quantity', parseFloat(e.target.value) || 0)
+                            }
+                            className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <input
+                            type="number"
+                            value={li.unitCost}
+                            onChange={(e) =>
+                              updateEditLine(li.id, 'unitCost', parseFloat(e.target.value) || 0)
+                            }
+                            className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm text-gray-900">
+                          {li.totalCost.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          {li.quantityReceived === 0 && (
+                            <button
+                              onClick={() => removeEditLine(li.id)}
+                              className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Description
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        SKU
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Qty
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Unit Cost
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Total
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Landed Alloc.
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Effective Cost
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Received
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {order.lineItems.map((li) => (
+                      <tr key={li.id}>
+                        <td className="px-4 py-3 text-sm text-gray-900">{li.description}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{li.sku ?? '—'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 text-right">{li.quantity}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                          {li.unitCost.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                          {li.totalCost.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 text-right">
+                          {(li.landedCostAllocation ?? 0).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                          {(li.effectiveUnitCost ?? li.unitCost).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 text-right">
+                          {li.quantityReceived}/{li.quantity}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Landed Costs */}
-        <Grid size={{ xs: 12, md: 5 }}>
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>Landed Costs</Typography>
+        <div className="lg:col-span-5">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Landed Costs</h2>
+            <div className="space-y-2">
               {[
                 ['Shipping', order.landedCosts.shipping],
                 ['Customs', order.landedCosts.customs],
@@ -418,136 +478,157 @@ export default function PurchaseOrderDetailPage() {
                 ['Handling', order.landedCosts.handling],
                 ['Other', order.landedCosts.other],
               ].map(([label, value]) => (
-                <Box key={label as string} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                  <Typography color="text.secondary">{label as string}</Typography>
-                  <Typography>{(value as number).toLocaleString()} {order.landedCosts.currency}</Typography>
-                </Box>
+                <div key={label as string} className="flex justify-between">
+                  <span className="text-gray-600">{label as string}</span>
+                  <span className="text-gray-900">
+                    {(value as number).toLocaleString()} {order.landedCosts.currency}
+                  </span>
+                </div>
               ))}
-              <Divider sx={{ my: 1 }} />
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography fontWeight="bold">Total Landed</Typography>
-                <Typography fontWeight="bold">
+              <hr className="my-2" />
+              <div className="flex justify-between font-semibold">
+                <span>Total Landed</span>
+                <span>
                   {order.landedCosts.totalLandedCost.toLocaleString()} {order.landedCosts.currency}
-                </Typography>
-              </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
                 Distribution: {order.landedCosts.distributionMethod.replace(/_/g, ' ')}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Totals */}
-        <Grid size={{ xs: 12, md: 3 }}>
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>Totals</Typography>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography color="text.secondary">Subtotal</Typography>
-                <Typography>{order.totals.subtotal.toLocaleString()}</Typography>
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography color="text.secondary">Landed Costs</Typography>
-                <Typography>{order.totals.landedCostTotal.toLocaleString()}</Typography>
-              </Box>
-              <Divider sx={{ my: 1 }} />
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography fontWeight="bold">Grand Total</Typography>
-                <Typography fontWeight="bold">
+        <div className="lg:col-span-3">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Totals</h2>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Subtotal</span>
+                <span className="text-gray-900">{order.totals.subtotal.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Landed Costs</span>
+                <span className="text-gray-900">{order.totals.landedCostTotal.toLocaleString()}</span>
+              </div>
+              <hr className="my-2" />
+              <div className="flex justify-between font-semibold">
+                <span>Grand Total</span>
+                <span>
                   {order.totals.grandTotal.toLocaleString()} {order.totals.currency}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Receiving History */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Receiving History ({order.receivingHistory.length})
-              </Typography>
-              {order.receivingHistory.length > 0 ? (
-                order.receivingHistory.map((receipt) => (
-                  <Box key={receipt.id} sx={{ mb: 1, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
-                    <Typography variant="body2" fontWeight="bold">{receipt.id}</Typography>
-                    <Typography variant="caption" color="text.secondary">
+        <div className="lg:col-span-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              Receiving History ({order.receivingHistory.length})
+            </h2>
+            {order.receivingHistory.length > 0 ? (
+              <div className="space-y-2">
+                {order.receivingHistory.map((receipt) => (
+                  <div key={receipt.id} className="p-3 bg-gray-50 rounded-lg">
+                    <p className="font-medium text-gray-900 text-sm">{receipt.id}</p>
+                    <p className="text-xs text-gray-500">
                       {receipt.lines.length} line(s) received
                       {receipt.deliveryReference && ` — Ref: ${receipt.deliveryReference}`}
-                    </Typography>
+                    </p>
                     {receipt.notes && (
-                      <Typography variant="caption" display="block" color="text.secondary">
-                        {receipt.notes}
-                      </Typography>
+                      <p className="text-xs text-gray-500 mt-1">{receipt.notes}</p>
                     )}
-                  </Box>
-                ))
-              ) : (
-                <Typography color="text.secondary">No goods received yet</Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500">No goods received yet</p>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Reject Dialog */}
-      <Dialog open={showRejectDialog} onClose={() => setShowRejectDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Reject Purchase Order</DialogTitle>
-        <DialogContent>
-          <TextField
-            label="Rejection Reason"
-            multiline
-            rows={3}
-            fullWidth
-            value={rejectNotes}
-            onChange={(e) => setRejectNotes(e.target.value)}
-            sx={{ mt: 1 }}
-            required
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowRejectDialog(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleReject}
-            disabled={!rejectNotes.trim() || actionLoading}
-          >
-            Reject
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {showRejectDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Reject Purchase Order</h3>
+            </div>
+            <div className="p-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Rejection Reason <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={rejectNotes}
+                onChange={(e) => setRejectNotes(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+            </div>
+            <div className="p-4 border-t border-gray-200 flex justify-end gap-2">
+              <button
+                onClick={() => setShowRejectDialog(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReject}
+                disabled={!rejectNotes.trim() || actionLoading}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cancel Dialog */}
-      <Dialog open={showCancelDialog} onClose={() => setShowCancelDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Cancel Purchase Order</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            This will cancel the purchase order. This action cannot be undone.
-          </Typography>
-          <TextField
-            label="Cancellation Reason"
-            multiline
-            rows={3}
-            fullWidth
-            value={cancelReason}
-            onChange={(e) => setCancelReason(e.target.value)}
-            required
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowCancelDialog(false)}>Keep PO</Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleCancel}
-            disabled={!cancelReason.trim() || actionLoading}
-          >
-            Cancel PO
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {showCancelDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Cancel Purchase Order</h3>
+            </div>
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-gray-600">
+                This will cancel the purchase order. This action cannot be undone.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Cancellation Reason <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-200 flex justify-end gap-2">
+              <button
+                onClick={() => setShowCancelDialog(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Keep PO
+              </button>
+              <button
+                onClick={handleCancel}
+                disabled={!cancelReason.trim() || actionLoading}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                Cancel PO
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Goods Receipt Dialog */}
       {showReceiptDialog && (
@@ -556,10 +637,10 @@ export default function PurchaseOrderDetailPage() {
           onClose={() => setShowReceiptDialog(false)}
           order={order}
           warehouses={warehouses}
-          onReceive={(receipt) => actions.receive(receipt)}
+          onReceive={(receipt) => actions.receive(receipt as unknown as Parameters<typeof actions.receive>[0])}
           userId={user?.uid ?? ''}
         />
       )}
-    </Box>
+    </div>
   );
 }

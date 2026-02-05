@@ -385,6 +385,11 @@ export async function createApprovalItem(
     priority?: ClientApprovalItem['priority'];
     dueDate?: Date;
     internalNotes?: string;
+    // Design option specific fields
+    designOption?: ClientApprovalItem['designOption'];
+    isOptionGroup?: boolean;
+    sourceOptionId?: string;
+    sourceGroupId?: string;
   }
 ): Promise<ClientApprovalItem> {
   const approvalsRef = collection(db, 'clientApprovalItems');
@@ -421,7 +426,12 @@ export async function createApprovalItem(
   if (options?.alternativeOptions) item.alternativeOptions = options.alternativeOptions;
   if (options?.dueDate) item.dueDate = Timestamp.fromDate(options.dueDate);
   if (options?.internalNotes) item.internalNotes = options.internalNotes;
-  
+  // Design option specific fields
+  if (options?.designOption) item.designOption = options.designOption;
+  if (options?.isOptionGroup) item.isOptionGroup = options.isOptionGroup;
+  if (options?.sourceOptionId) item.sourceOptionId = options.sourceOptionId;
+  if (options?.sourceGroupId) item.sourceGroupId = options.sourceGroupId;
+
   const docRef = await addDoc(approvalsRef, {
     ...item,
     createdAt: serverTimestamp(),

@@ -13,12 +13,15 @@ import {
   Timestamp as FirestoreTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/shared/services/firebase';
-import type { 
-  Project, 
-  MaterialPalette, 
-  MaterialPaletteEntry, 
+import type {
+  Project,
+  MaterialPalette,
+  MaterialPaletteEntry,
   MaterialType,
   OptimizationStockSheet,
+  GlassStockDefinition,
+  TimberStockDefinition,
+  LinearStockDefinition,
   Timestamp,
 } from '@/shared/types';
 import type { PartEntry } from '../types';
@@ -305,7 +308,10 @@ export async function mapMaterialToInventory(
   inventorySku: string,
   unitCost: number | undefined,
   stockSheets: OptimizationStockSheet[],
-  userId: string
+  userId: string,
+  glassStock?: GlassStockDefinition[],
+  timberStock?: TimberStockDefinition[],
+  linearStock?: LinearStockDefinition[]
 ): Promise<void> {
   // Auto-fetch price from inventory if not provided or zero
   let resolvedUnitCost = unitCost || 0;
@@ -352,6 +358,7 @@ export async function mapMaterialToInventory(
   };
   
   // Update entry with resolved price (auto-fetched from inventory if needed)
+  // Include type-specific stock configurations if provided
   palette.entries[entryIndex] = {
     ...entry,
     inventoryId,
@@ -359,6 +366,9 @@ export async function mapMaterialToInventory(
     inventorySku,
     unitCost: resolvedUnitCost,
     stockSheets,
+    ...(glassStock && { glassStock }),
+    ...(timberStock && { timberStock }),
+    ...(linearStock && { linearStock }),
     mappedAt: timestamp,
     mappedBy: userId,
     updatedAt: timestamp,

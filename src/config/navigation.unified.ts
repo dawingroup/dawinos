@@ -196,6 +196,14 @@ export const GLOBAL_NAVIGATION: NavItem[] = [
     description: 'Customer management',
     keywords: ['clients', 'contacts'],
   },
+  {
+    id: 'suppliers',
+    label: 'Suppliers',
+    href: '/suppliers',
+    icon: 'Building2',
+    description: 'Vendor & supplier management',
+    keywords: ['vendors', 'suppliers', 'procurement'],
+  },
 ];
 
 // ============================================================================

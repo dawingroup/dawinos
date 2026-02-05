@@ -10,14 +10,18 @@ import {
   updateInventoryItem,
   getInventoryItem,
   generateSku,
+  addSupplierPricing,
+  removeSupplierPricing,
+  setPreferredSupplier,
 } from '../services/inventoryService';
 import type {
-  InventoryItem,
   InventoryCategory,
   InventoryClassification,
   InventoryUnit,
   InventoryStatus,
   GrainPattern,
+  SupplierInventoryPricing,
+  SupplierPricingFormData,
 } from '../types';
 import {
   INVENTORY_CATEGORIES,
@@ -25,6 +29,8 @@ import {
   COMMON_THICKNESSES,
 } from '../types';
 import { SupplierPicker } from '@/modules/manufacturing/components/po/SupplierPicker';
+import { SupplierPricingManager } from './SupplierPricingManager';
+import { MaterialLinkManager } from './MaterialLinkManager';
 
 interface InventoryItemModalProps {
   isOpen: boolean;
@@ -68,6 +74,10 @@ export function InventoryItemModal({
   const [grainPattern, setGrainPattern] = useState<GrainPattern>('none');
   const [status, setStatus] = useState<InventoryStatus>('active');
 
+  // Multi-supplier state
+  const [supplierPricing, setSupplierPricing] = useState<SupplierInventoryPricing[]>([]);
+  const [linkedMaterialIds, setLinkedMaterialIds] = useState<string[]>([]);
+
   // Load existing item if editing
   useEffect(() => {
     if (isOpen && itemId) {
@@ -109,6 +119,9 @@ export function InventoryItemModal({
         setWidth(item.dimensions?.width || '');
         setGrainPattern(item.grainPattern || 'none');
         setStatus(item.status);
+        // Multi-supplier data
+        setSupplierPricing(item.supplierPricing || []);
+        setLinkedMaterialIds(item.linkedMaterialIds || []);
       }
     } catch (err) {
       setError('Failed to load item');
@@ -138,12 +151,76 @@ export function InventoryItemModal({
     setWidth('');
     setGrainPattern('none');
     setStatus('active');
+    setSupplierPricing([]);
+    setLinkedMaterialIds([]);
     setError(null);
+  };
+
+  // Supplier pricing handlers
+  const handleAddSupplierPricing = async (pricing: SupplierPricingFormData, setAsPreferred: boolean) => {
+    if (!itemId) {
+      // For new items, just add to local state
+      const newPricing: SupplierInventoryPricing = {
+        ...pricing,
+        unit: unit,
+        isPreferred: setAsPreferred,
+        addedAt: new Date() as any, // Will be replaced with Timestamp on save
+        addedBy: userId,
+      };
+      setSupplierPricing((prev) => {
+        if (setAsPreferred) {
+          return [...prev.map((sp) => ({ ...sp, isPreferred: false })), newPricing];
+        }
+        const existingIndex = prev.findIndex((sp) => sp.supplierId === pricing.supplierId);
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = newPricing;
+          return updated;
+        }
+        return [...prev, newPricing];
+      });
+      if (setAsPreferred) {
+        setSupplierValue({ supplierId: pricing.supplierId, supplierName: pricing.supplierName });
+      }
+      return;
+    }
+    // For existing items, update in database
+    await addSupplierPricing(itemId, pricing, userId, setAsPreferred);
+    // Reload item to get updated data
+    await loadItem();
+  };
+
+  const handleRemoveSupplierPricing = async (supplierId: string) => {
+    if (!itemId) {
+      // For new items, just remove from local state
+      setSupplierPricing((prev) => prev.filter((sp) => sp.supplierId !== supplierId));
+      if (supplierValue?.supplierId === supplierId) {
+        setSupplierValue(null);
+      }
+      return;
+    }
+    await removeSupplierPricing(itemId, supplierId, userId);
+    await loadItem();
+  };
+
+  const handleSetPreferredSupplier = async (supplierId: string) => {
+    if (!itemId) {
+      setSupplierPricing((prev) =>
+        prev.map((sp) => ({ ...sp, isPreferred: sp.supplierId === supplierId }))
+      );
+      const supplier = supplierPricing.find((sp) => sp.supplierId === supplierId);
+      if (supplier) {
+        setSupplierValue({ supplierId: supplier.supplierId, supplierName: supplier.supplierName });
+      }
+      return;
+    }
+    await setPreferredSupplier(itemId, supplierId, userId);
+    await loadItem();
   };
 
   const handleGenerateSku = () => {
     if (name && category) {
-      const newSku = generateSku(category, name);
+      const newSku = generateSku(name, category);
       setSku(newSku);
     }
   };
@@ -184,9 +261,9 @@ export function InventoryItemModal({
           unit,
         },
         dimensions: (thickness || length || width) ? {
-          thickness: thickness || undefined,
-          length: length || undefined,
-          width: width || undefined,
+          thickness: typeof thickness === 'number' ? thickness : 0,
+          length: typeof length === 'number' ? length : 0,
+          width: typeof width === 'number' ? width : 0,
         } : undefined,
         grainPattern: grainPattern !== 'none' ? grainPattern : undefined,
         status,
@@ -407,7 +484,6 @@ export function InventoryItemModal({
                       value={supplierValue}
                       onChange={setSupplierValue}
                       label=""
-                      size="small"
                     />
                   </div>
                 </div>
@@ -442,12 +518,23 @@ export function InventoryItemModal({
                 )}
               </div>
 
+              {/* Multi-Supplier Pricing */}
+              <SupplierPricingManager
+                supplierPricing={supplierPricing}
+                preferredSupplierId={supplierValue?.supplierId}
+                onAddSupplier={handleAddSupplierPricing}
+                onRemoveSupplier={handleRemoveSupplierPricing}
+                onSetPreferred={handleSetPreferredSupplier}
+                disabled={saving}
+                currency={currency}
+              />
+
               {/* Pricing */}
               <div className="space-y-4">
                 <h3 className="text-sm font-medium text-gray-700 uppercase tracking-wide">
-                  Pricing
+                  Default Pricing
                 </h3>
-                
+
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -574,6 +661,15 @@ export function InventoryItemModal({
                     </select>
                   </div>
                 </div>
+              )}
+
+              {/* Linked Materials (only shown when editing) */}
+              {itemId && (
+                <MaterialLinkManager
+                  inventoryItemId={itemId}
+                  linkedMaterialIds={linkedMaterialIds}
+                  disabled={saving}
+                />
               )}
             </form>
           )}
