@@ -8,6 +8,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Plus, Upload, Trash2, Edit2, Package, AlertCircle, Wrench, Sparkles, Save, Check, Library, Loader2, Search, DollarSign, RefreshCw, Calculator } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useParts } from '../../hooks/useParts';
+import { useProject } from '../../hooks';
 import type { DesignItem, PartEntry, StandardPartEntry, SpecialPartEntry, ProjectPart } from '../../types';
 import { PartForm } from './PartForm';
 import { PartsImportDialog } from './PartsImportDialog';
@@ -25,6 +26,7 @@ type PartsSection = 'sheet' | 'standard' | 'special' | 'costing';
 export function PartsTab({ item, projectId }: PartsTabProps) {
   const { user } = useAuth();
   const parts = useParts(projectId, item, user?.email || '');
+  const { project } = useProject(projectId);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editingPart, setEditingPart] = useState<PartEntry | null>(null);
@@ -1493,7 +1495,21 @@ export function PartsTab({ item, projectId }: PartsTabProps) {
                   setCalculating(true);
                   try {
                     const { calculateSheetMaterialsFromParts, calculateLaborFromParts } = await import('../../services/estimateService');
-                    const { materials, totalCost: matCost } = await calculateSheetMaterialsFromParts(partsList);
+
+                    // Get material palette from project for accurate pricing
+                    const materialPalette = (project as any)?.materialPalette?.entries || [];
+                    console.log('[PartsTab] Project loaded:', !!project);
+                    console.log('[PartsTab] Material palette entries:', materialPalette.length);
+                    console.log('[PartsTab] Palette contents:');
+                    materialPalette.forEach((e: any, idx: number) => {
+                      console.log(`  Entry ${idx + 1}: designMaterialName="${e.designMaterialName || '(not set)'}", materialName="${e.materialName || '(not set)'}", thickness=${e.thickness}, unitCost=${e.unitCost}`);
+                    });
+
+                    const { materials, totalCost: matCost } = await calculateSheetMaterialsFromParts(
+                      partsList,
+                      projectId,
+                      materialPalette
+                    );
                     setSheetMaterials(materials);
                     setSheetMaterialsCost(matCost);
                     const labor = calculateLaborFromParts(partsList);

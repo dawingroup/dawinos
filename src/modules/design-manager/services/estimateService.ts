@@ -27,9 +27,9 @@ import type { ConstructionPricing } from '../types/deliverables';
 import { normalizeSourcingType } from '../types/deliverables';
 import type { EstimationResult, MaterialPaletteEntry } from '@/shared/types';
 import { getMaterial } from './materialService';
-import { getMaterialPriceByName } from '@/modules/inventory/services/inventoryPriceService';
 import type { BudgetTier, ProjectStrategy } from '../types/strategy';
 import { BUDGET_TIER_MULTIPLIERS } from '../types/strategy';
+import { getMaterialUnitCost } from './materialPricingService';
 
 // Default sheet size for material estimation (mm)
 const DEFAULT_SHEET_SIZE = { length: 2440, width: 1220 };
@@ -85,9 +85,11 @@ async function fetchProjectStrategy(projectId: string): Promise<ProjectStrategy 
 /**
  * Calculate sheet material breakdown from parts list
  * Groups parts by material and calculates required sheets
+ * Uses MaterialPricingService for consistent price lookups
  */
 export async function calculateSheetMaterialsFromParts(
   parts: PartEntry[],
+  projectId: string,
   materialPalette?: MaterialPaletteEntry[]
 ): Promise<{ materials: SheetMaterialBreakdown[]; totalCost: number }> {
   // Group parts by material
@@ -125,74 +127,26 @@ export async function calculateSheetMaterialsFromParts(
   for (const [, group] of materialGroups) {
     // Calculate sheet area (in m²)
     const sheetArea = (DEFAULT_SHEET_SIZE.length * DEFAULT_SHEET_SIZE.width) / 1_000_000;
-    
+
     // Estimate sheets required (with 15% waste factor)
     const sheetsRequired = Math.ceil((group.totalArea * 1.15) / sheetArea);
-    
-    // Get unit cost - PRIORITY: Material palette mappings first, then inventory
-    let unitCost = 0;
-    const normalizedName = group.materialName.toLowerCase().trim();
-    
-    // 1. FIRST: Check material palette (contains mapped inventory costs)
-    if (materialPalette) {
-      const paletteEntry = materialPalette.find(
-        entry => entry.designName === group.materialName || 
-                 entry.normalizedName === normalizedName
+
+    // Get unit cost using centralized MaterialPricingService
+    // This handles: Palette → Inventory → Material Service → Defaults
+    const priceResult = await getMaterialUnitCost(
+      group.materialName,
+      group.thickness,
+      projectId,
+      materialPalette
+    );
+
+    const unitCost = priceResult.cost;
+
+    // Log if using fallback pricing for visibility
+    if (priceResult.source === 'fallback') {
+      console.warn(
+        `[Estimate] Using fallback price for ${group.materialName} ${group.thickness}mm (${unitCost} ${priceResult.currency})`
       );
-      if (paletteEntry?.unitCost && paletteEntry.unitCost > 0) {
-        unitCost = paletteEntry.unitCost;
-      }
-      // Also try mapped inventory name if palette has it but no direct cost
-      if (unitCost === 0 && paletteEntry?.inventoryName) {
-        try {
-          const priceResult = await getMaterialPriceByName(
-            paletteEntry.inventoryName,
-            group.thickness
-          );
-          if (priceResult.found && priceResult.price) {
-            unitCost = priceResult.price.costPerUnit;
-          }
-        } catch {
-          // Continue to fallback
-        }
-      }
-    }
-    
-    // 2. SECOND: Try inventory by design material name (legacy)
-    if (unitCost === 0) {
-      try {
-        const priceResult = await getMaterialPriceByName(
-          group.materialName,
-          group.thickness
-        );
-        if (priceResult.found && priceResult.price) {
-          unitCost = priceResult.price.costPerUnit;
-        }
-      } catch {
-        // Inventory price lookup failed
-      }
-    }
-    
-    // 3. Fallback to old material service
-    if (unitCost === 0 && group.materialId) {
-      try {
-        const material = await getMaterial(group.materialId, 'global', undefined);
-        if (material?.pricing?.unitCost) {
-          unitCost = material.pricing.unitCost;
-        }
-      } catch {
-        // Material not found
-      }
-    }
-    
-    // 4. Last resort fallback pricing in UGX (to be deprecated)
-    if (unitCost === 0) {
-      console.warn(`[Estimate] No price found for ${group.materialName}, using fallback`);
-      const defaultPrices: Record<number, number> = { // UGX per sheet
-        3: 45000, 6: 65000, 9: 85000, 12: 105000, 15: 125000,
-        16: 135000, 18: 155000, 22: 185000, 25: 210000,
-      };
-      unitCost = defaultPrices[group.thickness] || 150000;
     }
 
     const materialTotal = sheetsRequired * unitCost;

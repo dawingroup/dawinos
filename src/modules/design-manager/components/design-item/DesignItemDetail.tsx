@@ -1291,9 +1291,16 @@ function CostingTab({
     setCalculating(true);
     try {
       const { calculateSheetMaterialsFromParts, calculateLaborFromParts } = await import('../../services/estimateService');
-      
+
+      // Get material palette from project for accurate pricing
+      const materialPalette = (project as any)?.materialPalette?.entries || [];
+
       // Calculate sheet materials
-      const { materials, totalCost: matCost } = await calculateSheetMaterialsFromParts(partsList);
+      const { materials, totalCost: matCost } = await calculateSheetMaterialsFromParts(
+        partsList,
+        projectId || '',
+        materialPalette
+      );
       setSheetMaterials(materials);
       setSheetMaterialsCost(matCost);
       

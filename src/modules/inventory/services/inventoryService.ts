@@ -279,7 +279,7 @@ export async function createInventoryItem(
     sku: data.sku,
     name: data.name,
     displayName: data.displayName,
-    description: data.description,
+    description: data.description || '',
     category: data.category,
     subcategory: data.subcategory,
     tags: data.tags || [],
@@ -306,7 +306,12 @@ export async function createInventoryItem(
     updatedBy: userId,
   };
 
-  const docRef = await addDoc(inventoryRef, docData);
+  // Remove undefined fields (Firebase rejects undefined values)
+  const cleanedData = Object.fromEntries(
+    Object.entries(docData).filter(([_, v]) => v !== undefined)
+  );
+
+  const docRef = await addDoc(inventoryRef, cleanedData);
   return docRef.id;
 }
 

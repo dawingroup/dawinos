@@ -3,7 +3,7 @@
  * Project detail page with design items, cutlist, estimates, and client quotes
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Plus, LayoutGrid, List, FolderOpen, Calendar, User, Clock,
@@ -45,6 +45,8 @@ import { ProjectDocuments } from './ProjectDocuments';
 import { createDesignItem } from '../../services/firestore';
 import { markAIAsApplied } from '../../services/documentUpload';
 import type { ClientDocument } from '../../types/document.types';
+import { PricingWorkflowTracker } from '../workflow';
+import { calculateWorkflowState, type PricingWorkflowState } from '../../services/workflowStateService';
 
 type ViewMode = 'kanban' | 'list';
 type ProjectTab = 'items' | 'cutlist' | 'estimate' | 'production' | 'quotes' | 'portal' | 'files';
@@ -62,11 +64,19 @@ export default function ProjectView() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [activeTab, setActiveTab] = useState<ProjectTab>('items');
   const [showPartsDrawer, setShowPartsDrawer] = useState(false);
+  const [workflowState, setWorkflowState] = useState<PricingWorkflowState | null>(null);
 
   const { items, loading: itemsLoading } = useDesignItems(projectId, {
     stage: stageFilter === 'all' ? undefined : stageFilter,
     category: categoryFilter === 'all' ? undefined : categoryFilter,
   });
+
+  // Calculate workflow state for pricing/estimation tracking
+  useEffect(() => {
+    if (project && items.length > 0) {
+      calculateWorkflowState(project as any, items).then(setWorkflowState);
+    }
+  }, [project, items]);
 
   const handleApplyAIToProject = useCallback(async (document: ClientDocument) => {
     if (!projectId || !project || !document.aiAnalysisResult?.extractedItems?.length) return;
@@ -348,6 +358,15 @@ export default function ProjectView() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Pricing Workflow Tracker */}
+      {workflowState && (
+        <PricingWorkflowTracker
+          workflowState={workflowState}
+          onNavigate={(tab) => setActiveTab(tab as ProjectTab)}
+          className="mb-4"
+        />
       )}
 
       {/* Project Tabs - Responsive */}

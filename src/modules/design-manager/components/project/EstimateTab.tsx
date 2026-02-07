@@ -25,6 +25,9 @@ import { ESTIMATE_CATEGORY_LABELS, DEFAULT_ESTIMATE_CONFIG } from '../../types/e
 import type { DesignProject } from '../../types';
 import type { ConsolidatedEstimate, EstimateLineItem, EstimateLineItemFormData, EstimateLineItemCategory } from '../../types/estimate';
 import { formatDateTime } from '../../utils/formatting';
+import { WorkflowAlerts, AlertTemplates, validationErrorsToAlerts } from '../workflow';
+import { calculateWorkflowState, type PricingWorkflowState } from '../../services/workflowStateService';
+import { detectProjectStaleness } from '../../services/workflowStalenessService';
 
 // Aggregated parts types
 interface AggregatedStandardPart {
@@ -61,6 +64,8 @@ export function EstimateTab({ project }: EstimateTabProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [designItems, setDesignItems] = useState<DesignItem[]>([]);
   const [partsTab, setPartsTab] = useState<'standard' | 'special'>('standard');
+  const [workflowState, setWorkflowState] = useState<PricingWorkflowState | null>(null);
+  const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
 
   // Subscribe to design items for parts aggregation
   useEffect(() => {
@@ -69,6 +74,13 @@ export function EstimateTab({ project }: EstimateTabProps) {
     });
     return () => unsubscribe();
   }, [project.id]);
+
+  // Calculate workflow state when items or project changes
+  useEffect(() => {
+    if (designItems.length > 0) {
+      calculateWorkflowState(project, designItems).then(setWorkflowState);
+    }
+  }, [project, designItems]);
 
   // Aggregate standard parts from all design items
   const aggregatedStandardParts: AggregatedStandardPart[] = (() => {
@@ -350,6 +362,22 @@ export function EstimateTab({ project }: EstimateTabProps) {
             <p className="text-sm text-blue-700">This project has design documents or procured items that don't require optimization</p>
           </div>
         </div>
+      )}
+
+      {/* Workflow Alerts - show validation errors and staleness warnings */}
+      {workflowState && workflowState.validationErrors.length > 0 && (
+        <WorkflowAlerts
+          alerts={validationErrorsToAlerts(
+            workflowState.validationErrors.filter(e => !dismissedAlerts.has(`error-${workflowState.validationErrors.indexOf(e)}`)),
+            (itemId, tab) => {
+              // Navigate to item detail page (implementation depends on routing)
+              console.log('Navigate to item:', itemId, tab);
+            }
+          )}
+          onDismiss={(alertId) => {
+            setDismissedAlerts(prev => new Set(prev).add(alertId));
+          }}
+        />
       )}
 
       {/* Stale warning */}

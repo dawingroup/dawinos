@@ -271,5 +271,14 @@ service firebase.storage {
       allow read: if isAuthenticated() && belongsToSubsidiary('finishes');
       allow write: if isAuthenticated() && belongsToSubsidiary('finishes') && isValidLargeFileSize();
     }
+
+    // ============================================
+    // DARWIN FINISHES - DESIGN PROJECT CLIPS
+    // ============================================
+
+    match /design-projects/{projectId}/clips/{path=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isValidSize();
+    }
   }
 }

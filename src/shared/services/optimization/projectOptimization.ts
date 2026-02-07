@@ -459,14 +459,29 @@ async function fetchMaterialCosts(
     const normalizedName = designMaterialName.toLowerCase().trim();
     
     // 1. First priority: Look up in material palette (mapped materials)
-    const paletteEntry = materialPalette.find(
-      entry => entry.designName === designMaterialName || 
-               entry.normalizedName === normalizedName
-    );
-    
+    // Use flexible matching: case-insensitive and check both designName and normalizedName
+    const paletteEntry = materialPalette.find(entry => {
+      const entryDesignName = entry.designName?.toLowerCase().trim() || '';
+      const entryNormalizedName = entry.normalizedName?.toLowerCase().trim() || '';
+      const searchName = normalizedName;
+
+      // Direct match
+      if (entryDesignName === searchName || entryNormalizedName === searchName) {
+        return true;
+      }
+
+      // Fuzzy match: Check if search name starts with entry name (handles suffixes like " 1", " 2")
+      if (searchName.startsWith(entryDesignName + ' ') || searchName.startsWith(entryNormalizedName + ' ')) {
+        return true;
+      }
+
+      return false;
+    });
+
     if (paletteEntry?.unitCost && paletteEntry.unitCost > 0) {
       // Use the mapped material's cost from palette
       costs[designMaterialName] = paletteEntry.unitCost;
+      console.log(`[Estimation] Using palette price for "${designMaterialName}": ${paletteEntry.unitCost} UGX`);
       continue;
     }
     
