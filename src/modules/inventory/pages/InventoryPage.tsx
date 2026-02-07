@@ -16,7 +16,7 @@ import { AddToProjectDialog } from '../components/AddToProjectDialog';
 import StockLevelsByLocation from '../components/StockLevelsByLocation';
 import WarehouseManager from '../components/WarehouseManager';
 import type { InventoryListItem, InventoryItem } from '../types';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import { collection, addDoc, onSnapshot, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 
 type InventoryTab = 'products' | 'materials' | 'all-items' | 'stock-levels' | 'warehouses';

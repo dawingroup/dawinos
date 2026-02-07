@@ -19,6 +19,8 @@ import { NewBOQRequisitionPage } from './pages/NewBOQRequisitionPage';
 // ADD-FIN-001 Enhanced Forms
 import { RequisitionFormEnhanced } from './components/forms/RequisitionFormEnhanced';
 import { AccountabilityFormEnhanced } from './components/forms/AccountabilityFormEnhanced';
+// Hierarchical Requisitions
+import { ChildRequisitionFormPage } from './pages/ChildRequisitionFormPage';
 
 // Project Layout and Pages
 import { ProjectLayout } from './components/projects/ProjectLayout';
@@ -121,6 +123,7 @@ export function DeliveryRoutes() {
             <Route index element={<RequisitionsPage />} />
             <Route path="new" element={<NewBOQRequisitionPage />} />
             <Route path="new/manual" element={<RequisitionFormEnhanced />} />
+            <Route path="new/child" element={<ChildRequisitionFormPage />} />
             <Route path=":requisitionId" element={<RequisitionDetailPage />} />
             <Route path=":requisitionId/edit" element={<RequisitionFormEnhanced />} />
             <Route path=":requisitionId/accountability/new" element={<AccountabilityFormEnhanced />} />

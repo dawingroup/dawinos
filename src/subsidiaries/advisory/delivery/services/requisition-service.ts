@@ -121,6 +121,7 @@ export class RequisitionService {
       items,
       boqItems: data.boqItems,
       sourceType: data.sourceType,
+      requisitionType: data.requisitionType,
       advanceType: data.advanceType,
       expectedReturnDate: data.expectedReturnDate,
 
@@ -141,6 +142,20 @@ export class RequisitionService {
       // ADD-FIN-001: Custom approval chain
       useCustomApprovalChain: data.useCustomApprovalChain || false,
       customApprovalChainId: data.customApprovalChainId,
+
+      // Hierarchical requisition fields
+      ...(data.parentRequisitionId && {
+        parentRequisitionId: data.parentRequisitionId,
+        parentRequisitionNumber: data.parentRequisitionNumber,
+      }),
+
+      // Labour reconciliation
+      ...(data.requisitionType === 'labour' && data.isLabourAdvance && {
+        labourReconciliation: {
+          isAdvance: true,
+          reconciled: false,
+        },
+      }),
 
       status: 'draft',
       currentApprovalLevel: 0,
@@ -200,6 +215,146 @@ export class RequisitionService {
 
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Requisition));
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // HIERARCHICAL REQUISITION OPERATIONS
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Create a child requisition (materials or labour) linked to a parent funds requisition.
+   */
+  async createChildRequisition(
+    data: RequisitionFormData,
+    userId: string,
+    orgId?: string
+  ): Promise<string> {
+    if (!data.parentRequisitionId) {
+      throw new Error('Parent requisition ID is required for child requisitions');
+    }
+
+    // Validate parent
+    const parent = await this.getRequisition(data.parentRequisitionId);
+    if (!parent) throw new Error('Parent requisition not found');
+
+    const parentType = (parent.requisitionType as string) === 'materials_services'
+      ? 'funds' : parent.requisitionType;
+    if (parentType !== 'funds') {
+      throw new Error('Parent must be a funds requisition');
+    }
+    if (!['approved', 'paid'].includes(parent.status)) {
+      throw new Error('Parent requisition must be approved or paid before creating child requisitions');
+    }
+
+    // Create child requisition
+    const childId = await this.createRequisition(data, userId, orgId);
+
+    // Update parent with child link
+    const updatedChildIds = [...(parent.childRequisitionIds || []), childId];
+    await updateDoc(doc(this.db, PAYMENTS_PATH, data.parentRequisitionId), {
+      childRequisitionIds: updatedChildIds,
+      updatedAt: Timestamp.now(),
+      updatedBy: userId,
+    });
+
+    // Recalculate parent summary
+    await this.updateParentSummary(data.parentRequisitionId, userId);
+
+    return childId;
+  }
+
+  /**
+   * Get all child requisitions of a parent funds requisition.
+   */
+  async getChildRequisitions(parentId: string): Promise<Requisition[]> {
+    const q = query(
+      collection(this.db, PAYMENTS_PATH),
+      where('parentRequisitionId', '==', parentId),
+      where('paymentType', '==', 'requisition'),
+      orderBy('createdAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Requisition));
+  }
+
+  /**
+   * Get BOQ items from the parent requisition for pre-populating child forms.
+   */
+  async getParentBOQItems(parentId: string): Promise<Requisition['boqItems']> {
+    const parent = await this.getRequisition(parentId);
+    if (!parent) throw new Error('Parent requisition not found');
+    return parent.boqItems || [];
+  }
+
+  /**
+   * Recalculate the childRequisitionsSummary on a parent funds requisition.
+   */
+  async updateParentSummary(parentId: string, userId: string): Promise<void> {
+    const parent = await this.getRequisition(parentId);
+    if (!parent) return;
+
+    const children = await this.getChildRequisitions(parentId);
+
+    let materialCount = 0;
+    let labourCount = 0;
+    let materialAmount = 0;
+    let labourAmount = 0;
+
+    for (const child of children) {
+      const childType = (child.requisitionType as string) === 'materials_services'
+        ? 'materials' : child.requisitionType;
+      if (childType === 'materials') {
+        materialCount++;
+        materialAmount += child.grossAmount || 0;
+      } else if (childType === 'labour') {
+        labourCount++;
+        labourAmount += child.grossAmount || 0;
+      }
+    }
+
+    const totalChildAmount = materialAmount + labourAmount;
+    const parentAmount = parent.grossAmount || 0;
+
+    await updateDoc(doc(this.db, PAYMENTS_PATH, parentId), {
+      childRequisitionsSummary: {
+        totalChildAmount,
+        materialRequisitionsCount: materialCount,
+        labourRequisitionsCount: labourCount,
+        materialRequisitionsAmount: materialAmount,
+        labourRequisitionsAmount: labourAmount,
+        remainingFundsBalance: parentAmount - totalChildAmount,
+        budgetExceeded: totalChildAmount > parentAmount,
+      },
+      updatedAt: Timestamp.now(),
+      updatedBy: userId,
+    });
+  }
+
+  /**
+   * Reconcile a labour advance requisition against BOQ items.
+   */
+  async reconcileLabourRequisition(
+    requisitionId: string,
+    reconciledBoqItems: Array<{ boqItemId: string; boqItemCode: string; description: string; unit: string; quantityExecuted: number; rate: number; amount: number }>,
+    userId: string
+  ): Promise<void> {
+    const requisition = await this.getRequisition(requisitionId);
+    if (!requisition) throw new Error('Requisition not found');
+    if (requisition.requisitionType !== 'labour') {
+      throw new Error('Only labour requisitions can be reconciled');
+    }
+    if (!requisition.labourReconciliation?.isAdvance) {
+      throw new Error('Only advance labour requisitions require reconciliation');
+    }
+
+    await updateDoc(doc(this.db, PAYMENTS_PATH, requisitionId), {
+      'labourReconciliation.reconciled': true,
+      'labourReconciliation.reconciledAt': Timestamp.now(),
+      'labourReconciliation.reconciledBy': userId,
+      'labourReconciliation.reconciledBoqItems': reconciledBoqItems,
+      updatedAt: Timestamp.now(),
+      updatedBy: userId,
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────

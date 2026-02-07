@@ -20,11 +20,14 @@ import {
   Loader2,
   AlertCircle,
   MinusCircle,
+  Package,
+  Hammer,
 } from 'lucide-react';
-import { useRequisition, useRequisitionAccountabilities, useSubmitPayment } from '../hooks/payment-hooks';
+import { useRequisition, useRequisitionAccountabilities, useSubmitPayment, useChildRequisitions, useParentRequisition } from '../hooks/payment-hooks';
 import { Requisition, AccountabilityStatus } from '../types/requisition';
 import { Accountability } from '../types/accountability';
 import { PaymentStatus } from '../types/payment';
+import { ChildRequisitionsSummary } from '../components/requisitions/ChildRequisitionsSummary';
 import { db } from '@/core/services/firebase';
 import { useAuth } from '@/shared/hooks';
 
@@ -174,6 +177,19 @@ export function RequisitionDetailPage() {
   const { accountabilities, loading: accLoading } = useRequisitionAccountabilities(db, requisitionId || null);
   const { submitForApproval, loading: submitting } = useSubmitPayment(db, user?.uid || '');
 
+  // Hierarchy hooks
+  const isFundsRequisition = requisition?.requisitionType === 'funds' ||
+    (requisition?.requisitionType as string) === 'materials_services' && !requisition?.parentRequisitionId;
+  const isParentEligible = isFundsRequisition && ['approved', 'paid'].includes(requisition?.status || '');
+  const { children: childRequisitions, loading: childrenLoading } = useChildRequisitions(
+    db,
+    isParentEligible ? (requisitionId || null) : null
+  );
+  const { parent: parentRequisition } = useParentRequisition(
+    db,
+    requisition?.parentRequisitionId || null
+  );
+
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
 
   const handleSubmitForApproval = async () => {
@@ -260,6 +276,24 @@ export function RequisitionDetailPage() {
               Add Accountability
             </button>
           )}
+          {isParentEligible && (
+            <>
+              <button
+                onClick={() => navigate(`/advisory/delivery/projects/${requisition.projectId}/requisitions/new/child?parentId=${requisitionId}&type=materials`)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                <Package className="w-4 h-4" />
+                Material Requisition
+              </button>
+              <button
+                onClick={() => navigate(`/advisory/delivery/projects/${requisition.projectId}/requisitions/new/child?parentId=${requisitionId}&type=labour`)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+              >
+                <Hammer className="w-4 h-4" />
+                Labour Requisition
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -295,6 +329,43 @@ export function RequisitionDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Parent Requisition Link (for child requisitions) */}
+          {parentRequisition && (
+            <Link
+              to={`/advisory/delivery/requisitions/${parentRequisition.id}`}
+              className="block bg-orange-50 border border-orange-200 rounded-lg p-4 hover:bg-orange-100 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Wallet className="w-5 h-5 text-orange-600" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-orange-800">
+                    Parent: {parentRequisition.requisitionNumber}
+                  </p>
+                  <p className="text-xs text-orange-600">{parentRequisition.purpose}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-orange-800">
+                    {formatCurrency(parentRequisition.grossAmount, parentRequisition.currency)}
+                  </p>
+                  {parentRequisition.childRequisitionsSummary && (
+                    <p className="text-xs text-orange-600">
+                      Remaining: {formatCurrency(parentRequisition.childRequisitionsSummary.remainingFundsBalance, parentRequisition.currency)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Link>
+          )}
+
+          {/* Child Requisitions Summary (for parent funds requisitions) */}
+          {isParentEligible && (
+            <ChildRequisitionsSummary
+              parentRequisition={requisition}
+              children={childRequisitions}
+              loading={childrenLoading}
+            />
+          )}
 
           {/* Line Items */}
           <div className="bg-white border rounded-lg">

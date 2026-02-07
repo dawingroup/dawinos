@@ -13,7 +13,7 @@ import {
   where,
   Timestamp,
 } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import type { ShopifySyncState, ShopifyPublishPayload, ShopifyMetafield } from '../types/shopify.types';
 import type { LaunchProduct } from '../types/product.types';
 

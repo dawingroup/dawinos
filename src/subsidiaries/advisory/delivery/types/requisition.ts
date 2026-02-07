@@ -34,6 +34,75 @@ export interface SelectedSupplier {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// REQUISITION TYPE (Hierarchical: Funds → Materials / Labour)
+// ─────────────────────────────────────────────────────────────────
+
+export type RequisitionType = 'funds' | 'materials' | 'labour';
+
+export const REQUISITION_TYPE_CONFIG: Record<RequisitionType, {
+  label: string;
+  description: string;
+  color: string;
+  supportsPO: boolean;
+  isParent: boolean;
+}> = {
+  funds: {
+    label: 'Funds Requisition',
+    description: 'Cash advance for a set of BOQ activities. Parent document for material and labour requisitions.',
+    color: 'orange',
+    supportsPO: false,
+    isParent: true,
+  },
+  materials: {
+    label: 'Materials Requisition',
+    description: 'Procurement of materials/equipment against a funds requisition. Purchase orders generated on approval.',
+    color: 'blue',
+    supportsPO: true,
+    isParent: false,
+  },
+  labour: {
+    label: 'Labour Requisition',
+    description: 'Labour payments against BOQ activities. Reconciled for completion tracking. No PO generated.',
+    color: 'green',
+    supportsPO: false,
+    isParent: false,
+  },
+};
+
+/**
+ * Determine requisition type from advance type.
+ */
+export function inferRequisitionType(advanceType: AdvanceType): RequisitionType {
+  switch (advanceType) {
+    case 'materials':
+    case 'equipment':
+      return 'materials';
+    case 'labor':
+      return 'labour';
+    case 'transport':
+    case 'miscellaneous':
+      return 'funds';
+    default:
+      return 'funds';
+  }
+}
+
+/**
+ * Backward compatibility: normalize old 'materials_services' to 'materials'
+ */
+export function normalizeRequisitionType(type: string): RequisitionType {
+  if (type === 'materials_services') return 'materials';
+  return type as RequisitionType;
+}
+
+/**
+ * Check if requisition type triggers PO generation
+ */
+export function requiresPurchaseOrder(type: RequisitionType): boolean {
+  return type === 'materials';
+}
+
+// ─────────────────────────────────────────────────────────────────
 // ADVANCE & EXPENSE TYPES
 // ─────────────────────────────────────────────────────────────────
 
@@ -156,6 +225,9 @@ export interface RequisitionBOQItem {
 export interface Requisition extends Payment {
   paymentType: 'requisition';
 
+  // Requisition type: funds (cash advance) vs materials/services (procurement)
+  requisitionType: RequisitionType;
+
   // Requisition-specific fields
   requisitionNumber: string;
   purpose: string;
@@ -201,6 +273,32 @@ export interface Requisition extends Payment {
   notionSyncStatus?: 'pending' | 'synced' | 'error';
   notionSyncError?: string;
   lastNotionSyncAt?: Timestamp;
+
+  // ─── HIERARCHICAL REQUISITION FIELDS ──────────────────────────
+  // Parent-child relationship
+  parentRequisitionId?: string;
+  parentRequisitionNumber?: string;
+  childRequisitionIds?: string[];
+
+  // Budget tracking (on parent funds requisition)
+  childRequisitionsSummary?: {
+    totalChildAmount: number;
+    materialRequisitionsCount: number;
+    labourRequisitionsCount: number;
+    materialRequisitionsAmount: number;
+    labourRequisitionsAmount: number;
+    remainingFundsBalance: number;
+    budgetExceeded: boolean;
+  };
+
+  // Labour reconciliation (on labour requisitions)
+  labourReconciliation?: {
+    isAdvance: boolean;
+    reconciled: boolean;
+    reconciledAt?: Timestamp;
+    reconciledBy?: string;
+    reconciledBoqItems?: RequisitionBOQItem[];
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -211,6 +309,7 @@ export interface RequisitionFormData {
   projectId: string;
   purpose: string;
   budgetLineId: string;
+  requisitionType: RequisitionType;
   advanceType: AdvanceType;
   expectedReturnDate?: Date;
   accountabilityDueDate: Date;
@@ -231,6 +330,13 @@ export interface RequisitionFormData {
   // ADD-FIN-001: Custom approval override
   useCustomApprovalChain?: boolean;
   customApprovalChainId?: string;
+
+  // Hierarchical requisition fields
+  parentRequisitionId?: string;
+  parentRequisitionNumber?: string;
+
+  // Labour advance mode
+  isLabourAdvance?: boolean;
 }
 
 export interface BOQItemSelection {

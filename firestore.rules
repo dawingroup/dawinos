@@ -1630,6 +1630,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
+    // Platform Settings (including branding)
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated(); // Allow authenticated users to update branding
+      allow delete: if isAdmin();
+    }
+
     // System Settings
     match /system_settings/{settingId} {
       allow read: if isAuthenticated();
@@ -2072,6 +2079,50 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated();
       allow delete: if isAdmin();
+    }
+
+    // ============================================
+    // MARKETING MODULE COLLECTIONS
+    // Campaign Management & Social Media
+    // ============================================
+
+    // Marketing Campaigns
+    match /marketingCampaigns/{campaignId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+
+      // Campaign Sends (messages) subcollection
+      match /sends/{sendId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // Social Media Posts
+    match /socialMediaPosts/{postId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    // Content Templates
+    match /contentTemplates/{templateId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    // Campaign Analytics (aggregated data)
+    match /campaignAnalytics/{analyticsId} {
+      allow read: if isAuthenticated();
+      // Only Cloud Functions can write analytics
+      allow write: if false;
     }
   }
 }

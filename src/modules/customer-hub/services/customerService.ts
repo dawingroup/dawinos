@@ -15,7 +15,7 @@ import {
   onSnapshot,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import type { Customer, CustomerFormData, CustomerListItem, CustomerStatus } from '../types';
 
 // Collection reference

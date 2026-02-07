@@ -26,6 +26,7 @@ import type {
   CreateRequisitionItemInput
 } from '../types/requisition';
 import type { BOQMoney } from '../types/boq';
+import { autoPOGenerationService } from './auto-po-generation.service';
 
 // Generate unique IDs
 const generateId = (): string => {
@@ -60,6 +61,7 @@ export const requisitionService = {
     
     const requisition: Requisition = {
       id,
+      requisitionType: input.requisitionType || 'materials',
       projectId: input.projectId,
       projectName: input.projectName,
       engagementId: input.engagementId,
@@ -420,6 +422,40 @@ export const requisitionService = {
       'audit.updatedAt': Timestamp.now(),
       'audit.updatedBy': userId
     });
+
+    // Auto-generate POs for materials requisitions (including legacy 'materials_services' from Firestore)
+    const reqType = requisition.requisitionType as string;
+    if (reqType === 'materials' || reqType === 'materials_services') {
+      try {
+        const result = await autoPOGenerationService.generatePOsFromRequisition(
+          requisitionId,
+          userId
+        );
+
+        if (result.success) {
+          console.log(
+            `✓ Generated ${result.summary.totalPOs} PO(s) for requisition ${requisition.requisitionNumber}`,
+            result.summary.supplierBreakdown
+          );
+        } else {
+          console.warn(
+            `⚠ PO generation had errors for requisition ${requisition.requisitionNumber}:`,
+            result.errors
+          );
+        }
+
+        if (result.warnings.length > 0) {
+          console.warn('PO generation warnings:', result.warnings);
+        }
+      } catch (error) {
+        // Don't throw - requisition approval succeeded, PO generation is bonus
+        console.error('Failed to auto-generate POs:', error);
+      }
+    } else {
+      console.log(
+        `ℹ Skipping PO generation for funds requisition ${requisition.requisitionNumber}`
+      );
+    }
   },
   
   /**

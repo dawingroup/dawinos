@@ -76,6 +76,9 @@ const SuppliersPage = lazy(() => import('@/modules/suppliers/pages/SuppliersPage
 // WhatsApp Communication
 const WhatsAppInboxPage = lazy(() => import('@/modules/whatsapp/pages/WhatsAppInboxPage'));
 
+// Marketing Hub
+const MarketingModule = lazy(() => import('@/modules/marketing/MarketingModule'));
+
 // Client Portal (Public)
 const ClientPortalPage = lazy(() => import('@/modules/design-manager/components/client-portal/ClientPortalPage'));
 
@@ -517,6 +520,18 @@ export const router = createBrowserRouter([
       {
         path: 'whatsapp',
         element: <PageWrapper><WhatsAppInboxPage /></PageWrapper>,
+      },
+
+      // Marketing Hub
+      {
+        path: 'marketing/*',
+        element: (
+          <RoleGuard roles={['member', 'manager', 'admin', 'super_admin']}>
+            <PageWrapper>
+              <MarketingModule />
+            </PageWrapper>
+          </RoleGuard>
+        ),
       },
 
       // ========================================

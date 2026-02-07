@@ -76,7 +76,12 @@ export interface ProcurementEntry {
   efrisValidated: boolean;
   efrisInvoiceNumber?: string;
   efrisTin?: string;
-  
+
+  // Purchase order linkage
+  purchaseOrderId?: string;
+  poItemId?: string;
+  poItemLineNumber?: number;
+
   createdAt: Timestamp;
   createdBy: string;
   updatedAt: Timestamp;
@@ -134,6 +139,13 @@ export interface PurchaseOrderItem {
   unitPrice: number;
   amount: number;
   boqItemIds: string[];
+
+  // Delivery tracking
+  deliveredQuantity: number;
+  receivedQuantity: number;
+  rejectedQuantity: number;
+  acceptedQuantity: number;
+  deliveryEntryIds: string[];  // References to ProcurementEntry IDs
 }
 
 export interface StockAdjustment {
@@ -280,4 +292,46 @@ export interface QualityCheckInput {
   quantityRejected: number;
   condition: DeliveryCondition;
   notes?: string;
+}
+
+// ============================================================================
+// THREE-WAY MATCH
+// ============================================================================
+
+/**
+ * Three-way match record linking PO → Delivery → Accountability
+ * Used for variance detection and investigation triggers
+ */
+export interface ThreeWayMatch {
+  id: string;
+  purchaseOrderId: string;
+  poItemId: string;
+  deliveryEntryId: string;
+  accountabilityExpenseId?: string;
+
+  // Quantities
+  poQuantity: number;
+  deliveredQuantity: number;
+  accountedQuantity?: number;
+
+  // Amounts
+  poAmount: number;
+  deliveryAmount: number;
+  accountedAmount?: number;
+
+  // Variance tracking
+  quantityVariance: number;
+  amountVariance: number;
+  variancePercentage: number;
+
+  // Status & investigation
+  matchStatus: 'pending' | 'matched' | 'variance_detected' | 'disputed';
+  varianceSeverity?: 'minor' | 'moderate' | 'severe';
+  requiresInvestigation: boolean;
+  investigationId?: string;
+
+  // Metadata
+  createdAt: Timestamp;
+  createdBy: string;
+  lastMatchedAt?: Timestamp;
 }

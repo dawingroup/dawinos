@@ -15,7 +15,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useCreateRequisition } from '../../hooks/payment-hooks';
-import { RequisitionFormData, ExpenseCategory, EXPENSE_CATEGORY_LABELS, AdvanceType, ADVANCE_TYPE_LABELS } from '../../types/requisition';
+import { RequisitionFormData, ExpenseCategory, EXPENSE_CATEGORY_LABELS, AdvanceType, ADVANCE_TYPE_LABELS, inferRequisitionType } from '../../types/requisition';
 import { db } from '@/core/services/firebase';
 import { useAuth } from '@/shared/hooks';
 
@@ -113,6 +113,7 @@ export function RequisitionForm() {
     const requisitionData: RequisitionFormData = {
       projectId,
       purpose: formData.purpose,
+      requisitionType: inferRequisitionType(formData.advanceType),
       advanceType: formData.advanceType,
       budgetLineId: formData.budgetLineId || formData.budgetLineName,
       accountabilityDueDate: new Date(formData.accountabilityDueDate),

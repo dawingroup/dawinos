@@ -14,7 +14,7 @@ import {
   where,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 
 export interface PriceOverride {
   id: string;

@@ -15,7 +15,7 @@ import {
   arrayRemove,
   collection,
 } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import type { Material, MaterialTier, MaterialWithInventory, SupplierPricingSummary } from '@/modules/design-manager/types/materials';
 import type { InventoryItem } from '../types';
 

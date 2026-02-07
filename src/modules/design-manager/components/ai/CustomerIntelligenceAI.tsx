@@ -12,7 +12,7 @@
 
 import { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import { 
   Users, 
   TrendingUp, 

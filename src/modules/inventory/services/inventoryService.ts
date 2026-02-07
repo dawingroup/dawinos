@@ -18,7 +18,7 @@ import {
   serverTimestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import type {
   InventoryItem,
   InventoryItemFormData,

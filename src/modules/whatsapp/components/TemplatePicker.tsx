@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { X, Send, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import { useWhatsAppTemplates } from '../hooks';
 import { TemplatePreview } from './TemplatePreview';
 import { syncTemplates } from '../services/whatsappApiService';

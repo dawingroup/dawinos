@@ -16,6 +16,7 @@ export type DocumentType =
   | 'invoice'
   | 'receipt'
   | 'delivery_note'
+  | 'purchase_order'
   | 'photo_evidence'
   | 'attendance_register'
   | 'payment_receipt'
@@ -28,6 +29,7 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   invoice: 'Invoice',
   receipt: 'Receipt',
   delivery_note: 'Delivery Note',
+  purchase_order: 'Purchase Order',
   photo_evidence: 'Photo Evidence',
   attendance_register: 'Attendance Register',
   payment_receipt: 'Payment Receipt',
@@ -77,55 +79,68 @@ export const PROOF_OF_SPEND_REQUIREMENTS: Record<
     requiredDocuments: DocumentType[];
     minimumDocumentQuality: number; // DPI
     requiresPhotographicEvidence: boolean;
+    requiresPurchaseOrder: boolean;  // PO requirement
+    poMandatoryThreshold?: number;   // Amount above which PO is mandatory (UGX)
     description: string;
   }
 > = {
   construction_materials: {
-    requiredDocuments: ['invoice', 'receipt', 'delivery_note', 'photo_evidence'],
+    requiredDocuments: ['invoice', 'receipt', 'delivery_note', 'photo_evidence', 'purchase_order'],
     minimumDocumentQuality: 300,
     requiresPhotographicEvidence: true,
-    description: 'Materials require invoice, receipt, delivery note, and photo evidence',
+    requiresPurchaseOrder: true,
+    poMandatoryThreshold: 500000,  // 500k UGX
+    description: 'Materials require PO, invoice, receipt, delivery note, and photo evidence',
   },
   labor_wages: {
     requiredDocuments: ['attendance_register', 'payment_receipt'],
     minimumDocumentQuality: 300,
     requiresPhotographicEvidence: false,
+    requiresPurchaseOrder: false,
     description: 'Labor requires attendance register and payment receipt',
   },
   equipment_rental: {
-    requiredDocuments: ['rental_agreement', 'receipt'],
+    requiredDocuments: ['rental_agreement', 'receipt', 'purchase_order'],
     minimumDocumentQuality: 300,
     requiresPhotographicEvidence: false,
-    description: 'Equipment rental requires agreement and receipt',
+    requiresPurchaseOrder: true,
+    poMandatoryThreshold: 1000000,  // 1M UGX
+    description: 'Equipment rental requires PO, agreement, and receipt',
   },
   transport_logistics: {
     requiredDocuments: ['waybill', 'fuel_receipt'],
     minimumDocumentQuality: 300,
     requiresPhotographicEvidence: false,
+    requiresPurchaseOrder: false,
     description: 'Transport requires waybill and fuel receipts',
   },
   utilities: {
     requiredDocuments: ['invoice', 'receipt'],
     minimumDocumentQuality: 300,
     requiresPhotographicEvidence: false,
+    requiresPurchaseOrder: false,
     description: 'Utilities require invoice and receipt',
   },
   permits_fees: {
     requiredDocuments: ['receipt', 'invoice'],
     minimumDocumentQuality: 300,
     requiresPhotographicEvidence: false,
+    requiresPurchaseOrder: false,
     description: 'Permits and fees require receipt and invoice',
   },
   professional_services: {
-    requiredDocuments: ['invoice', 'receipt'],
+    requiredDocuments: ['invoice', 'receipt', 'purchase_order'],
     minimumDocumentQuality: 300,
     requiresPhotographicEvidence: false,
-    description: 'Professional services require invoice and receipt',
+    requiresPurchaseOrder: true,
+    poMandatoryThreshold: 2000000,  // 2M UGX
+    description: 'Professional services require PO, invoice, and receipt',
   },
   contingency: {
     requiredDocuments: ['receipt'],
     minimumDocumentQuality: 300,
     requiresPhotographicEvidence: false,
+    requiresPurchaseOrder: false,
     description: 'Contingency expenses require receipt',
   },
 };
@@ -375,6 +390,24 @@ export interface AccountabilityExpense {
   boqItemId?: string;
   boqItemCode?: string;
   quantityExecuted?: number;
+
+  // Purchase order linkage
+  purchaseOrderId?: string;
+  poItemId?: string;
+  poItemLineNumber?: number;
+
+  // Three-way match tracking
+  threeWayMatchId?: string;
+  threeWayMatchStatus?: 'matched' | 'variance' | 'missing_po' | 'not_applicable';
+
+  // PO validation
+  poValidated?: boolean;
+  poValidationNotes?: string;
+  poVariance?: {
+    quantityVariance: number;
+    amountVariance: number;
+    variancePercentage: number;
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────

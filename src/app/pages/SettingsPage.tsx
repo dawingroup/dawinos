@@ -51,6 +51,7 @@ import {
   type GlobalRole,
 } from '@/core/settings';
 import { useSubsidiary } from '@/contexts/SubsidiaryContext';
+import { BrandingSettings } from '@/shared/components/branding';
 
 type Tab = 'general' | 'branding' | 'users' | 'access' | 'integrations' | 'templates';
 
@@ -360,188 +361,15 @@ function GeneralTab({ canEdit }: { canEdit: boolean }) {
 // ============================================================================
 
 function BrandingTab({ canEdit }: { canEdit: boolean }) {
-  const { settings, isLoading, updateSettings } = useOrganizationSettings();
-  const [primaryColor, setPrimaryColor] = useState('#872E5C');
-  const [secondaryColor, setSecondaryColor] = useState('#E18425');
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setUploading(true);
-    setUploadError(null);
-    
-    try {
-      await uploadOrganizationLogo(file, 'default', 'primary');
-    } catch (error) {
-      console.error('Failed to upload logo:', error);
-      setUploadError(error instanceof Error ? error.message : 'Failed to upload logo');
-    } finally {
-      setUploading(false);
-      // Reset file input
-      e.target.value = '';
-    }
-  };
-
-  const handleDeleteLogo = async () => {
-    if (!confirm('Are you sure you want to delete the logo?')) return;
-    
-    setUploading(true);
-    try {
-      await deleteOrganizationLogo('default', 'primary');
-    } catch (error) {
-      console.error('Failed to delete logo:', error);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-      </div>
-    );
-  }
-
   return (
-    <div className="p-6 space-y-6">
-      <h3 className="text-lg font-semibold text-gray-900">Branding & Appearance</h3>
-
-      {uploadError && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
-          <AlertCircle className="w-4 h-4" />
-          {uploadError}
-        </div>
-      )}
-
-      {/* Logo Upload */}
-      <div className="space-y-4">
-        <label className="block text-sm font-medium text-gray-700">Organization Logo</label>
-        <p className="text-sm text-gray-500">This logo will appear on quotes, client portal, and documents.</p>
-        <div className="flex items-center gap-6">
-          <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300 overflow-hidden">
-            {uploading ? (
-              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-            ) : settings?.branding?.logoUrl ? (
-              <img
-                src={settings.branding.logoUrl}
-                alt="Logo"
-                className="w-full h-full object-contain p-2"
-              />
-            ) : (
-              <Upload className="w-8 h-8 text-gray-400" />
-            )}
-          </div>
-          {canEdit && (
-            <div className="space-y-2">
-              <label className="inline-block">
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                  onChange={handleLogoUpload}
-                  disabled={uploading}
-                  className="hidden"
-                />
-                <span className="px-4 py-2 bg-[#872E5C] text-white rounded-lg hover:bg-[#6a2449] text-sm cursor-pointer inline-block">
-                  {uploading ? 'Uploading...' : settings?.branding?.logoUrl ? 'Change Logo' : 'Upload Logo'}
-                </span>
-              </label>
-              {settings?.branding?.logoUrl && (
-                <button
-                  onClick={handleDeleteLogo}
-                  disabled={uploading}
-                  className="block px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm"
-                >
-                  Remove Logo
-                </button>
-              )}
-              <p className="text-xs text-gray-500">PNG, JPG, SVG, WebP up to 2MB</p>
-            </div>
-          )}
-        </div>
+    <div className="p-6">
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold text-gray-900">Platform Branding</h3>
+        <p className="text-sm text-gray-500 mt-1">
+          Manage your platform's logo and favicon. These appear in the header and browser tab.
+        </p>
       </div>
-
-      {/* Colors */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Primary Color
-          </label>
-          <div className="flex items-center gap-3">
-            <input
-              type="color"
-              value={settings?.branding?.primaryColor || primaryColor}
-              onChange={(e) => setPrimaryColor(e.target.value)}
-              disabled={!canEdit}
-              className="w-12 h-12 rounded-lg cursor-pointer border border-gray-300"
-            />
-            <input
-              type="text"
-              value={settings?.branding?.primaryColor || primaryColor}
-              onChange={(e) => setPrimaryColor(e.target.value)}
-              disabled={!canEdit}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Secondary Color
-          </label>
-          <div className="flex items-center gap-3">
-            <input
-              type="color"
-              value={settings?.branding?.secondaryColor || secondaryColor}
-              onChange={(e) => setSecondaryColor(e.target.value)}
-              disabled={!canEdit}
-              className="w-12 h-12 rounded-lg cursor-pointer border border-gray-300"
-            />
-            <input
-              type="text"
-              value={settings?.branding?.secondaryColor || secondaryColor}
-              onChange={(e) => setSecondaryColor(e.target.value)}
-              disabled={!canEdit}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Preview */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Preview</label>
-        <div
-          className="h-16 rounded-lg flex items-center justify-center text-white font-semibold"
-          style={{
-            background: `linear-gradient(to right, ${settings?.branding?.primaryColor || primaryColor}, ${settings?.branding?.secondaryColor || secondaryColor})`,
-          }}
-        >
-          {settings?.info?.name || 'Organization Name'}
-        </div>
-      </div>
-
-      {canEdit && (
-        <div className="flex justify-end pt-4 border-t">
-          <button
-            onClick={() => {
-              updateSettings({
-                branding: {
-                  ...settings?.branding,
-                  primaryColor,
-                  secondaryColor,
-                },
-              });
-            }}
-            className="px-4 py-2 bg-[#872E5C] text-white rounded-lg hover:bg-[#6a2449]"
-          >
-            Save Branding
-          </button>
-        </div>
-      )}
+      <BrandingSettings />
     </div>
   );
 }

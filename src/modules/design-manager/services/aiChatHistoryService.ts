@@ -23,7 +23,7 @@ import {
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 
 // Chat types
 export type AIChatType = 'strategy-research' | 'design-item-enhancement' | 'project-scoping' | 'customer-intelligence' | 'image-analysis';

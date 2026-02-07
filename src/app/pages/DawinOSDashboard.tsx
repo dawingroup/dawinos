@@ -25,13 +25,13 @@ import { useState, useRef, useEffect } from 'react';
 import { useSubsidiary } from '@/contexts/SubsidiaryContext';
 import type { SubsidiaryModule } from '@/types/subsidiary';
 
-const MODULE_CONFIG: Record<SubsidiaryModule, {
+const MODULE_CONFIG: Partial<Record<SubsidiaryModule, {
   title: string;
   description: string;
   icon: React.ElementType;
   href: string;
   color: string;
-}> = {
+}>> = {
   'design-manager': {
     title: 'Design Manager',
     description: 'Manage projects, design items, and production optimization',
@@ -219,6 +219,7 @@ function ModuleCard({
   isAvailable: boolean;
 }) {
   const config = MODULE_CONFIG[module];
+  if (!config) return null;
   const Icon = config.icon;
 
   return (

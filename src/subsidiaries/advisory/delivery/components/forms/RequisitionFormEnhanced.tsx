@@ -35,12 +35,15 @@ import type {
   RequisitionFormData,
   ExpenseCategory,
   AdvanceType,
+  RequisitionType,
   RequisitionQuotation,
   SelectedSupplier,
 } from '../../types/requisition';
 import {
   EXPENSE_CATEGORY_LABELS,
   ADVANCE_TYPE_LABELS,
+  REQUISITION_TYPE_CONFIG,
+  inferRequisitionType,
 } from '../../types/requisition';
 import { getBOQItems } from '@/subsidiaries/advisory/matflow/services/boqService';
 import { RequisitionService } from '../../services/requisition-service';
@@ -73,6 +76,7 @@ export function RequisitionFormEnhanced() {
   // Form state
   const [formData, setFormData] = useState({
     purpose: '',
+    requisitionType: 'funds' as RequisitionType,
     advanceType: 'materials' as AdvanceType,
     budgetLineId: '',
     accountabilityDueDate: new Date(
@@ -300,6 +304,7 @@ export function RequisitionFormEnhanced() {
       const requisitionData: RequisitionFormData = {
         projectId,
         purpose: formData.purpose,
+        requisitionType: formData.requisitionType,
         advanceType: formData.advanceType,
         budgetLineId: formData.budgetLineId || 'default',
         accountabilityDueDate: new Date(formData.accountabilityDueDate),
@@ -449,25 +454,94 @@ export function RequisitionFormEnhanced() {
             />
           </div>
 
+          {/* Requisition Type Selector */}
+          <div className="col-span-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Requisition Type <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-3 gap-3">
+              {(Object.entries(REQUISITION_TYPE_CONFIG) as [RequisitionType, typeof REQUISITION_TYPE_CONFIG[RequisitionType]][]).map(
+                ([type, config]) => {
+                  const isSelected = formData.requisitionType === type;
+                  const borderColor = isSelected
+                    ? config.color === 'blue' ? 'border-blue-600 bg-blue-50'
+                    : config.color === 'green' ? 'border-green-600 bg-green-50'
+                    : 'border-orange-500 bg-orange-50'
+                    : 'border-gray-200 hover:border-gray-300';
+                  const defaultAdvance: AdvanceType =
+                    type === 'funds' ? 'transport'
+                    : type === 'materials' ? 'materials'
+                    : 'labor';
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          requisitionType: type,
+                          advanceType: defaultAdvance,
+                        }))
+                      }
+                      className={`p-4 rounded-lg border-2 text-left transition-all ${borderColor}`}
+                    >
+                      <div className="font-semibold text-gray-900">
+                        {config.label}
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {config.description}
+                      </p>
+                      {config.supportsPO && (
+                        <span className="inline-block mt-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                          PO will be generated
+                        </span>
+                      )}
+                      {config.isParent && (
+                        <span className="inline-block mt-2 text-xs bg-orange-100 text-orange-800 px-2 py-0.5 rounded">
+                          Parent requisition
+                        </span>
+                      )}
+                    </button>
+                  );
+                }
+              )}
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Advance Type <span className="text-red-500">*</span>
             </label>
             <select
               value={formData.advanceType}
-              onChange={(e) =>
+              onChange={(e) => {
+                const advanceType = e.target.value as AdvanceType;
                 setFormData((prev) => ({
                   ...prev,
-                  advanceType: e.target.value as AdvanceType,
-                }))
-              }
+                  advanceType,
+                  requisitionType: inferRequisitionType(advanceType),
+                }));
+              }}
               className="w-full px-3 py-2 border rounded-lg"
             >
-              {Object.entries(ADVANCE_TYPE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
+              {Object.entries(ADVANCE_TYPE_LABELS)
+                .filter(([value]) => {
+                  if (formData.requisitionType === 'funds') {
+                    return ['transport', 'miscellaneous'].includes(value);
+                  }
+                  if (formData.requisitionType === 'materials') {
+                    return ['materials', 'equipment'].includes(value);
+                  }
+                  if (formData.requisitionType === 'labour') {
+                    return ['labor'].includes(value);
+                  }
+                  return true;
+                })
+                .map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
             </select>
           </div>
 

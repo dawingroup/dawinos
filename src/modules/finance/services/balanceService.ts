@@ -10,7 +10,7 @@ import {
   runTransaction,
   Timestamp,
 } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { db } from '@/shared/services/firebase';
 import { Account, AccountBalance } from '../types/account.types';
 import { JournalLine } from '../types/journal.types';
 import { NORMAL_BALANCE, AccountType } from '../constants/account.constants';

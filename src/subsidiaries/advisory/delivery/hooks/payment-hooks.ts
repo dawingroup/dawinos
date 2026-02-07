@@ -818,3 +818,173 @@ export function useIPCCertification(
 
   return { certifyByQS, loading, error };
 }
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useChildRequisitions
+// ─────────────────────────────────────────────────────────────────
+
+export function useChildRequisitions(
+  db: Firestore,
+  parentRequisitionId: string | null
+) {
+  const [children, setChildren] = useState<Requisition[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = useMemo(() => RequisitionService.getInstance(db), [db]);
+
+  useEffect(() => {
+    if (!parentRequisitionId) {
+      setChildren([]);
+      setLoading(false);
+      return;
+    }
+
+    const fetchChildren = async () => {
+      setLoading(true);
+      try {
+        const result = await service.getChildRequisitions(parentRequisitionId);
+        setChildren(result);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch child requisitions'));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChildren();
+  }, [service, parentRequisitionId]);
+
+  const materialChildren = useMemo(
+    () => children.filter(c => {
+      const t = c.requisitionType as string;
+      return t === 'materials' || t === 'materials_services';
+    }),
+    [children]
+  );
+
+  const labourChildren = useMemo(
+    () => children.filter(c => c.requisitionType === 'labour'),
+    [children]
+  );
+
+  const totalChildAmount = useMemo(
+    () => children.reduce((sum, c) => sum + (c.grossAmount || 0), 0),
+    [children]
+  );
+
+  return { children, materialChildren, labourChildren, totalChildAmount, loading, error };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useCreateChildRequisition
+// ─────────────────────────────────────────────────────────────────
+
+export function useCreateChildRequisition(
+  db: Firestore,
+  userId: string
+) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = useMemo(() => RequisitionService.getInstance(db), [db]);
+
+  const createChildRequisition = useCallback(
+    async (data: RequisitionFormData): Promise<string> => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const id = await service.createChildRequisition(data, userId);
+        return id;
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Failed to create child requisition');
+        setError(error);
+        throw error;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [service, userId]
+  );
+
+  return { createChildRequisition, loading, error };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useParentRequisition
+// ─────────────────────────────────────────────────────────────────
+
+export function useParentRequisition(
+  db: Firestore,
+  parentRequisitionId: string | null
+) {
+  const [parent, setParent] = useState<Requisition | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = useMemo(() => RequisitionService.getInstance(db), [db]);
+
+  useEffect(() => {
+    if (!parentRequisitionId) {
+      setParent(null);
+      setLoading(false);
+      return;
+    }
+
+    const fetchParent = async () => {
+      setLoading(true);
+      try {
+        const result = await service.getRequisition(parentRequisitionId);
+        setParent(result);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch parent requisition'));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchParent();
+  }, [service, parentRequisitionId]);
+
+  return { parent, loading, error };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HOOK: useParentBOQItems
+// ─────────────────────────────────────────────────────────────────
+
+export function useParentBOQItems(
+  db: Firestore,
+  parentRequisitionId: string | null
+) {
+  const [boqItems, setBoqItems] = useState<Requisition['boqItems']>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const service = useMemo(() => RequisitionService.getInstance(db), [db]);
+
+  useEffect(() => {
+    if (!parentRequisitionId) {
+      setBoqItems([]);
+      setLoading(false);
+      return;
+    }
+
+    const fetchItems = async () => {
+      setLoading(true);
+      try {
+        const items = await service.getParentBOQItems(parentRequisitionId);
+        setBoqItems(items);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch parent BOQ items'));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchItems();
+  }, [service, parentRequisitionId]);
+
+  return { boqItems, loading, error };
+}

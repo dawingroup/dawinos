@@ -5,7 +5,7 @@ import {
   updateKatanaCatalogItem,
 } from '../../services/katanaCatalogService';
 import type { KatanaCatalogItem } from '../../types/katanaCatalog';
-import { auth, db } from '@/firebase/config';
+import { auth, db } from '@/shared/services/firebase';
 import { collection, addDoc, onSnapshot, serverTimestamp, doc } from 'firebase/firestore';
 
 type EditFormState = {

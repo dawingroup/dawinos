@@ -9,7 +9,7 @@ import {
   serverTimestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import type { KatanaCatalogItem, KatanaCatalogSource } from '../types/katanaCatalog';
 
 const KATANA_CATALOG_COLLECTION = 'katanaCatalog';

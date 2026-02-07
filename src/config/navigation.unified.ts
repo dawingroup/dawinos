@@ -97,6 +97,21 @@ export const FINISHES_NAVIGATION: NavItem[] = [
     description: 'Product launches',
     keywords: ['launch', 'products', 'pipeline'],
   },
+  {
+    id: 'marketing',
+    label: 'Marketing Hub',
+    href: '/marketing',
+    icon: 'Megaphone',
+    description: 'Campaigns, social media & analytics',
+    keywords: ['campaigns', 'marketing', 'whatsapp', 'social', 'analytics'],
+    children: [
+      { id: 'marketing-dashboard', label: 'Dashboard', href: '/marketing', icon: 'LayoutDashboard' },
+      { id: 'marketing-campaigns', label: 'Campaigns', href: '/marketing/campaigns', icon: 'Megaphone' },
+      { id: 'marketing-calendar', label: 'Content Calendar', href: '/marketing/calendar', icon: 'Calendar' },
+      { id: 'marketing-templates', label: 'Templates', href: '/marketing/templates', icon: 'MessageSquare' },
+      { id: 'marketing-analytics', label: 'Analytics', href: '/marketing/analytics', icon: 'BarChart3' },
+    ],
+  },
 ];
 
 // ============================================================================

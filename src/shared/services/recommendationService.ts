@@ -12,7 +12,7 @@ import {
   limit,
   getDocs,
 } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 
 // ============================================
 // Types

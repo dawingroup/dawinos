@@ -13,7 +13,7 @@ import {
   query,
   where,
 } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import { nanoid } from 'nanoid';
 import type {
   ConsolidatedEstimate,

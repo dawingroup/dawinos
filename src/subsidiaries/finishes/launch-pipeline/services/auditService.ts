@@ -5,7 +5,7 @@
  */
 
 import { collection, addDoc, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import type { AuditResult, AuditConfig, AuditIssue } from '../types/audit.types';
 
 const API_BASE = 'https://api-okekivpl2a-uc.a.run.app';

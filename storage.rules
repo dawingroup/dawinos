@@ -46,7 +46,7 @@ service firebase.storage {
     
     // Validate image type
     function isValidImageType() {
-      return request.resource.contentType.matches('image/(png|jpeg|gif|webp)');
+      return request.resource.contentType.matches('image/(png|jpeg|jpg|gif|webp|svg\\+xml)|image/x-icon');
     }
     
     // Validate document type
@@ -166,6 +166,17 @@ service firebase.storage {
       // Auto-deleted after 24 hours via Cloud Function
     }
     
+    // ============================================
+    // PLATFORM BRANDING (Logo & Favicon)
+    // ============================================
+
+    match /branding/{fileName} {
+      // Public read access for branding assets (logo and favicon need to be publicly visible)
+      allow read: if true;
+      // Authenticated users can upload branding (images only, with size limits per service)
+      allow write: if isAuthenticated() && isValidImageType();
+    }
+
     // ============================================
     // ORGANIZATION BRANDING & ASSETS
     // ============================================

@@ -11,7 +11,7 @@
  */
 
 import { doc, getDoc, setDoc, Timestamp, onSnapshot } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import { useMemo } from 'react';
 import type { DesignItem } from '../types';
 import type {

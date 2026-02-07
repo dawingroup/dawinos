@@ -20,7 +20,7 @@ import {
   DocumentSnapshot,
   QueryConstraint,
 } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { db } from '@/shared/services/firebase';
 import {
   JournalEntry,
   JournalLine,

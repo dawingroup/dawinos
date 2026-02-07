@@ -295,33 +295,86 @@ export const procurementService = {
   },
   
   /**
-   * Update PO delivery status based on deliveries
+   * Link delivery entry to PO item and update quantities
+   */
+  async linkDeliveryToPO(
+    deliveryId: string,
+    purchaseOrderId: string,
+    poItemId: string,
+    userId: string
+  ): Promise<void> {
+    // 1. Get delivery entry
+    const delivery = await this.getProcurementEntry(deliveryId);
+    if (!delivery) throw new Error('Delivery entry not found');
+
+    // 2. Get PO and find item
+    const po = await this.getPurchaseOrder(purchaseOrderId);
+    if (!po) throw new Error('Purchase order not found');
+
+    const itemIndex = po.items.findIndex(item => item.materialId === poItemId);
+    if (itemIndex === -1) throw new Error('PO item not found');
+
+    // 3. Update delivery with PO reference
+    await updateDoc(doc(db, PROCUREMENT_COLLECTION, deliveryId), {
+      purchaseOrderId,
+      poItemId,
+      poItemLineNumber: itemIndex + 1,
+      updatedAt: Timestamp.now(),
+      updatedBy: userId
+    });
+
+    // 4. Update PO item quantities
+    const updatedItems = [...po.items];
+    updatedItems[itemIndex] = {
+      ...updatedItems[itemIndex],
+      deliveredQuantity: (updatedItems[itemIndex].deliveredQuantity || 0) + delivery.quantityReceived,
+      acceptedQuantity: (updatedItems[itemIndex].acceptedQuantity || 0) + delivery.quantityAccepted,
+      rejectedQuantity: (updatedItems[itemIndex].rejectedQuantity || 0) + (delivery.quantityRejected || 0),
+      deliveryEntryIds: [...(updatedItems[itemIndex].deliveryEntryIds || []), deliveryId]
+    };
+
+    // 5. Update PO
+    await updateDoc(doc(db, PO_COLLECTION, purchaseOrderId), {
+      items: updatedItems,
+      updatedAt: Timestamp.now()
+    });
+
+    // 6. Auto-update PO status based on fulfillment
+    await this.updatePODeliveryStatus(purchaseOrderId, userId);
+  },
+
+  /**
+   * Auto-update PO status based on delivery fulfillment
    */
   async updatePODeliveryStatus(
     poId: string,
-    _userId: string
+    userId: string
   ): Promise<void> {
     const po = await this.getPurchaseOrder(poId);
     if (!po) throw new Error('Purchase order not found');
-    
-    // Check if all items are fully delivered
-    // Note: deliveredQuantity tracking would need to be added to PO items
+
+    // Calculate fulfillment
     const allFullyDelivered = po.items.every(
-      item => (item as any).deliveredQuantity >= item.quantity
+      item => (item.deliveredQuantity || 0) >= item.quantity
     );
-    const anyDelivered = po.items.some(item => (item as any).deliveredQuantity > 0);
-    
-    let status = po.status;
-    if (allFullyDelivered) {
-      status = 'fulfilled';
-    } else if (anyDelivered) {
-      status = 'partially_fulfilled';
+    const anyDelivered = po.items.some(item => (item.deliveredQuantity || 0) > 0);
+
+    // Determine new status using workflow rules
+    let newStatus = po.status;
+    if (allFullyDelivered && po.status !== 'fulfilled') {
+      newStatus = 'fulfilled';
+    } else if (anyDelivered && po.status === 'approved') {
+      newStatus = 'partially_fulfilled';
     }
-    
-    await updateDoc(doc(db, PO_COLLECTION, poId), {
-      status,
-      updatedAt: Timestamp.now()
-    });
+
+    // Only update if status changed
+    if (newStatus !== po.status) {
+      await updateDoc(doc(db, PO_COLLECTION, poId), {
+        status: newStatus,
+        updatedAt: Timestamp.now(),
+        updatedBy: userId
+      });
+    }
   },
   
   // ============================================================================

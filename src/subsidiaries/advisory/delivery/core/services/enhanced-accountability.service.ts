@@ -39,6 +39,9 @@ import {
 import { RequisitionService } from '../../services/requisition-service';
 import { BOQControlService } from './boq-control.service';
 import type { RequisitionBOQItem } from '../../types/requisition';
+import { procurementService } from '../../../matflow/services/procurement-service';
+import { setDoc } from 'firebase/firestore';
+import type { ThreeWayMatch } from '../../../matflow/types/procurement';
 
 // ─────────────────────────────────────────────────────────────────
 // TYPES
@@ -146,6 +149,42 @@ export class EnhancedAccountabilityService {
       }
     }
 
+    // 2.5. NEW: PO validation for each expense
+    for (const expense of data.expenses) {
+      const requirements = PROOF_OF_SPEND_REQUIREMENTS[expense.category];
+
+      // Check if PO is required
+      const poRequired = requirements.requiresPurchaseOrder &&
+        (!requirements.poMandatoryThreshold || expense.amount >= requirements.poMandatoryThreshold);
+
+      if (poRequired && !expense.purchaseOrderId) {
+        errors.push(
+          `Expense "${expense.description}" (${expense.amount.toLocaleString()} UGX) requires purchase order reference`
+        );
+      }
+
+      // Validate against PO if provided
+      if (expense.purchaseOrderId && expense.poItemId) {
+        const poValidation = await this.validateExpenseAgainstPO(
+          expense,
+          expense.purchaseOrderId,
+          expense.poItemId
+        );
+
+        if (!poValidation.valid) {
+          errors.push(...poValidation.errors);
+        }
+        warnings.push(...poValidation.warnings);
+
+        // Mark for investigation if severe variance
+        if (poValidation.requiresInvestigation) {
+          warnings.push(
+            `Expense "${expense.description}" has ${poValidation.variancePercentage.toFixed(2)}% variance from PO - investigation required`
+          );
+        }
+      }
+    }
+
     // 3. Calculate variance
     const totalExpenses = data.expenses.reduce((sum, exp) => sum + exp.amount, 0);
     const variance = calculateAccountabilityVariance(
@@ -210,6 +249,73 @@ export class EnhancedAccountabilityService {
     }
 
     return { valid: true };
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // PO VALIDATION
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Validate expense against purchase order
+   */
+  async validateExpenseAgainstPO(
+    expense: AccountabilityExpense,
+    purchaseOrderId: string,
+    poItemId: string
+  ): Promise<{
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+    requiresInvestigation: boolean;
+    variancePercentage: number;
+  }> {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    // Get PO
+    const po = await procurementService.getPurchaseOrder(purchaseOrderId);
+    if (!po) {
+      return {
+        valid: false,
+        errors: ['Purchase order not found'],
+        warnings: [],
+        requiresInvestigation: false,
+        variancePercentage: 0
+      };
+    }
+
+    // Find PO item
+    const poItem = po.items.find(item => item.materialId === poItemId);
+    if (!poItem) {
+      return {
+        valid: false,
+        errors: ['PO item not found'],
+        warnings: [],
+        requiresInvestigation: false,
+        variancePercentage: 0
+      };
+    }
+
+    // Calculate variance
+    const amountVariance = Math.abs(expense.amount - poItem.amount);
+    const variancePercentage = (amountVariance / poItem.amount) * 100;
+
+    // Check variance thresholds (2% moderate, 5% severe - same as accountability variance)
+    if (variancePercentage >= 2) {
+      warnings.push(
+        `Amount variance of ${variancePercentage.toFixed(2)}% detected between expense and PO`
+      );
+    }
+
+    const requiresInvestigation = variancePercentage >= 5;
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings,
+      requiresInvestigation,
+      variancePercentage
+    };
   }
 
   // ─────────────────────────────────────────────────────────────────
@@ -524,6 +630,84 @@ export class EnhancedAccountabilityService {
       },
       requisition.projectId
     );
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // THREE-WAY MATCHING
+  // ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Create three-way match record (PO → Delivery → Accountability)
+   */
+  async createThreeWayMatch(
+    purchaseOrderId: string,
+    poItemId: string,
+    deliveryEntryId: string,
+    accountabilityExpenseId: string,
+    userId: string
+  ): Promise<string> {
+    // Get all three components
+    const po = await procurementService.getPurchaseOrder(purchaseOrderId);
+    const delivery = await procurementService.getProcurementEntry(deliveryEntryId);
+    const accountability = await this.baseService.getAccountability(accountabilityExpenseId);
+
+    if (!po || !delivery || !accountability) {
+      throw new Error('Missing required records for three-way match');
+    }
+
+    const poItem = po.items.find(i => i.materialId === poItemId);
+    const expense = accountability.expenses.find(e => e.id === accountabilityExpenseId);
+
+    // Calculate variances
+    const quantityVariance = (expense?.quantityExecuted || 0) - (poItem?.quantity || 0);
+    const amountVariance = (expense?.amount || 0) - (poItem?.amount || 0);
+    const variancePercentage = Math.abs(amountVariance / (poItem?.amount || 1)) * 100;
+
+    // Determine match status
+    let matchStatus: 'pending' | 'matched' | 'variance_detected' | 'disputed' = 'matched';
+    if (variancePercentage >= 2) {
+      matchStatus = 'variance_detected';
+    }
+
+    // Create match record
+    const matchId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const match: ThreeWayMatch = {
+      id: matchId,
+      purchaseOrderId,
+      poItemId,
+      deliveryEntryId,
+      accountabilityExpenseId,
+      poQuantity: poItem?.quantity || 0,
+      deliveredQuantity: delivery.quantityAccepted,
+      accountedQuantity: expense?.quantityExecuted,
+      poAmount: poItem?.amount || 0,
+      deliveryAmount: delivery.totalAmount,
+      accountedAmount: expense?.amount || 0,
+      quantityVariance,
+      amountVariance,
+      variancePercentage,
+      matchStatus,
+      requiresInvestigation: variancePercentage >= 5,
+      createdAt: Timestamp.now(),
+      createdBy: userId
+    };
+
+    await setDoc(
+      doc(this.db, 'advisoryPlatform/matflow/threeWayMatches', matchId),
+      match
+    );
+
+    // Trigger investigation if needed
+    if (match.requiresInvestigation) {
+      await this.triggerVarianceInvestigation(
+        accountabilityExpenseId,
+        amountVariance,
+        variancePercentage,
+        userId
+      );
+    }
+
+    return matchId;
   }
 
   // ─────────────────────────────────────────────────────────────────

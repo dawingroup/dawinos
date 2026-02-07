@@ -13,7 +13,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import type { ShopifySyncStatus, InventoryItem } from '../types/inventory';
 
 const API_BASE = 'https://api-okekivpl2a-uc.a.run.app';

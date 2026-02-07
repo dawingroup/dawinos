@@ -8,18 +8,33 @@ import { Timestamp } from 'firebase/firestore';
 import type { BOQMoney as Money, BOQAuditFields as AuditFields } from './boq';
 
 // ============================================================================
+// REQUISITION TYPE
+// ============================================================================
+
+/**
+ * Requisition type distinguishes between:
+ * - 'funds': Cash advance for BOQ activities (parent, no PO)
+ * - 'materials': Procurement of materials/equipment (child, PO generated)
+ * - 'labour': Labour payments against BOQ activities (child, no PO)
+ */
+export type RequisitionType = 'funds' | 'materials' | 'labour';
+
+// ============================================================================
 // REQUISITION
 // ============================================================================
 
 export interface Requisition {
   id: string;
-  
+
+  // Requisition type: funds (cash advance) vs materials/services (procurement)
+  requisitionType: RequisitionType;
+
   // Relationships
   projectId: string;
   projectName: string;
   engagementId: string;
   programId?: string;
-  
+
   // Requisition info
   requisitionNumber: string;
   description: string;
@@ -42,7 +57,11 @@ export interface Requisition {
   
   // Procurement link
   purchaseOrderIds?: string[];
-  
+
+  // Hierarchical requisition linkage
+  parentRequisitionId?: string;
+  childRequisitionIds?: string[];
+
   // Audit
   audit: AuditFields;
 }
@@ -172,6 +191,7 @@ export interface CreateRequisitionInput {
   projectName: string;
   engagementId: string;
   programId?: string;
+  requisitionType?: RequisitionType;
   description: string;
   priority: RequisitionPriority;
   requiredDate: Timestamp;

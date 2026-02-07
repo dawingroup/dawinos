@@ -17,7 +17,7 @@ import {
 import { BOQItemSelector } from '../components/requisitions/BOQItemSelector';
 import { useProjectBOQItems, useBOQItemSelection, useBOQSummary } from '../hooks/boq-hooks';
 import { useCreateRequisition } from '../hooks/payment-hooks';
-import { RequisitionFormData, AdvanceType, ADVANCE_TYPE_LABELS } from '../types/requisition';
+import { RequisitionFormData, AdvanceType, ADVANCE_TYPE_LABELS, inferRequisitionType } from '../types/requisition';
 import { db } from '@/core/services/firebase';
 import { useAuth } from '@/shared/hooks';
 
@@ -80,6 +80,7 @@ export function NewBOQRequisitionPage() {
     const formData: RequisitionFormData = {
       projectId,
       purpose,
+      requisitionType: inferRequisitionType(advanceType),
       advanceType,
       budgetLineId: '',
       accountabilityDueDate: new Date(accountabilityDueDate),

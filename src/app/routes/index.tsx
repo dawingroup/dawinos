@@ -12,6 +12,8 @@ const LaunchPipelineModule = lazy(() => import('@/modules/launch-pipeline/Launch
 const ClipperPage = lazy(() => import('../pages/ClipperPage'));
 const InventoryPage = lazy(() => import('@/modules/inventory/pages/InventoryPage'));
 const CustomerHubModule = lazy(() => import('@/modules/customer-hub/CustomerHubModule'));
+const SettingsPage = lazy(() => import('../pages/SettingsPage'));
+const MarketingModule = lazy(() => import('@/modules/marketing/MarketingModule'));
 
 /**
  * Loading fallback component
@@ -48,6 +50,8 @@ export const ROUTES = {
   FEATURES: '/features',
   INVENTORY: '/inventory',
   LAUNCH_PIPELINE: '/launch-pipeline',
+  MARKETING: '/marketing',
+  SETTINGS: '/settings',
   AI_TOOLS: '/ai-tools',
   PROCUREMENT: '/procurement',
   PRODUCTION: '/production',
@@ -103,6 +107,14 @@ export function AppRouter() {
         <Route
           path="launch-pipeline/*"
           element={withSuspense(LaunchPipelineModule)}
+        />
+        <Route
+          path="marketing/*"
+          element={withSuspense(MarketingModule)}
+        />
+        <Route
+          path="settings"
+          element={withSuspense(SettingsPage)}
         />
 
         {/* Legacy redirects */}

@@ -18,10 +18,14 @@ import {
   AlertCircle,
   Wallet,
   MinusCircle,
+  Package,
+  Hammer,
+  Banknote,
+  GitBranch,
 } from 'lucide-react';
 import { useProjectRequisitions } from '../hooks/payment-hooks';
 import { useProjectManualRequisitions } from '../hooks/manual-requisition-hooks';
-import { Requisition, AccountabilityStatus } from '../types/requisition';
+import { Requisition, AccountabilityStatus, RequisitionType, REQUISITION_TYPE_CONFIG, normalizeRequisitionType } from '../types/requisition';
 import { ManualRequisition } from '../types/manual-requisition';
 import { PaymentStatus } from '../types/payment';
 import { db } from '@/core/services/firebase';
@@ -29,6 +33,19 @@ import { FileText } from 'lucide-react';
 
 type FilterStatus = 'all' | PaymentStatus;
 type AccountabilityFilter = 'all' | AccountabilityStatus;
+type TypeFilter = 'all' | RequisitionType;
+
+const TYPE_ICONS: Record<RequisitionType, React.ElementType> = {
+  funds: Banknote,
+  materials: Package,
+  labour: Hammer,
+};
+
+const TYPE_COLORS: Record<RequisitionType, string> = {
+  funds: 'bg-orange-100 text-orange-700',
+  materials: 'bg-blue-100 text-blue-700',
+  labour: 'bg-green-100 text-green-700',
+};
 
 const STATUS_COLORS: Record<PaymentStatus, string> = {
   draft: 'bg-gray-100 text-gray-700',
@@ -76,6 +93,13 @@ interface RequisitionCardProps {
 function RequisitionCard({ requisition }: RequisitionCardProps) {
   const accountabilityConfig = ACCOUNTABILITY_STATUS_CONFIG[requisition.accountabilityStatus];
   const AccountabilityIcon = accountabilityConfig.icon;
+  const reqType = normalizeRequisitionType(requisition.requisitionType || 'funds');
+  const typeConfig = REQUISITION_TYPE_CONFIG[reqType];
+  const TypeIcon = TYPE_ICONS[reqType];
+  const typeColor = TYPE_COLORS[reqType];
+  const isParent = reqType === 'funds';
+  const isChild = !!requisition.parentRequisitionId;
+  const childCount = requisition.childRequisitionIds?.length || 0;
 
   return (
     <Link
@@ -83,16 +107,30 @@ function RequisitionCard({ requisition }: RequisitionCardProps) {
       className="block bg-white border rounded-lg p-4 hover:shadow-md transition-shadow"
     >
       <div className="flex items-start gap-4">
-        <div className="p-2 bg-purple-50 rounded-lg">
-          <Receipt className="w-5 h-5 text-purple-600" />
+        <div className={`p-2 rounded-lg ${reqType === 'funds' ? 'bg-orange-50' : reqType === 'materials' ? 'bg-blue-50' : 'bg-green-50'}`}>
+          <TypeIcon className={`w-5 h-5 ${reqType === 'funds' ? 'text-orange-600' : reqType === 'materials' ? 'text-blue-600' : 'text-green-600'}`} />
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="font-medium text-gray-900">{requisition.requisitionNumber}</span>
+            <span className={`px-2 py-0.5 text-xs rounded-full ${typeColor}`}>
+              {typeConfig?.label || reqType}
+            </span>
             <span className={`px-2 py-0.5 text-xs rounded-full ${STATUS_COLORS[requisition.status]}`}>
               {requisition.status.replace('_', ' ')}
             </span>
+            {isParent && childCount > 0 && (
+              <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700 flex items-center gap-1">
+                <GitBranch className="w-3 h-3" />
+                {childCount} child{childCount !== 1 ? 'ren' : ''}
+              </span>
+            )}
+            {isChild && requisition.parentRequisitionNumber && (
+              <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">
+                Parent: {requisition.parentRequisitionNumber}
+              </span>
+            )}
           </div>
 
           <p className="text-sm text-gray-600 mb-2 line-clamp-1">{requisition.purpose}</p>
@@ -117,6 +155,15 @@ function RequisitionCard({ requisition }: RequisitionCardProps) {
               </span>
             </div>
           </div>
+
+          {isParent && requisition.childRequisitionsSummary && (
+            <div className="mt-2 flex items-center gap-3 text-sm text-gray-600">
+              <span>Allocated: {formatCurrency(requisition.childRequisitionsSummary.totalChildAmount, requisition.currency)}</span>
+              <span className={requisition.childRequisitionsSummary.budgetExceeded ? 'text-red-600 font-medium' : 'text-green-600'}>
+                Balance: {formatCurrency(requisition.childRequisitionsSummary.remainingFundsBalance, requisition.currency)}
+              </span>
+            </div>
+          )}
 
           {requisition.unaccountedAmount > 0 && (
             <div className="mt-2 flex items-center gap-2 text-sm">
@@ -205,6 +252,7 @@ export function RequisitionsPage() {
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [accountabilityFilter, setAccountabilityFilter] = useState<AccountabilityFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showManualRequisitions, setShowManualRequisitions] = useState(true);
 
@@ -226,6 +274,13 @@ export function RequisitionsPage() {
       result = result.filter(r => r.accountabilityStatus === accountabilityFilter);
     }
 
+    if (typeFilter !== 'all') {
+      result = result.filter(r => {
+        const normalizedType = normalizeRequisitionType(r.requisitionType || 'funds');
+        return normalizedType === typeFilter;
+      });
+    }
+
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       result = result.filter(r =>
@@ -235,7 +290,7 @@ export function RequisitionsPage() {
     }
 
     return result;
-  }, [requisitions, statusFilter, accountabilityFilter, searchQuery]);
+  }, [requisitions, statusFilter, accountabilityFilter, typeFilter, searchQuery]);
 
   const stats = useMemo(() => ({
     total: requisitions.length,
@@ -376,6 +431,16 @@ export function RequisitionsPage() {
 
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-gray-400" />
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+            className="px-3 py-2 border rounded-lg bg-white"
+          >
+            <option value="all">All Types</option>
+            <option value="funds">Funds</option>
+            <option value="materials">Materials</option>
+            <option value="labour">Labour</option>
+          </select>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as FilterStatus)}

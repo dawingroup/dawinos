@@ -13,7 +13,7 @@ import {
   getDocs,
   Timestamp,
 } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import type { LaunchProduct, ProductCategory } from '@/modules/launch-pipeline/types/product.types';
 
 const PRODUCTS_COLLECTION = 'launchProducts';

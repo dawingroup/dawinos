@@ -4,7 +4,7 @@
 
 import { useState, useCallback } from 'react';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import { ConversationList } from '../components/ConversationList';
 import { ConversationPanel } from '../components/ConversationPanel';
 import { NewConversationDialog } from '../components/NewConversationDialog';

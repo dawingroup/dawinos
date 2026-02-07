@@ -13,6 +13,7 @@ export const DAWINOS_MODULES = {
   STAFF_PERFORMANCE: 'staff_performance',
   CAPITAL_HUB: 'capital_hub',
   MARKET_INTELLIGENCE: 'market_intelligence',
+  MARKETING: 'marketing',
   SETTINGS: 'settings',
 } as const;
 
@@ -117,6 +118,18 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     order: 7,
   },
   {
+    id: 'marketing',
+    name: 'Marketing Hub',
+    shortName: 'Marketing',
+    description: 'Campaign management, social media, WhatsApp marketing, and analytics',
+    icon: 'Megaphone',
+    color: '#872E5C',
+    basePath: '/marketing',
+    permissions: ['view:marketing', 'manage:marketing'],
+    features: ['campaigns', 'social_media', 'whatsapp', 'analytics', 'templates'],
+    order: 8,
+  },
+  {
     id: 'settings',
     name: 'Settings',
     shortName: 'Settings',
@@ -126,7 +139,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     basePath: '/settings',
     permissions: ['view:settings', 'manage:settings'],
     features: ['profile', 'organization', 'integrations', 'security'],
-    order: 8,
+    order: 9,
   },
 ];
 

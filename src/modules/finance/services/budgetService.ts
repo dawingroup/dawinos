@@ -18,7 +18,7 @@ import {
   writeBatch,
   Timestamp,
 } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { db } from '@/shared/services/firebase';
 import {
   BUDGETS_COLLECTION,
   BUDGET_LINES_COLLECTION,

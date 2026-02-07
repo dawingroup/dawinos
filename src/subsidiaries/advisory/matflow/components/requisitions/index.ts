@@ -1,5 +1,7 @@
 /**
- * Requisition Components Index
+ * Requisition UI Components
+ *
+ * Export requisition-related components
  */
 
-export { RequisitionForm } from './RequisitionForm';
+export { AutoPOGenerationDialog } from './AutoPOGenerationDialog';

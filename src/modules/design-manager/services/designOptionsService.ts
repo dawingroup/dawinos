@@ -19,7 +19,7 @@ import {
   onSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import { createApprovalItem } from './clientPortalExtendedService';
 import type {
   DesignOption,

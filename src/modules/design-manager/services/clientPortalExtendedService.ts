@@ -18,7 +18,7 @@ import {
   limit,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import { storage } from '@/shared/services/firebase';
 import { nanoid } from 'nanoid';
 import type {

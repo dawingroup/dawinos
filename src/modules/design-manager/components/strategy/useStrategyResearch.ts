@@ -6,7 +6,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { doc, onSnapshot, setDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import {
   getOrCreateChat,
   addMessage as addChatMessage,

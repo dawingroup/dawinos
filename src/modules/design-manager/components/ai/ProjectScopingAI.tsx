@@ -8,7 +8,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import { 
   Sparkles, 
   FileText, 

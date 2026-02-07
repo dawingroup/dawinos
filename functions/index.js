@@ -251,6 +251,16 @@ exports.syncWhatsAppTemplates = syncWhatsAppTemplates;
 exports.scheduledTemplateSync = scheduledTemplateSync;
 exports.setupZokoWebhook = setupZokoWebhook;
 
+// Marketing Hub Functions
+const { executeCampaign } = require('./src/marketing/executeCampaign');
+const { trackCampaignEngagement, trackCampaignReplies } = require('./src/marketing/trackCampaignEngagement');
+const { aggregateCampaignAnalytics, triggerCampaignAnalytics } = require('./src/marketing/aggregateCampaignAnalytics');
+exports.executeCampaign = executeCampaign;
+exports.trackCampaignEngagement = trackCampaignEngagement;
+exports.trackCampaignReplies = trackCampaignReplies;
+exports.aggregateCampaignAnalytics = aggregateCampaignAnalytics;
+exports.triggerCampaignAnalytics = triggerCampaignAnalytics;
+
 // EFRIS Tax Invoice Validation - Disabled until EFRIS API key is configured
 // const {
 //   validateEFRISInvoice,

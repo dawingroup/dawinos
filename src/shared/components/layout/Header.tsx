@@ -6,7 +6,8 @@
 
 import { useAuth } from '@/shared/hooks';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LogOut, User, FolderOpen, Wrench, Layers, Rocket, Image, Package } from 'lucide-react';
+import { LogOut, User, FolderOpen, Wrench, Layers, Rocket, Image, Package, Settings } from 'lucide-react';
+import { DawinGroupLogo } from '@/shared/components/branding/DawinGroupLogo';
 
 export interface HeaderProps {
   title?: string;
@@ -31,11 +32,9 @@ export function Header({ title = 'Dawin Finishes' }: HeaderProps) {
   return (
     <header className="sticky top-0 z-50 h-14 border-b border-gray-200 bg-white/95 backdrop-blur px-4 sm:px-6 lg:px-8 flex items-center justify-between">
       {/* Left: Logo and Brand */}
-      <div className="flex items-center gap-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#872E5C] to-[#E18425]">
-          <FolderOpen className="h-5 w-5 text-white" />
-        </div>
-        <div className="hidden sm:block">
+      <div className="flex items-center gap-3">
+        <DawinGroupLogo size={36} />
+        <div className="hidden sm:block border-l pl-3 border-gray-200">
           <h1 className="text-sm font-semibold text-gray-900">{title}</h1>
           <p className="text-[10px] text-gray-500">Manufacturing Tools</p>
         </div>
@@ -132,6 +131,13 @@ export function Header({ title = 'Dawin Finishes' }: HeaderProps) {
                 {user.displayName || user.email}
               </span>
             </div>
+            <button
+              onClick={() => navigate('/settings')}
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors min-h-[44px] min-w-[44px] sm:min-h-auto sm:min-w-auto flex items-center justify-center"
+              title="Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
             <button
               onClick={() => signOut()}
               className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors min-h-[44px] min-w-[44px] sm:min-h-auto sm:min-w-auto flex items-center justify-center"

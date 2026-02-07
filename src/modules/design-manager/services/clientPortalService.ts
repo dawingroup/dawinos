@@ -16,7 +16,7 @@ import {
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import { nanoid } from 'nanoid';
 import { getOrganizationSettings } from '@/core/settings';
 import type {

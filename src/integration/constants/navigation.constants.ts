@@ -115,6 +115,20 @@ export const MAIN_NAVIGATION: NavItem[] = [
     ],
     permissions: ['view:market'],
   },
+  {
+    id: 'marketing',
+    label: 'Marketing Hub',
+    icon: 'Megaphone',
+    module: 'marketing',
+    children: [
+      { id: 'dashboard', label: 'Dashboard', path: '/marketing' },
+      { id: 'campaigns', label: 'Campaigns', path: '/marketing/campaigns' },
+      { id: 'calendar', label: 'Content Calendar', path: '/marketing/calendar' },
+      { id: 'templates', label: 'Templates', path: '/marketing/templates' },
+      { id: 'analytics', label: 'Analytics', path: '/marketing/analytics' },
+    ],
+    permissions: ['view:marketing'],
+  },
 ];
 
 // ----------------------------------------------------------------------------

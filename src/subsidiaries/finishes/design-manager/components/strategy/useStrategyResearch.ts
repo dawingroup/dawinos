@@ -5,7 +5,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { doc, onSnapshot, setDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 
 const API_BASE = 'https://api-okekivpl2a-uc.a.run.app';
 

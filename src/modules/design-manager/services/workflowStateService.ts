@@ -4,7 +4,7 @@
  */
 
 import { doc, updateDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/firebase/config';
+import { db } from '@/shared/services/firebase';
 import type { DesignItem } from '../types';
 import type { Project } from '@/shared/types';
 import {
