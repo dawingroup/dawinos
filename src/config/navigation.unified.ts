@@ -110,6 +110,8 @@ export const FINISHES_NAVIGATION: NavItem[] = [
       { id: 'marketing-calendar', label: 'Content Calendar', href: '/marketing/calendar', icon: 'Calendar' },
       { id: 'marketing-templates', label: 'Templates', href: '/marketing/templates', icon: 'MessageSquare' },
       { id: 'marketing-analytics', label: 'Analytics', href: '/marketing/analytics', icon: 'BarChart3' },
+      { id: 'marketing-media', label: 'Media Library', href: '/marketing/media', icon: 'Image' },
+      { id: 'marketing-agent', label: 'AI Agent', href: '/marketing/agent', icon: 'Bot' },
     ],
   },
 ];
