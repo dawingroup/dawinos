@@ -54,10 +54,10 @@ function getModel() {
 function getThinkingModel() {
   if (!genAI) throw new Error('Gemini API key not configured');
   return genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash-preview-04-17',
+    model: 'gemini-2.5-pro',
     generationConfig: {
       // @ts-expect-error - thinkingConfig is supported but not yet in all type defs
-      thinkingConfig: { thinkingBudget: 8192 },
+      thinkingConfig: { thinkingBudget: 16384 },
     },
   });
 }
