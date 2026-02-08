@@ -14,6 +14,7 @@ import {
   AnalyticsReportsPage,
   MediaLibraryPage,
   MarketingAgentPage,
+  KeyDateDetailPage,
 } from './pages';
 
 export function MarketingModule() {
@@ -28,6 +29,7 @@ export function MarketingModule() {
       <Route path="analytics" element={<AnalyticsReportsPage />} />
       <Route path="media" element={<MediaLibraryPage />} />
       <Route path="agent" element={<MarketingAgentPage />} />
+      <Route path="key-dates/:dateId" element={<KeyDateDetailPage />} />
       <Route path="*" element={<Navigate to="/marketing" replace />} />
     </Routes>
   );

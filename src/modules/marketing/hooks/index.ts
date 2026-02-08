@@ -11,3 +11,4 @@ export * from './useSocialPosts';
 export * from './useCampaignAnalytics';
 export * from './useMediaLibrary';
 export * from './useMarketingAgent';
+export * from './useMarketingTasks';

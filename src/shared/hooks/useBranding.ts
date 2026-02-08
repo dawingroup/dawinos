@@ -1,13 +1,19 @@
 /**
  * useBranding Hook
- * Manages branding assets state and operations
+ * Manages branding assets state and operations.
+ *
+ * Single source of truth: organizations/{orgId}/settings/general
+ *   → branding.subsidiaries['dawin-group'].logoUrl / faviconUrl
+ *
+ * All upload UIs (BrandingSettings, LogoUpload, SubsidiaryBranding)
+ * write to the same document, so a single onSnapshot is sufficient.
  */
 
 import { useState, useEffect } from 'react';
 import { onSnapshot, doc } from 'firebase/firestore';
-import { db } from '@/shared/services/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { db, auth } from '@/shared/services/firebase';
 import {
-  getBrandingAssets,
   uploadLogo,
   uploadFavicon,
   resetBranding,
@@ -20,38 +26,62 @@ export function useBranding() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Subscribe to branding changes
+  // Subscribe to org settings after auth is ready
   useEffect(() => {
-    const brandingRef = doc(db, 'settings', 'branding');
+    let unsubFirestore: (() => void) | null = null;
 
-    const unsubscribe = onSnapshot(
-      brandingRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data() as BrandingAssets;
-          console.log('[useBranding] Received branding update:', data);
-          setBranding(data);
-        } else {
-          console.log('[useBranding] No branding document exists');
-          setBranding({});
-        }
-        setLoading(false);
-      },
-      (err) => {
-        console.error('Error listening to branding:', err);
-        setError(err.message);
-        setLoading(false);
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      // Tear down previous listener when auth state changes
+      if (unsubFirestore) {
+        unsubFirestore();
+        unsubFirestore = null;
       }
-    );
 
-    return () => unsubscribe();
+      if (!user) {
+        setBranding({});
+        setLoading(false);
+        return;
+      }
+
+      // Listen to the single org-settings document
+      const orgSettingsRef = doc(db, 'organizations', 'default', 'settings', 'general');
+      unsubFirestore = onSnapshot(
+        orgSettingsRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            const sub = data?.branding?.subsidiaries?.['dawin-group'];
+            const assets: BrandingAssets = {
+              logoUrl: sub?.logoUrl || undefined,
+              faviconUrl: sub?.faviconUrl || undefined,
+            };
+            console.log('[useBranding] Branding from org settings:', assets);
+            setBranding(assets);
+          } else {
+            console.log('[useBranding] No org settings document exists');
+            setBranding({});
+          }
+          setLoading(false);
+        },
+        (err) => {
+          console.error('[useBranding] Error listening to org settings:', err);
+          setError(err.message);
+          setLoading(false);
+        }
+      );
+    });
+
+    return () => {
+      unsubAuth();
+      if (unsubFirestore) unsubFirestore();
+    };
   }, []);
 
-  const handleUploadLogo = async (file: File, userId: string) => {
+  const handleUploadLogo = async (file: File) => {
     setUploading(true);
     setError(null);
     try {
-      await uploadLogo(file, userId);
+      await uploadLogo(file);
     } catch (err: any) {
       setError(err.message);
       throw err;
@@ -60,11 +90,11 @@ export function useBranding() {
     }
   };
 
-  const handleUploadFavicon = async (file: File, userId: string) => {
+  const handleUploadFavicon = async (file: File) => {
     setUploading(true);
     setError(null);
     try {
-      await uploadFavicon(file, userId);
+      await uploadFavicon(file);
     } catch (err: any) {
       setError(err.message);
       throw err;

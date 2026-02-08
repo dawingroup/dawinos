@@ -10,3 +10,4 @@ export * from './socialMediaService';
 export * from './analyticsService';
 export * from './mediaLibraryService';
 export * from './marketingAgentService';
+export * from './marketingTaskService';

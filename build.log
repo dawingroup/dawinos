@@ -1,0 +1,11 @@
+
+> dawinos-finishes@2.0.0 build
+> vite build
+
+vite v4.5.14 building for production...
+transforming...
+
+warn - Your `content` configuration includes a pattern which looks like it's accidentally matching all of `node_modules` and can cause serious performance issues.
+warn - Pattern: `./src/**/*.ts`
+warn - See our documentation for recommendations:
+warn - https://tailwindcss.com/docs/content-configuration#pattern-recommendations

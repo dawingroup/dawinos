@@ -141,9 +141,9 @@ export async function uploadSubsidiaryLogo(
     throw new Error('File size exceeds 2MB limit');
   }
   
-  const allowedTypes = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
+  const allowedTypes = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp', 'image/x-icon', 'image/vnd.microsoft.icon'];
   if (!allowedTypes.includes(file.type)) {
-    throw new Error('Invalid file type. Allowed: PNG, JPG, SVG, WebP');
+    throw new Error('Invalid file type. Allowed: PNG, JPG, SVG, WebP, ICO');
   }
   
   // Generate storage path

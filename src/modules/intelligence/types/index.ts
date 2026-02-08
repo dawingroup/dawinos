@@ -9,3 +9,4 @@ export * from './role-profile.types';
 export * from './task-generation.types';
 export * from './grey-area.types';
 export * from './smart-task-core.types';
+export * from './market-intelligence.types';

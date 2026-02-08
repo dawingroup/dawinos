@@ -27,6 +27,7 @@ const { generateProductNames } = require('./src/ai/productNaming');
 const { generateProductContent, generateDiscoverabilityData } = require('./src/ai/productContent');
 const { auditShopifyProduct } = require('./src/ai/catalogAudit');
 const { generateEmbedding, generateEmbeddings, semanticSearch, indexCollection } = require('./src/ai/embeddings');
+const { marketIntelligenceScan, getMarketIntelligenceReports } = require('./src/ai/marketIntelligence');
 
 // Scheduled Audit Functions
 const { dailyCatalogAudit, weeklyCatalogAudit } = require('./src/scheduled/catalogAudit');
@@ -75,6 +76,10 @@ exports.generateProductNames = generateProductNames;
 exports.generateProductContent = generateProductContent;
 exports.generateDiscoverabilityData = generateDiscoverabilityData;
 exports.auditShopifyProduct = auditShopifyProduct;
+
+// Market Intelligence AI Functions
+exports.marketIntelligenceScan = marketIntelligenceScan;
+exports.getMarketIntelligenceReports = getMarketIntelligenceReports;
 
 // RAG / Embedding Functions
 exports.generateEmbedding = generateEmbedding;

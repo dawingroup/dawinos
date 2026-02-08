@@ -49,6 +49,7 @@ import {
 import { AIIntelligenceMenu } from '@/modules/intelligence-layer/components/AIIntelligenceMenu';
 import { cn } from '@/shared/lib/utils';
 import { useFeatureFlag } from '@/shared/hooks/useFeatureFlag';
+import { useBranding } from '@/shared/hooks/useBranding';
 import { subscribeToUnreadCount } from '@/modules/whatsapp/services/whatsappService';
 
 interface AppShellProps {
@@ -72,6 +73,34 @@ export function AppShell({ children }: AppShellProps) {
     toggleSection,
     setExpandedSections,
   } = useNavigationStore();
+
+  // Branding (logo + favicon)
+  const { branding } = useBranding();
+
+  // Update browser favicon whenever branding changes
+  useEffect(() => {
+    const faviconSrc = branding.faviconUrl || branding.logoUrl;
+    if (!faviconSrc) return;
+
+    // Use the id-based link from index.html for maximum reliability
+    const el = document.getElementById('app-favicon') as HTMLLinkElement | null;
+    if (el) {
+      el.removeAttribute('type');
+      el.href = faviconSrc;
+    } else {
+      // Fallback: create a new link if the id-based one isn't found
+      const link = document.createElement('link');
+      link.id = 'app-favicon';
+      link.rel = 'icon';
+      link.href = faviconSrc;
+      document.head.appendChild(link);
+    }
+
+    // Update apple-touch-icon links too
+    document.querySelectorAll<HTMLLinkElement>("link[rel='apple-touch-icon']").forEach((icon) => {
+      icon.href = faviconSrc;
+    });
+  }, [branding.faviconUrl, branding.logoUrl]);
 
   // WhatsApp
   const whatsappEnabled = useFeatureFlag('WHATSAPP_ENABLED');
@@ -329,8 +358,14 @@ export function AppShell({ children }: AppShellProps) {
         isScrolled && "shadow-sm"
       )}>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Building2 className="h-4 w-4" />
-          <span className="font-medium">Dawin Group</span>
+          {branding.logoUrl ? (
+            <img src={branding.logoUrl} alt="Logo" className="h-8 w-auto object-contain" />
+          ) : (
+            <>
+              <Building2 className="h-4 w-4" />
+              <span className="font-medium">Dawin Group</span>
+            </>
+          )}
         </div>
         
         <nav className="flex items-center gap-1 ml-4">
@@ -471,7 +506,11 @@ export function AppShell({ children }: AppShellProps) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon">
-              <Building2 className="h-5 w-5" />
+              {branding.logoUrl ? (
+                <img src={branding.logoUrl} alt="Logo" className="h-8 w-8 object-contain" />
+              ) : (
+                <Building2 className="h-5 w-5" />
+              )}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">

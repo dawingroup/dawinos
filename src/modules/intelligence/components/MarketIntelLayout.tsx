@@ -32,6 +32,12 @@ const MARKET_INTEL_TABS: TabNavItem[] = [
     path: '/market-intel/insights',
     icon: 'Lightbulb',
   },
+  {
+    id: 'ai-scan',
+    label: 'AI Scan',
+    path: '/market-intel/ai-scan',
+    icon: 'Radar',
+  },
 ];
 
 export function MarketIntelLayout() {

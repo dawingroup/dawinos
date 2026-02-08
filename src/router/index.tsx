@@ -144,6 +144,7 @@ const MarketCompetitorComparisonPage = lazy(() => import('@/modules/intelligence
 const MarketNewsFeedPage = lazy(() => import('@/modules/intelligence/pages/NewsFeedPage'));
 const MarketAnalysisPage = lazy(() => import('@/modules/intelligence/pages/MarketAnalysisPage'));
 const MarketInsightsPage = lazy(() => import('@/modules/intelligence/pages/InsightsPage'));
+const MarketIntelligenceScanPage = lazy(() => import('@/modules/intelligence/pages/MarketIntelligenceScanPage'));
 
 // Intelligence Layer Module Pages
 const IntelligenceLayout = lazy(() => import('@/modules/intelligence-layer/components/IntelligenceLayout'));
@@ -477,6 +478,7 @@ export const router = createBrowserRouter([
           { path: 'news', element: <MarketNewsFeedPage /> },
           { path: 'market', element: <MarketAnalysisPage /> },
           { path: 'insights', element: <MarketInsightsPage /> },
+          { path: 'ai-scan', element: <MarketIntelligenceScanPage /> },
         ],
       },
 

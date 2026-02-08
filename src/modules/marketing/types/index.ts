@@ -20,3 +20,6 @@ export * from './media-library.types';
 
 // Marketing AI agent types
 export * from './marketing-agent.types';
+
+// Marketing task types
+export * from './marketing-task.types';

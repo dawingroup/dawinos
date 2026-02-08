@@ -466,6 +466,61 @@ export async function acknowledgeKeyDate(dateId: string): Promise<void> {
 }
 
 /**
+ * Update a key date
+ */
+export async function updateKeyDate(
+  dateId: string,
+  updates: Partial<MarketingKeyDate>
+): Promise<void> {
+  const { id, ...data } = { ...updates, id: undefined };
+  const cleaned = Object.fromEntries(
+    Object.entries(data).filter(([, v]) => v !== undefined)
+  );
+  await updateDoc(doc(db, KEY_DATES_COLLECTION, dateId), {
+    ...cleaned,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Get a single key date by ID
+ */
+export async function getKeyDate(dateId: string): Promise<MarketingKeyDate | null> {
+  const { getDoc: getDocFn } = await import('firebase/firestore');
+  const docSnap = await getDocFn(doc(db, KEY_DATES_COLLECTION, dateId));
+  if (!docSnap.exists()) return null;
+  return { id: docSnap.id, ...docSnap.data() } as MarketingKeyDate;
+}
+
+/**
+ * Link a campaign to a key date
+ */
+export async function linkCampaignToKeyDate(
+  dateId: string,
+  campaignId: string
+): Promise<void> {
+  const keyDate = await getKeyDate(dateId);
+  if (!keyDate) return;
+  const linked = keyDate.linkedCampaignIds || [];
+  if (!linked.includes(campaignId)) {
+    await updateDoc(doc(db, KEY_DATES_COLLECTION, dateId), {
+      linkedCampaignIds: [...linked, campaignId],
+      updatedAt: serverTimestamp(),
+    });
+  }
+}
+
+/**
+ * Mark a key date as content planned
+ */
+export async function markContentPlanned(dateId: string): Promise<void> {
+  await updateDoc(doc(db, KEY_DATES_COLLECTION, dateId), {
+    contentPlanned: true,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/**
  * Delete a key date
  */
 export async function deleteKeyDate(dateId: string): Promise<void> {

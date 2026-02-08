@@ -8,7 +8,6 @@ import { router } from './routes/index';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SubsidiaryProvider } from '@/contexts/SubsidiaryContext';
 import { TooltipProvider } from '@/core/components/ui/tooltip';
-import { DynamicFavicon } from '@/shared/components/branding';
 
 /**
  * Error Boundary fallback
@@ -38,7 +37,6 @@ export default function App() {
     <AuthProvider>
       <SubsidiaryProvider>
         <TooltipProvider delayDuration={300}>
-          <DynamicFavicon />
           <RouterProvider router={router} />
         </TooltipProvider>
       </SubsidiaryProvider>

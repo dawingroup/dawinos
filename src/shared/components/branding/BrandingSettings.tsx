@@ -20,7 +20,7 @@ export function BrandingSettings() {
     if (!file || !user) return;
 
     try {
-      await uploadLogo(file, user.uid);
+      await uploadLogo(file);
       setSuccessMessage('Logo uploaded successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
@@ -38,7 +38,7 @@ export function BrandingSettings() {
     if (!file || !user) return;
 
     try {
-      await uploadFavicon(file, user.uid);
+      await uploadFavicon(file);
       setSuccessMessage('Favicon uploaded successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {

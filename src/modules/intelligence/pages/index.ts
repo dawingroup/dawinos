@@ -10,3 +10,4 @@ export { default as CompetitorComparisonPage } from './CompetitorComparisonPage'
 export { default as NewsFeedPage } from './NewsFeedPage';
 export { default as MarketAnalysisPage } from './MarketAnalysisPage';
 export { default as InsightsPage } from './InsightsPage';
+export { default as MarketIntelligenceScanPage } from './MarketIntelligenceScanPage';

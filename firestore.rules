@@ -2133,6 +2133,14 @@ service cloud.firestore {
       allow delete: if isAuthenticated();
     }
 
+    // Marketing Tasks (campaign-scoped work items)
+    match /marketingTasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+
     // ============================================
     // MARKET INTELLIGENCE MODULE
     // Competitors, Signals, SWOT, Moves, Win/Loss

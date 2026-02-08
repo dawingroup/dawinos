@@ -12,3 +12,4 @@ export * from './useCompetitors';
 export * from './useMarketData';
 export * from './useNewsFeed';
 export * from './useInsights';
+export * from './useMarketIntelligenceScan';

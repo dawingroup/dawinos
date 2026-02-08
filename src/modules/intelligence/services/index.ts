@@ -7,3 +7,4 @@ export * from './role-profile.service';
 export * from './task-generation.service';
 export * from './grey-area-detection.service';
 export * from './smart-task-core.service';
+export * from './marketIntelligenceService';
