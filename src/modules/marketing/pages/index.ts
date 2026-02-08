@@ -10,3 +10,5 @@ export { default as CampaignCreatePage } from './CampaignCreatePage';
 export { default as ContentCalendarPage } from './ContentCalendarPage';
 export { default as TemplateLibraryPage } from './TemplateLibraryPage';
 export { default as AnalyticsReportsPage } from './AnalyticsReportsPage';
+export { default as MediaLibraryPage } from './MediaLibraryPage';
+export { default as MarketingAgentPage } from './MarketingAgentPage';

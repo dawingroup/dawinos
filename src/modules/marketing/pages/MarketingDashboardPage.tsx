@@ -209,7 +209,7 @@ export default function MarketingDashboardPage() {
                       <div className="flex items-center gap-2">
                         <h3 className="font-medium text-gray-900 truncate">{campaign.name}</h3>
                         <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
-                          {CAMPAIGN_STATUS_LABELS[campaign.status]}
+                          {CAMPAIGN_STATUS_LABELS[campaign.status]?.label}
                         </span>
                       </div>
                       <p className="text-xs text-gray-500 mt-1">

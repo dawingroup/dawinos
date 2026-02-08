@@ -46,6 +46,7 @@ export function WhatsAppCampaignConfig({ value, onChange }: WhatsAppCampaignConf
       onChange({
         templateId: '',
         templateName: '',
+        usePersonalization: true,
         sendRate: 'throttled',
         throttleConfig: DEFAULT_THROTTLE_CONFIG,
       });

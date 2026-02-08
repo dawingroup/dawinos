@@ -14,10 +14,8 @@ import {
   orderBy,
   onSnapshot,
   getDoc,
-  getDocs,
   Timestamp,
   serverTimestamp,
-  limit as firestoreLimit,
 } from 'firebase/firestore';
 import { db } from '@/shared/services/firebase';
 import { COLLECTIONS } from '../constants';
@@ -180,7 +178,7 @@ export function subscribeToPostsByDateRange(
 export async function updateSocialPost(
   postId: string,
   data: Partial<SocialPostFormData>,
-  updatedBy: string
+  _updatedBy: string
 ): Promise<void> {
   const updates: Record<string, any> = {
     ...data,

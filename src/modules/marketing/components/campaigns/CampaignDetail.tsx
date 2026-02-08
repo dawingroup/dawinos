@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Calendar, Users, MessageSquare, TrendingUp,
-  Play, Pause, CheckCircle, Clock, AlertCircle, Edit
+  CheckCircle, Clock, AlertCircle, Edit
 } from 'lucide-react';
 import { useCampaign, useCampaignSends } from '../../hooks';
 import { CampaignMetrics } from './CampaignMetrics';
@@ -69,11 +69,11 @@ export function CampaignDetail() {
             <h1 className="text-2xl font-bold text-gray-900">{campaign.name}</h1>
             <div className="flex items-center gap-3 mt-1">
               <span className="text-sm text-gray-500">
-                {CAMPAIGN_TYPE_LABELS[campaign.campaignType]}
+                {CAMPAIGN_TYPE_LABELS[campaign.campaignType]?.label}
               </span>
               <span className="text-sm text-gray-300">•</span>
               <span className="text-sm text-gray-500">
-                {CAMPAIGN_STATUS_LABELS[campaign.status]}
+                {CAMPAIGN_STATUS_LABELS[campaign.status]?.label}
               </span>
             </div>
           </div>
@@ -121,7 +121,7 @@ export function CampaignDetail() {
           <div className="text-sm text-gray-700">
             <div>Estimated: {campaign.estimatedReach.toLocaleString()}</div>
             <div className="text-xs text-gray-500 mt-1">
-              {campaign.targetAudience.segmentName || 'Custom segment'}
+              {campaign.targetAudience.segmentType === 'all' ? 'All customers' : campaign.targetAudience.segmentType === 'filters' ? 'Filtered segment' : 'Custom segment'}
             </div>
           </div>
         </div>
@@ -179,10 +179,10 @@ export function CampaignDetail() {
               <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-gray-600" />
-                  <span className="text-sm text-gray-700">{goal.metric}</span>
+                  <span className="text-sm text-gray-700">{goal.name}</span>
                 </div>
                 <span className="text-sm font-medium text-gray-900">
-                  Target: {goal.target.toLocaleString()}
+                  Target: {goal.targetValue.toLocaleString()}
                 </span>
               </div>
             ))}
@@ -244,7 +244,7 @@ function SendItem({ send }: { send: CampaignSend }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-gray-900">
-            {send.recipientName || send.recipientPhone}
+            {send.customerName || send.phoneNumber}
           </span>
           <span className={`flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${statusConfig.bg} ${statusConfig.text}`}>
             <StatusIcon className="h-3 w-3" />
@@ -257,9 +257,6 @@ function SendItem({ send }: { send: CampaignSend }) {
           </div>
         )}
       </div>
-      {send.channel && (
-        <span className="text-xs text-gray-500">{send.channel}</span>
-      )}
     </div>
   );
 }

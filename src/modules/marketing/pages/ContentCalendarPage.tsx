@@ -13,7 +13,6 @@ import { POST_STATUSES, SOCIAL_PLATFORMS } from '../constants';
 import type { SocialMediaPost, SocialPostFormData, PostStatus, SocialPlatform } from '../types';
 import {
   Search,
-  Filter,
   List,
   Calendar as CalendarIcon,
   MoreHorizontal,
@@ -23,7 +22,6 @@ import {
   CheckCircle,
   FileText,
   AlertCircle,
-  X,
 } from 'lucide-react';
 
 const STATUS_ICONS: Record<PostStatus, typeof Clock> = {

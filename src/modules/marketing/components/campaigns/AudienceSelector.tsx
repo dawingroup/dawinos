@@ -6,7 +6,6 @@
 import { useState, useEffect } from 'react';
 import { Users, Info, RefreshCw } from 'lucide-react';
 import type { AudienceSegment } from '../../types';
-import type { CustomerStatus, CustomerType } from '@/modules/customer-hub/types';
 import { estimateAudienceSize } from '../../services/audienceService';
 
 interface AudienceSelectorProps {
@@ -41,12 +40,12 @@ export function AudienceSelector({ companyId, value, onChange, onEstimateUpdate 
     doEstimate();
   }, [companyId, value, onEstimateUpdate]);
 
-  const handleSegmentTypeChange = (type: 'all' | 'filtered' | 'specific') => {
+  const handleSegmentTypeChange = (segmentType: 'all' | 'filters' | 'customer_ids') => {
     onChange({
       ...value,
-      type,
-      filters: type === 'filtered' ? (value.filters || {}) : undefined,
-      customerIds: type === 'specific' ? (value.customerIds || []) : undefined,
+      segmentType,
+      filters: segmentType === 'filters' ? (value.filters || {}) : undefined,
+      customerIds: segmentType === 'customer_ids' ? (value.customerIds || []) : undefined,
     });
   };
 
@@ -62,20 +61,6 @@ export function AudienceSelector({ companyId, value, onChange, onEstimateUpdate 
 
   return (
     <div className="space-y-4">
-      {/* Segment Name */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Segment Name
-        </label>
-        <input
-          type="text"
-          value={value.segmentName || ''}
-          onChange={(e) => onChange({ ...value, segmentName: e.target.value })}
-          placeholder="e.g., Active Customers"
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-        />
-      </div>
-
       {/* Segment Type */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -87,7 +72,7 @@ export function AudienceSelector({ companyId, value, onChange, onEstimateUpdate 
               type="radio"
               name="segmentType"
               value="all"
-              checked={value.type === 'all'}
+              checked={value.segmentType === 'all'}
               onChange={() => handleSegmentTypeChange('all')}
               className="text-primary focus:ring-primary"
             />
@@ -102,8 +87,8 @@ export function AudienceSelector({ companyId, value, onChange, onEstimateUpdate 
               type="radio"
               name="segmentType"
               value="filtered"
-              checked={value.type === 'filtered'}
-              onChange={() => handleSegmentTypeChange('filtered')}
+              checked={value.segmentType === 'filters'}
+              onChange={() => handleSegmentTypeChange('filters')}
               className="text-primary focus:ring-primary"
             />
             <div>
@@ -117,8 +102,8 @@ export function AudienceSelector({ companyId, value, onChange, onEstimateUpdate 
               type="radio"
               name="segmentType"
               value="specific"
-              checked={value.type === 'specific'}
-              onChange={() => handleSegmentTypeChange('specific')}
+              checked={value.segmentType === 'customer_ids'}
+              onChange={() => handleSegmentTypeChange('customer_ids')}
               className="text-primary focus:ring-primary"
             />
             <div>
@@ -130,7 +115,7 @@ export function AudienceSelector({ companyId, value, onChange, onEstimateUpdate 
       </div>
 
       {/* Filters (when filtered type is selected) */}
-      {value.type === 'filtered' && (
+      {value.segmentType === 'filters' && (
         <div className="bg-gray-50 rounded-lg p-4 space-y-4">
           <h4 className="text-sm font-medium text-gray-900">Audience Filters</h4>
 
@@ -140,8 +125,8 @@ export function AudienceSelector({ companyId, value, onChange, onEstimateUpdate 
               Customer Status
             </label>
             <select
-              value={value.filters?.status || ''}
-              onChange={(e) => handleFilterChange('status', e.target.value || undefined)}
+              value={value.filters?.customerStatus?.[0] || ''}
+              onChange={(e) => handleFilterChange('customerStatus', e.target.value ? [e.target.value] : undefined)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             >
               <option value="">All Statuses</option>
@@ -157,8 +142,8 @@ export function AudienceSelector({ companyId, value, onChange, onEstimateUpdate 
               Customer Type
             </label>
             <select
-              value={value.filters?.type || ''}
-              onChange={(e) => handleFilterChange('type', e.target.value || undefined)}
+              value={value.filters?.customerType?.[0] || ''}
+              onChange={(e) => handleFilterChange('customerType', e.target.value ? [e.target.value] : undefined)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             >
               <option value="">All Types</option>
@@ -200,7 +185,7 @@ export function AudienceSelector({ companyId, value, onChange, onEstimateUpdate 
       )}
 
       {/* Specific Customers (when specific type is selected) */}
-      {value.type === 'specific' && (
+      {value.segmentType === 'customer_ids' && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-start gap-2">
             <Info className="h-4 w-4 text-blue-600 mt-0.5" />

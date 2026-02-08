@@ -12,6 +12,8 @@ import {
   ContentCalendarPage,
   TemplateLibraryPage,
   AnalyticsReportsPage,
+  MediaLibraryPage,
+  MarketingAgentPage,
 } from './pages';
 
 export function MarketingModule() {
@@ -24,6 +26,8 @@ export function MarketingModule() {
       <Route path="calendar" element={<ContentCalendarPage />} />
       <Route path="templates" element={<TemplateLibraryPage />} />
       <Route path="analytics" element={<AnalyticsReportsPage />} />
+      <Route path="media" element={<MediaLibraryPage />} />
+      <Route path="agent" element={<MarketingAgentPage />} />
       <Route path="*" element={<Navigate to="/marketing" replace />} />
     </Routes>
   );

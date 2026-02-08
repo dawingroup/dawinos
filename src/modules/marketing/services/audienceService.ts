@@ -43,8 +43,6 @@ export async function resolveAudienceToCustomers(
   companyId: string,
   segment: AudienceSegment
 ): Promise<Customer[]> {
-  const customersRef = collection(db, CUSTOMERS_COLLECTION);
-
   switch (segment.segmentType) {
     case 'all':
       return await getAllCustomers(companyId);

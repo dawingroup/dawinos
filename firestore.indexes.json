@@ -2638,6 +2638,250 @@
         { "fieldPath": "templateType", "order": "ASCENDING" },
         { "fieldPath": "usageCount", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "marketingKeyDates",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "competitors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "competitors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "competitors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "threatLevel", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "competitors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "threatLevel", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "competitors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "competitors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "competitors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "competitors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "threatLevel", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "competitor_swot",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "competitorId", "order": "ASCENDING" },
+        { "fieldPath": "analysisDate", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "competitive_moves",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "competitorId", "order": "ASCENDING" },
+        { "fieldPath": "dateObserved", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "competitive_moves",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "dateObserved", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "win_loss_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "outcome", "order": "ASCENDING" },
+        { "fieldPath": "decisionDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "win_loss_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "competitorId", "order": "ASCENDING" },
+        { "fieldPath": "decisionDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "win_loss_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dawinSubsidiary", "order": "ASCENDING" },
+        { "fieldPath": "decisionDate", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "market_signals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "signalDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "market_signals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "competitorId", "order": "ASCENDING" },
+        { "fieldPath": "signalDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "market_signals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "impactLevel", "order": "ASCENDING" },
+        { "fieldPath": "signalDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "market_signals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "requiresAction", "order": "ASCENDING" },
+        { "fieldPath": "signalDate", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "intelligence_items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "intelligence_items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "intelligence_items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "intelligence_items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "relevance", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "swot_analyses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "analysisDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "swot_analyses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyId", "order": "ASCENDING" },
+        { "fieldPath": "targetId", "order": "ASCENDING" },
+        { "fieldPath": "analysisDate", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "market_intelligence_reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subsidiaryId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "market_share_data",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "competitorId", "order": "ASCENDING" },
+        { "fieldPath": "period", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "pricing_intelligence",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "competitorId", "order": "ASCENDING" },
+        { "fieldPath": "collectedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

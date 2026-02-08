@@ -4,7 +4,7 @@
  */
 
 import { Timestamp } from 'firebase/firestore';
-import { SocialPlatform, PostType } from './campaign.types';
+import { SocialPlatform } from './campaign.types';
 
 // ============================================
 // Social Media Post Types

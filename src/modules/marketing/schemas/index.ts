@@ -45,7 +45,7 @@ export const throttleConfigSchema = z.object({
 export const whatsappCampaignConfigSchema = z.object({
   templateId: z.string().min(1, 'Template is required'),
   templateName: z.string().min(1),
-  templateParams: z.record(z.string()).optional(),
+  templateParams: z.record(z.string(), z.string()).optional(),
   usePersonalization: z.boolean(),
   sendRate: z.enum(['immediate', 'scheduled', 'throttled']),
   throttleConfig: throttleConfigSchema.optional(),

@@ -12,8 +12,6 @@ import {
   CheckCircle,
   AlertCircle,
   FileText,
-  MoreHorizontal,
-  Calendar as CalendarIcon,
 } from 'lucide-react';
 import type { SocialMediaPost, CalendarView, PostStatus, SocialPlatform } from '../../types';
 import { SOCIAL_PLATFORMS, POST_STATUSES } from '../../constants';
@@ -426,7 +424,7 @@ function WeekView({
   weekDays,
   isToday,
   getPostsForDate,
-  onDateSelect,
+  onDateSelect: _onDateSelect,
   onPostClick,
   onCreatePost,
 }: WeekViewProps) {

@@ -129,8 +129,8 @@ export async function getCampaigns(
   const snapshot = await getDocs(q);
 
   let campaigns = snapshot.docs.map((doc) => ({
-    id: doc.id,
     ...doc.data(),
+    id: doc.id,
   })) as MarketingCampaign[];
 
   // Client-side filters
@@ -266,8 +266,8 @@ export function subscribeToCampaigns(
     q,
     (snapshot) => {
       let campaigns = snapshot.docs.map((doc) => ({
-        id: doc.id,
         ...doc.data(),
+        id: doc.id,
       })) as MarketingCampaign[];
 
       // Client-side filters
@@ -446,8 +446,8 @@ export async function getRecentCampaigns(
   const snapshot = await getDocs(q);
 
   return snapshot.docs.map((doc) => ({
-    id: doc.id,
     ...doc.data(),
+    id: doc.id,
   })) as MarketingCampaign[];
 }
 
@@ -464,7 +464,7 @@ export async function getActiveCampaigns(companyId: string): Promise<MarketingCa
   const snapshot = await getDocs(q);
 
   return snapshot.docs.map((doc) => ({
-    id: doc.id,
     ...doc.data(),
+    id: doc.id,
   })) as MarketingCampaign[];
 }

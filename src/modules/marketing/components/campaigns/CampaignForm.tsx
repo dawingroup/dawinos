@@ -29,7 +29,7 @@ interface FormData {
   estimatedReach: number;
   whatsappConfig?: WhatsAppConfigType;
   budget?: number;
-  goals: Array<{ metric: string; target: number }>;
+  goals: Array<{ type: string; name: string; targetValue: number; unit: string }>;
 }
 
 const INITIAL_FORM_DATA: FormData = {
@@ -40,7 +40,8 @@ const INITIAL_FORM_DATA: FormData = {
   scheduledStartDate: '',
   scheduledEndDate: '',
   targetAudience: {
-    type: 'all',
+    segmentType: 'all',
+    estimatedSize: 0,
   },
   estimatedReach: 0,
   goals: [],
@@ -134,8 +135,8 @@ export function CampaignForm({ campaign, onClose, onSuccess }: CampaignFormProps
 
     if (!result.success) {
       const zodErrors: Record<string, string> = {};
-      result.error.errors.forEach(err => {
-        zodErrors[err.path[0]] = err.message;
+      result.error.issues.forEach((err) => {
+        zodErrors[String(err.path[0])] = err.message;
       });
       setErrors(zodErrors);
       return;
@@ -153,10 +154,15 @@ export function CampaignForm({ campaign, onClose, onSuccess }: CampaignFormProps
 
       let campaignId: string;
       if (isEditing && campaign) {
-        await updateCampaign(campaign.id, campaignData, user.email);
+        await updateCampaign(campaign.id, campaignData as any);
         campaignId = campaign.id;
       } else {
-        campaignId = await createCampaign(campaignData as any, user.email);
+        campaignId = await createCampaign(
+          user.companyId,
+          campaignData as any,
+          user.email,
+          user.displayName || 'Unknown'
+        );
       }
 
       onSuccess?.(campaignId);

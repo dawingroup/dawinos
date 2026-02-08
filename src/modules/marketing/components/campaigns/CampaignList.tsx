@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, Megaphone, Calendar, TrendingUp, Pause, Play, Check, X } from 'lucide-react';
+import { Search, Plus, Megaphone, Calendar, Pause, Play, Check, X } from 'lucide-react';
 import { useCampaigns } from '../../hooks';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CampaignStatus, CampaignType } from '../../types';
@@ -103,9 +103,9 @@ export function CampaignList({ onNewCampaign }: CampaignListProps) {
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
           >
             <option value="">All Statuses</option>
-            {Object.entries(CAMPAIGN_STATUS_LABELS).map(([value, label]) => (
+            {Object.entries(CAMPAIGN_STATUS_LABELS).map(([value, config]) => (
               <option key={value} value={value}>
-                {label}
+                {config.label}
               </option>
             ))}
           </select>
@@ -117,9 +117,9 @@ export function CampaignList({ onNewCampaign }: CampaignListProps) {
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
           >
             <option value="">All Types</option>
-            {Object.entries(CAMPAIGN_TYPE_LABELS).map(([value, label]) => (
+            {Object.entries(CAMPAIGN_TYPE_LABELS).map(([value, config]) => (
               <option key={value} value={value}>
-                {label}
+                {config.label}
               </option>
             ))}
           </select>
@@ -168,13 +168,13 @@ export function CampaignList({ onNewCampaign }: CampaignListProps) {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-900 truncate">{campaign.name}</h3>
-                    <p className="text-sm text-gray-500">{CAMPAIGN_TYPE_LABELS[campaign.campaignType]}</p>
+                    <p className="text-sm text-gray-500">{CAMPAIGN_TYPE_LABELS[campaign.campaignType]?.label}</p>
                   </div>
                   <span
                     className={`flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap ${statusConfig.bg} ${statusConfig.text}`}
                   >
                     {StatusIcon && <StatusIcon className="h-3 w-3" />}
-                    {CAMPAIGN_STATUS_LABELS[campaign.status]}
+                    {CAMPAIGN_STATUS_LABELS[campaign.status]?.label}
                   </span>
                 </div>
 

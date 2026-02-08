@@ -9,3 +9,5 @@ export * from './useCampaignSends';
 export * from './useTemplates';
 export * from './useSocialPosts';
 export * from './useCampaignAnalytics';
+export * from './useMediaLibrary';
+export * from './useMarketingAgent';
