@@ -48,7 +48,7 @@ const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 function getModel() {
   if (!genAI) throw new Error('Gemini API key not configured');
-  return genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  return genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 }
 
 function getThinkingModel() {
@@ -424,7 +424,7 @@ export async function discoverKeyDates(
 
     // Use a model instance with Google Search grounding enabled
     const searchModel = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       tools: [{ googleSearchRetrieval: {} }],
     });
 

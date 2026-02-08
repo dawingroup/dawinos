@@ -160,8 +160,8 @@ export class GeminiAgent {
     // Use Pro for complex domains, Flash for simple queries
     const modelName: GeminiModel = 
       domain === 'analytics' || domain === 'advisory' || domain === 'investment'
-        ? 'gemini-1.5-pro'
-        : 'gemini-1.5-flash';
+        ? 'gemini-2.5-pro'
+        : 'gemini-2.5-flash';
 
     return this.genAI.getGenerativeModel({
       model: modelName,

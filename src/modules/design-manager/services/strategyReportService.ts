@@ -55,7 +55,7 @@ export async function createStrategyReportFromGeneration(
     inputParameters: inputParams,
     generatedAt: now,
     generatedBy: userId,
-    aiModel: 'gemini-2.0-flash',
+    aiModel: 'gemini-2.5-pro',
   };
 
   const versionEntry: VersionEntry = {
@@ -380,7 +380,7 @@ export async function refreshReportFromStrategy(
       inputParameters: inputParams,
       generatedAt: now,
       generatedBy: userId,
-      aiModel: 'gemini-2.0-flash',
+      aiModel: 'gemini-2.5-pro',
     };
 
     await updateStrategyReport(

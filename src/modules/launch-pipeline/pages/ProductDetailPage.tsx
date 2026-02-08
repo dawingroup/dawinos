@@ -521,7 +521,7 @@ export default function ProductDetailPage() {
                     faqs: product.aiContent?.faqs ?? [],
                     altTexts: product.aiContent?.altTexts ?? [],
                     generatedAt: Timestamp.now(),
-                    modelVersion: product.aiContent?.modelVersion ?? 'gemini-2.0-flash',
+                    modelVersion: product.aiContent?.modelVersion ?? 'gemini-2.5-flash',
                     editedByUser: true,
                     ...sanitized,
                   },
