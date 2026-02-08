@@ -22,7 +22,15 @@ import {
   MessageSquare,
   Settings2,
   X,
+  Megaphone,
+  ArrowRight,
+  CalendarDays,
+  Users,
+  Lightbulb,
+  Hash,
+  ChevronRight,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useMarketingAgent } from '../hooks';
 import type {
   AgentMessage,
@@ -31,6 +39,7 @@ import type {
   GeneratedContent,
   MarketingKeyDate,
   MarketingDateCategory,
+  CampaignProposal,
 } from '../types';
 import { CONTENT_TONES } from '../types/marketing-agent.types';
 import type { SocialPlatform } from '../types/campaign.types';
@@ -602,10 +611,297 @@ function KeyDateCard({
 }
 
 // ============================================
+// Campaign Proposals Panel
+// ============================================
+
+const PRIORITY_COLORS: Record<string, string> = {
+  high: 'bg-red-100 text-red-700',
+  medium: 'bg-amber-100 text-amber-700',
+  low: 'bg-green-100 text-green-700',
+};
+
+const CAMPAIGN_TYPE_LABELS: Record<string, string> = {
+  whatsapp: 'WhatsApp',
+  social_media: 'Social Media',
+  product_promotion: 'Product Promotion',
+  hybrid: 'Hybrid',
+};
+
+function CampaignProposalsPanel({
+  proposals,
+  loading,
+  onPropose,
+  keyDatesCount,
+  hasStrategy,
+}: {
+  proposals: CampaignProposal[];
+  loading: boolean;
+  onPropose: () => void;
+  keyDatesCount: number;
+  hasStrategy: boolean;
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+              <Megaphone className="h-4 w-4 text-orange-500" />
+              AI Campaign Proposals
+            </h3>
+            <p className="text-xs text-gray-500 mt-1">
+              Generate draft campaign ideas based on your strategy and upcoming key dates.
+            </p>
+          </div>
+          <button
+            onClick={onPropose}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 transition-colors"
+          >
+            {loading ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Propose Campaigns
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Context indicators */}
+        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100">
+          <span className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
+            hasStrategy ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
+          }`}>
+            <Target className="h-3 w-3" />
+            {hasStrategy ? 'Strategy set' : 'No strategy'}
+          </span>
+          <span className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
+            keyDatesCount > 0 ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500'
+          }`}>
+            <Calendar className="h-3 w-3" />
+            {keyDatesCount} key date{keyDatesCount !== 1 ? 's' : ''}
+          </span>
+          {!hasStrategy && (
+            <span className="text-xs text-gray-400">
+              Set up your strategy for better proposals
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Proposals */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-16">
+          <RefreshCw className="h-8 w-8 text-orange-400 animate-spin mb-3" />
+          <p className="text-sm text-gray-600">Analyzing strategy & key dates...</p>
+          <p className="text-xs text-gray-400 mt-1">Generating campaign proposals with AI</p>
+        </div>
+      ) : proposals.length === 0 ? (
+        <div className="text-center py-16">
+          <Megaphone className="h-12 w-12 text-gray-200 mx-auto mb-3" />
+          <p className="text-sm text-gray-500">No campaign proposals yet</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Click "Propose Campaigns" to get AI-generated campaign ideas
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {proposals.map((proposal) => {
+            const isExpanded = expandedId === proposal.id;
+            return (
+              <div
+                key={proposal.id}
+                className="bg-white rounded-xl border border-gray-200 overflow-hidden transition-shadow hover:shadow-sm"
+              >
+                {/* Proposal header */}
+                <div
+                  className="p-4 cursor-pointer"
+                  onClick={() => setExpandedId(isExpanded ? null : proposal.id)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-semibold text-gray-900">{proposal.name}</h4>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${PRIORITY_COLORS[proposal.priority]}`}>
+                          {proposal.priority}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                          {CAMPAIGN_TYPE_LABELS[proposal.campaignType] || proposal.campaignType}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1 line-clamp-2">{proposal.description}</p>
+                      <div className="flex items-center gap-3 mt-2 text-[11px] text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <CalendarDays className="h-3 w-3" />
+                          {proposal.suggestedStartDate} → {proposal.suggestedEndDate}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {proposal.durationDays}d
+                        </span>
+                        {proposal.linkedKeyDateName && (
+                          <span className="flex items-center gap-1 text-blue-600">
+                            <Calendar className="h-3 w-3" />
+                            {proposal.linkedKeyDateName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 ml-3">
+                      {/* Strategy alignment */}
+                      <div className="text-center">
+                        <div className={`text-lg font-bold ${
+                          proposal.strategyAlignmentScore >= 80 ? 'text-green-600' :
+                          proposal.strategyAlignmentScore >= 60 ? 'text-amber-600' : 'text-red-600'
+                        }`}>
+                          {proposal.strategyAlignmentScore}
+                        </div>
+                        <div className="text-[9px] text-gray-400 uppercase tracking-wide">Alignment</div>
+                      </div>
+                      <ChevronRight className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Expanded details */}
+                {isExpanded && (
+                  <div className="border-t border-gray-100 p-4 space-y-4 bg-gray-50/50">
+                    {/* Objective & Audience */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700 mb-1">
+                          <Target className="h-3 w-3" /> Objective
+                        </div>
+                        <p className="text-xs text-gray-600">{proposal.objective}</p>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700 mb-1">
+                          <Users className="h-3 w-3" /> Target Audience
+                        </div>
+                        <p className="text-xs text-gray-600">{proposal.targetAudience}</p>
+                      </div>
+                    </div>
+
+                    {/* Channels */}
+                    <div>
+                      <div className="text-xs font-medium text-gray-700 mb-1.5">Channels</div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {proposal.channels.map((ch) => (
+                          <span key={ch} className="px-2 py-0.5 text-[10px] rounded-full bg-blue-50 text-blue-700 capitalize">
+                            {ch}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Content Ideas */}
+                    <div>
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700 mb-1.5">
+                        <Lightbulb className="h-3 w-3" /> Content Ideas ({proposal.suggestedPosts} posts)
+                      </div>
+                      <ul className="space-y-1">
+                        {proposal.contentIdeas.map((idea, i) => (
+                          <li key={i} className="text-xs text-gray-600 flex items-start gap-1.5">
+                            <span className="text-gray-400 mt-0.5">•</span>
+                            {idea}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Key Messages */}
+                    <div>
+                      <div className="text-xs font-medium text-gray-700 mb-1.5">Key Messages</div>
+                      <div className="space-y-1">
+                        {proposal.keyMessages.map((msg, i) => (
+                          <div key={i} className="text-xs text-gray-600 bg-white rounded px-2.5 py-1.5 border border-gray-100">
+                            "{msg}"
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* CTA & Hashtags */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-xs font-medium text-gray-700 mb-1">Call to Action</div>
+                        <p className="text-xs text-gray-600 italic">"{proposal.callToAction}"</p>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1 text-xs font-medium text-gray-700 mb-1">
+                          <Hash className="h-3 w-3" /> Hashtags
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {proposal.hashtags.map((tag) => (
+                            <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Goals */}
+                    <div>
+                      <div className="text-xs font-medium text-gray-700 mb-1.5">Goals</div>
+                      <ul className="space-y-1">
+                        {proposal.goals.map((goal, i) => (
+                          <li key={i} className="text-xs text-gray-600 flex items-start gap-1.5">
+                            <Check className="h-3 w-3 text-green-500 mt-0.5 flex-shrink-0" />
+                            {goal}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* AI Reasoning */}
+                    <div className="bg-purple-50 rounded-lg p-3">
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-purple-800 mb-1">
+                        <Bot className="h-3 w-3" /> AI Reasoning
+                      </div>
+                      <p className="text-xs text-purple-700">{proposal.reasoning}</p>
+                    </div>
+
+                    {/* Action: Create Campaign */}
+                    <div className="pt-2 border-t border-gray-200 flex items-center justify-between">
+                      {proposal.estimatedBudget && (
+                        <span className="text-xs text-gray-500">
+                          Est. budget: {proposal.estimatedBudget}
+                        </span>
+                      )}
+                      <Link
+                        to={`/marketing/campaigns/new?name=${encodeURIComponent(proposal.name)}&type=${proposal.campaignType}&description=${encodeURIComponent(proposal.description)}${proposal.linkedKeyDateId ? `&keyDateId=${proposal.linkedKeyDateId}` : ''}`}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity ml-auto"
+                      >
+                        <Megaphone className="h-4 w-4" />
+                        Create Campaign
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================
 // Main Page
 // ============================================
 
-type ActiveTab = 'chat' | 'generate' | 'dates' | 'strategy';
+type ActiveTab = 'chat' | 'generate' | 'dates' | 'campaigns' | 'strategy';
 
 // ============================================
 // Strategy Setup Panel
@@ -747,6 +1043,9 @@ export default function MarketingAgentPage() {
     acknowledgeDt,
     removeDt,
     datesLoading,
+    campaignProposals,
+    proposeDraftCampaigns,
+    proposingCampaigns,
     strategyContext,
     setStrategyContext,
     error,
@@ -803,10 +1102,16 @@ export default function MarketingAgentPage() {
     }
   }, [discoverDates, saveDates]);
 
+  // Handle propose campaigns
+  const handleProposeCampaigns = useCallback(async () => {
+    await proposeDraftCampaigns();
+  }, [proposeDraftCampaigns]);
+
   const tabs: { id: ActiveTab; label: string; icon: React.ElementType }[] = [
     { id: 'chat', label: 'Chat', icon: MessageSquare },
     { id: 'generate', label: 'Generate', icon: Sparkles },
     { id: 'dates', label: 'Key Dates', icon: Calendar },
+    { id: 'campaigns', label: 'Campaigns', icon: Megaphone },
     { id: 'strategy', label: 'Strategy', icon: Settings2 },
   ];
 
@@ -848,6 +1153,11 @@ export default function MarketingAgentPage() {
                   {tab.id === 'dates' && keyDates.length > 0 && (
                     <span className="ml-1 px-1.5 py-0.5 text-[10px] bg-blue-100 text-blue-700 rounded-full font-semibold">
                       {keyDates.length}
+                    </span>
+                  )}
+                  {tab.id === 'campaigns' && campaignProposals.length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 text-[10px] bg-orange-100 text-orange-700 rounded-full font-semibold">
+                      {campaignProposals.length}
                     </span>
                   )}
                 </button>
@@ -939,6 +1249,19 @@ export default function MarketingAgentPage() {
                 onDiscover={handleDiscoverDates}
                 onAcknowledge={acknowledgeDt}
                 onDelete={removeDt}
+              />
+            </div>
+          )}
+
+          {/* Campaigns Tab */}
+          {activeTab === 'campaigns' && (
+            <div className="h-full overflow-y-auto p-6">
+              <CampaignProposalsPanel
+                proposals={campaignProposals}
+                loading={proposingCampaigns}
+                onPropose={handleProposeCampaigns}
+                keyDatesCount={keyDates.length}
+                hasStrategy={!!(strategyContext.brandVoice || strategyContext.businessGoals?.length)}
               />
             </div>
           )}

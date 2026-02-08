@@ -12,6 +12,7 @@ import type {
   GeneratedContent,
   StrategyContext,
   MarketingAgentConfig,
+  CampaignProposal,
 } from '../types';
 import {
   chatWithAgent,
@@ -23,6 +24,7 @@ import {
   deleteKeyDate,
   getAgentConfig,
   saveAgentConfig,
+  proposeCampaigns,
 } from '../services/marketingAgentService';
 
 interface UseMarketingAgentReturn {
@@ -54,6 +56,11 @@ interface UseMarketingAgentReturn {
   config: MarketingAgentConfig | null;
   loadConfig: () => Promise<void>;
   updateConfig: (config: MarketingAgentConfig) => Promise<void>;
+
+  // Campaign Proposals
+  campaignProposals: CampaignProposal[];
+  proposeDraftCampaigns: () => Promise<CampaignProposal[]>;
+  proposingCampaigns: boolean;
 
   // Strategy
   strategyContext: Partial<StrategyContext>;
@@ -95,6 +102,10 @@ export function useMarketingAgent(companyId?: string): UseMarketingAgentReturn {
   // Config state
   const [config, setConfig] = useState<MarketingAgentConfig | null>(null);
   const [strategyContext, setStrategyContext] = useState<Partial<StrategyContext>>({});
+
+  // Campaign proposals state
+  const [campaignProposals, setCampaignProposals] = useState<CampaignProposal[]>([]);
+  const [proposingCampaigns, setProposingCampaigns] = useState(false);
 
   // Error
   const [error, setError] = useState<Error | null>(null);
@@ -242,6 +253,29 @@ export function useMarketingAgent(companyId?: string): UseMarketingAgentReturn {
     }
   }, []);
 
+  // Propose draft campaigns
+  const proposeDraftCampaigns = useCallback(async (): Promise<CampaignProposal[]> => {
+    if (!effectiveCompanyId) return [];
+
+    setProposingCampaigns(true);
+    setError(null);
+
+    try {
+      const proposals = await proposeCampaigns(
+        effectiveCompanyId,
+        strategyContext,
+        keyDates
+      );
+      setCampaignProposals(proposals);
+      return proposals;
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to propose campaigns'));
+      return [];
+    } finally {
+      setProposingCampaigns(false);
+    }
+  }, [effectiveCompanyId, strategyContext, keyDates]);
+
   // Load config
   const loadConfigFn = useCallback(async () => {
     if (!effectiveCompanyId) return;
@@ -285,6 +319,9 @@ export function useMarketingAgent(companyId?: string): UseMarketingAgentReturn {
     config,
     loadConfig: loadConfigFn,
     updateConfig: updateConfigFn,
+    campaignProposals,
+    proposeDraftCampaigns,
+    proposingCampaigns,
     strategyContext,
     setStrategyContext,
     error,

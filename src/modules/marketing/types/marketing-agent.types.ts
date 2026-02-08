@@ -218,6 +218,46 @@ export interface MarketingAgentConfig {
 }
 
 // ============================================
+// AI Campaign Proposals
+// ============================================
+
+export interface CampaignProposal {
+  id: string;
+  name: string;
+  description: string;
+  campaignType: 'whatsapp' | 'social_media' | 'product_promotion' | 'hybrid';
+  objective: string;
+  targetAudience: string;
+  channels: SocialPlatform[];
+  tone: ContentTone;
+
+  // Timeline
+  suggestedStartDate: string; // ISO date string
+  suggestedEndDate: string;
+  durationDays: number;
+
+  // Key date linkage
+  linkedKeyDateId?: string;
+  linkedKeyDateName?: string;
+
+  // Content plan
+  contentIdeas: string[];
+  suggestedPosts: number;
+  keyMessages: string[];
+  callToAction: string;
+  hashtags: string[];
+
+  // Budget & goals
+  estimatedBudget?: string;
+  goals: string[];
+
+  // AI metadata
+  strategyAlignmentScore: number; // 0-100
+  reasoning: string;
+  priority: 'high' | 'medium' | 'low';
+}
+
+// ============================================
 // Constants
 // ============================================
 

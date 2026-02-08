@@ -72,7 +72,7 @@ const mockArticles: NewsArticle[] = [
     sentiment: 'positive' as SentimentLevel,
     sentimentScore: 0.72,
     relevanceScore: 88,
-    imageUrl: 'https://via.placeholder.com/400x200',
+    imageUrl: undefined,
     publishedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
     fetchedAt: new Date().toISOString(),
     isRead: false,

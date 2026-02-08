@@ -31,6 +31,7 @@ import type {
   ContentTone,
   PlatformContentVariant,
   StrategyAlignmentScore,
+  CampaignProposal,
 } from '../types';
 import {
   KEY_DATES_COLLECTION,
@@ -525,6 +526,175 @@ export async function markContentPlanned(dateId: string): Promise<void> {
  */
 export async function deleteKeyDate(dateId: string): Promise<void> {
   await deleteDoc(doc(db, KEY_DATES_COLLECTION, dateId));
+}
+
+// ============================================
+// AI Campaign Proposals
+// ============================================
+
+/**
+ * Propose draft campaigns based on strategy context and key dates
+ */
+export async function proposeCampaigns(
+  _companyId: string,
+  strategyContext: Partial<StrategyContext>,
+  keyDates: MarketingKeyDate[]
+): Promise<CampaignProposal[]> {
+  try {
+    const model = getModel();
+
+    const upcomingDates = keyDates
+      .filter((d) => d.date.toMillis() >= Date.now())
+      .sort((a, b) => a.date.toMillis() - b.date.toMillis())
+      .slice(0, 10);
+
+    const keyDatesContext = upcomingDates.length > 0
+      ? `\n\nUpcoming Key Dates:\n${upcomingDates.map((d) =>
+          `- "${d.name}" on ${d.date.toDate().toISOString().slice(0, 10)} (category: ${d.category}, region: ${d.region || 'global'}, relevance: ${d.relevanceScore}/100, lead time: ${d.leadTimeDays} days)\n  Content themes: ${d.suggestedContentThemes.join(', ')}\n  Suggested actions: ${d.suggestedActions.join('; ')}`
+        ).join('\n')}`
+      : '';
+
+    const strategyStr = strategyContext
+      ? `\nStrategy Context:
+- Brand Voice: ${strategyContext.brandVoice || 'not set'}
+- Target Market: ${strategyContext.targetMarket || 'not set'}
+- Business Goals: ${(strategyContext.businessGoals || []).join(', ') || 'not set'}
+- Content Pillars: ${(strategyContext.contentPillars || []).join(', ') || 'not set'}
+- Product Focus: ${(strategyContext.productFocus || []).join(', ') || 'not set'}
+- Unique Selling Points: ${(strategyContext.uniqueSellingPoints || []).join(', ') || 'not set'}
+- Current Promotions: ${(strategyContext.currentPromotions || []).join(', ') || 'none'}`
+      : '';
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    const prompt = `You are a marketing strategist. Based on the company's strategy and upcoming key dates, propose 3-5 marketing campaign ideas.
+
+Today's date: ${today}
+${strategyStr}
+${keyDatesContext}
+
+For each campaign proposal, respond with a JSON array of objects with these fields:
+- name: Campaign name (catchy, actionable)
+- description: 2-3 sentence campaign description
+- campaignType: one of "whatsapp", "social_media", "product_promotion", "hybrid"
+- objective: Primary campaign objective
+- targetAudience: Specific audience for this campaign
+- channels: array of platforms from ["facebook", "instagram", "linkedin", "twitter"]
+- tone: one of "professional", "casual", "inspirational", "educational", "promotional", "storytelling"
+- suggestedStartDate: ISO date (YYYY-MM-DD)
+- suggestedEndDate: ISO date (YYYY-MM-DD)
+- durationDays: number
+- linkedKeyDateName: name of the key date this relates to (if any, otherwise null)
+- contentIdeas: array of 3-5 specific content piece ideas
+- suggestedPosts: number of posts recommended
+- keyMessages: array of 2-3 core messages
+- callToAction: primary CTA
+- hashtags: array of 3-5 relevant hashtags
+- goals: array of 2-3 measurable goals
+- strategyAlignmentScore: 0-100 how well this aligns with the strategy
+- reasoning: why this campaign makes sense given the strategy and timing
+- priority: "high", "medium", or "low"
+
+Important: 
+- Campaigns tied to upcoming key dates should have higher priority
+- Start dates should account for lead time (preparation before the key date)
+- Each campaign should be distinct and target different goals or audiences
+- Include at least one key-date-linked campaign if dates are available
+- Budget estimates in UGX if possible
+
+Respond ONLY with a valid JSON array. No markdown, no explanation.`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+
+    // Parse JSON
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      console.error('Failed to parse campaign proposals JSON:', text.slice(0, 200));
+      return getDefaultProposals(strategyContext);
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    // Map to CampaignProposal and link key dates
+    return parsed.map((p: any, i: number) => {
+      // Try to match linked key date
+      let linkedKeyDateId: string | undefined;
+      if (p.linkedKeyDateName) {
+        const match = upcomingDates.find(
+          (d) => d.name.toLowerCase().includes(p.linkedKeyDateName?.toLowerCase()) ||
+                 p.linkedKeyDateName?.toLowerCase().includes(d.name.toLowerCase())
+        );
+        if (match) linkedKeyDateId = match.id;
+      }
+
+      return {
+        id: `proposal_${Date.now()}_${i}`,
+        name: p.name || `Campaign ${i + 1}`,
+        description: p.description || '',
+        campaignType: p.campaignType || 'social_media',
+        objective: p.objective || '',
+        targetAudience: p.targetAudience || '',
+        channels: Array.isArray(p.channels) ? p.channels : ['instagram'],
+        tone: p.tone || 'professional',
+        suggestedStartDate: p.suggestedStartDate || today,
+        suggestedEndDate: p.suggestedEndDate || today,
+        durationDays: p.durationDays || 14,
+        linkedKeyDateId,
+        linkedKeyDateName: p.linkedKeyDateName || undefined,
+        contentIdeas: Array.isArray(p.contentIdeas) ? p.contentIdeas : [],
+        suggestedPosts: p.suggestedPosts || 5,
+        keyMessages: Array.isArray(p.keyMessages) ? p.keyMessages : [],
+        callToAction: p.callToAction || '',
+        hashtags: Array.isArray(p.hashtags) ? p.hashtags : [],
+        goals: Array.isArray(p.goals) ? p.goals : [],
+        strategyAlignmentScore: p.strategyAlignmentScore || 70,
+        reasoning: p.reasoning || '',
+        priority: p.priority || 'medium',
+        estimatedBudget: p.estimatedBudget,
+      } as CampaignProposal;
+    });
+  } catch (error) {
+    console.error('Error proposing campaigns:', error);
+    return getDefaultProposals(strategyContext);
+  }
+}
+
+function getDefaultProposals(strategy: Partial<StrategyContext>): CampaignProposal[] {
+  const today = new Date();
+  const nextWeek = new Date(today);
+  nextWeek.setDate(nextWeek.getDate() + 7);
+  const nextMonth = new Date(today);
+  nextMonth.setDate(nextMonth.getDate() + 30);
+
+  return [
+    {
+      id: `proposal_default_1`,
+      name: 'Brand Awareness Push',
+      description: `A social media campaign to increase brand visibility and engagement. Focus on ${(strategy.productFocus || ['our products']).join(', ')}.`,
+      campaignType: 'social_media',
+      objective: 'Increase brand awareness and social media following',
+      targetAudience: strategy.targetMarket || 'General audience',
+      channels: ['instagram', 'facebook'],
+      tone: 'inspirational',
+      suggestedStartDate: nextWeek.toISOString().slice(0, 10),
+      suggestedEndDate: nextMonth.toISOString().slice(0, 10),
+      durationDays: 21,
+      contentIdeas: [
+        'Behind-the-scenes content',
+        'Customer testimonials',
+        'Product showcase posts',
+      ],
+      suggestedPosts: 9,
+      keyMessages: ['Quality you can trust', 'Transform your space'],
+      callToAction: 'Visit our showroom today',
+      hashtags: ['#interiordesign', '#homedecor', '#quality'],
+      goals: ['Increase followers by 15%', 'Achieve 5% engagement rate'],
+      strategyAlignmentScore: 65,
+      reasoning: 'Foundational brand awareness campaign to grow audience before key events.',
+      priority: 'medium',
+    },
+  ];
 }
 
 // ============================================
