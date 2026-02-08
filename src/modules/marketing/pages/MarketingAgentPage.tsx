@@ -29,9 +29,15 @@ import {
   Lightbulb,
   Hash,
   ChevronRight,
+  Upload,
+  FileText,
+  Brain,
+  ChevronUp,
+  AlertCircle,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useMarketingAgent } from '../hooks';
+import type { StrategyAnalysisResult } from '../services/marketingAgentService';
 import type {
   AgentMessage,
   ContentGenerationRequest,
@@ -904,15 +910,23 @@ function CampaignProposalsPanel({
 type ActiveTab = 'chat' | 'generate' | 'dates' | 'campaigns' | 'strategy';
 
 // ============================================
-// Strategy Setup Panel
+// Strategy Setup Panel (with Document Upload)
 // ============================================
+
+const ACCEPTED_FILE_TYPES = '.pdf,.txt,.md,.csv,.doc,.docx,.png,.jpg,.jpeg,.webp';
 
 function StrategySetupPanel({
   context,
   onChange,
+  onAnalyzeFile,
+  analysis,
+  analyzing,
 }: {
   context: Record<string, any>;
   onChange: (ctx: Record<string, any>) => void;
+  onAnalyzeFile: (file: File) => Promise<StrategyAnalysisResult | null>;
+  analysis: StrategyAnalysisResult | null;
+  analyzing: boolean;
 }) {
   const [brandVoice, setBrandVoice] = useState(context.brandVoice || '');
   const [targetMarket, setTargetMarket] = useState(context.targetMarket || '');
@@ -921,6 +935,20 @@ function StrategySetupPanel({
   const [productFocus, setProductFocus] = useState((context.productFocus || []).join(', '));
   const [uniqueSellingPoints, setUniqueSellingPoints] = useState((context.uniqueSellingPoints || []).join(', '));
   const [saved, setSaved] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [showInsights, setShowInsights] = useState(true);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync fields when context changes (e.g. after AI analysis populates them)
+  useEffect(() => {
+    setBrandVoice(context.brandVoice || '');
+    setTargetMarket(context.targetMarket || '');
+    setBusinessGoals((context.businessGoals || []).join(', '));
+    setContentPillars((context.contentPillars || []).join(', '));
+    setProductFocus((context.productFocus || []).join(', '));
+    setUniqueSellingPoints((context.uniqueSellingPoints || []).join(', '));
+  }, [context]);
 
   const handleSave = () => {
     const splitTrim = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
@@ -937,92 +965,335 @@ function StrategySetupPanel({
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const handleFileUpload = async (file: File) => {
+    setUploadedFileName(file.name);
+    await onAnalyzeFile(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileUpload(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileUpload(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(true);
+  };
+
+  const handleDragLeave = () => setDragActive(false);
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-      <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-        <Settings2 className="h-4 w-4 text-gray-500" />
-        Strategy Context
-      </h3>
-      <p className="text-xs text-gray-500">
-        Define your business strategy so the AI can align all generated content with your goals.
-      </p>
+    <div className="space-y-6">
+      {/* Upload Section */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+          <Brain className="h-4 w-4 text-purple-500" />
+          Upload Marketing Strategy
+        </h3>
+        <p className="text-xs text-gray-500">
+          Upload your marketing strategy document and Gemini Deep Think will analyze it to extract your full strategy context automatically.
+        </p>
 
-      <div>
-        <label className="text-xs font-medium text-gray-600">Brand Voice</label>
-        <input
-          value={brandVoice}
-          onChange={(e) => setBrandVoice(e.target.value)}
-          placeholder="e.g. Professional yet approachable, luxury-focused"
-          className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
-        />
+        {/* Drop zone */}
+        <div
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onClick={() => fileInputRef.current?.click()}
+          className={`relative border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+            dragActive
+              ? 'border-purple-400 bg-purple-50'
+              : analyzing
+              ? 'border-purple-300 bg-purple-50/50'
+              : 'border-gray-200 hover:border-purple-300 hover:bg-gray-50'
+          }`}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPTED_FILE_TYPES}
+            onChange={handleFileChange}
+            className="hidden"
+          />
+
+          {analyzing ? (
+            <div className="space-y-3">
+              <div className="flex justify-center">
+                <div className="relative">
+                  <Brain className="h-10 w-10 text-purple-400" />
+                  <RefreshCw className="h-5 w-5 text-purple-600 animate-spin absolute -bottom-1 -right-1" />
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-purple-700">Deep Think Analysis in Progress</p>
+                <p className="text-xs text-purple-500 mt-1">
+                  Gemini is carefully analyzing your strategy document...
+                </p>
+              </div>
+              <div className="flex justify-center gap-1">
+                <div className="h-1.5 w-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="h-1.5 w-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="h-1.5 w-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          ) : uploadedFileName ? (
+            <div className="space-y-2">
+              <FileText className="h-8 w-8 text-green-500 mx-auto" />
+              <p className="text-sm font-medium text-gray-700">{uploadedFileName}</p>
+              <p className="text-xs text-gray-400">Click or drop to upload a different file</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Upload className="h-8 w-8 text-gray-300 mx-auto" />
+              <p className="text-sm font-medium text-gray-600">Drop your strategy document here</p>
+              <p className="text-xs text-gray-400">
+                Supports PDF, TXT, DOC, DOCX, images, Markdown, CSV
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* File type badges */}
+        <div className="flex gap-1.5 flex-wrap">
+          {['PDF', 'DOCX', 'TXT', 'PNG/JPG', 'MD'].map((ext) => (
+            <span key={ext} className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">{ext}</span>
+          ))}
+        </div>
       </div>
 
-      <div>
-        <label className="text-xs font-medium text-gray-600">Target Market</label>
-        <input
-          value={targetMarket}
-          onChange={(e) => setTargetMarket(e.target.value)}
-          placeholder="e.g. Homeowners, architects, interior designers in East Africa"
-          className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
-        />
-      </div>
+      {/* Analysis Results */}
+      {analysis && (
+        <div className="bg-white rounded-xl border border-purple-200 overflow-hidden">
+          {/* Analysis header */}
+          <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 border-b border-purple-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Brain className="h-4 w-4 text-purple-600" />
+                <h3 className="text-sm font-semibold text-purple-900">Deep Think Analysis</h3>
+                <span className="text-[10px] px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">
+                  {analysis.documentType}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className={`text-sm font-bold ${
+                  analysis.confidence >= 80 ? 'text-green-600' :
+                  analysis.confidence >= 60 ? 'text-amber-600' : 'text-red-600'
+                }`}>
+                  {analysis.confidence}% confidence
+                </div>
+                <button
+                  onClick={() => setShowInsights(!showInsights)}
+                  className="p-1 text-purple-500 hover:bg-purple-100 rounded"
+                >
+                  {showInsights ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
 
-      <div>
-        <label className="text-xs font-medium text-gray-600">Business Goals (comma-separated)</label>
-        <input
-          value={businessGoals}
-          onChange={(e) => setBusinessGoals(e.target.value)}
-          placeholder="e.g. Increase brand awareness, drive showroom visits, grow online sales"
-          className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
-        />
-      </div>
+          {showInsights && (
+            <div className="p-4 space-y-4">
+              {/* Summary */}
+              <div>
+                <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Executive Summary</h4>
+                <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{analysis.summary}</p>
+              </div>
 
-      <div>
-        <label className="text-xs font-medium text-gray-600">Content Pillars (comma-separated)</label>
-        <input
-          value={contentPillars}
-          onChange={(e) => setContentPillars(e.target.value)}
-          placeholder="e.g. Design inspiration, product quality, customer stories, expert tips"
-          className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
-        />
-      </div>
+              {/* Key Insights */}
+              <div>
+                <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">Key Insights</h4>
+                <div className="space-y-1.5">
+                  {analysis.keyInsights.map((insight, i) => (
+                    <div key={i} className="flex items-start gap-2 text-sm">
+                      <Lightbulb className="h-3.5 w-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+                      <span className="text-gray-600">{insight}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-      <div>
-        <label className="text-xs font-medium text-gray-600">Product Focus (comma-separated)</label>
-        <input
-          value={productFocus}
-          onChange={(e) => setProductFocus(e.target.value)}
-          placeholder="e.g. Italian marble, porcelain tiles, natural stone, custom finishes"
-          className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
-        />
-      </div>
+              {/* Thinking process (if available) */}
+              {analysis.thinkingProcess && (
+                <details className="group">
+                  <summary className="cursor-pointer text-xs font-medium text-purple-600 hover:text-purple-700 flex items-center gap-1">
+                    <Brain className="h-3 w-3" />
+                    View AI Thinking Process
+                  </summary>
+                  <div className="mt-2 p-3 bg-purple-50 rounded-lg text-xs text-purple-800 whitespace-pre-wrap max-h-48 overflow-y-auto">
+                    {analysis.thinkingProcess}
+                  </div>
+                </details>
+              )}
 
-      <div>
-        <label className="text-xs font-medium text-gray-600">Unique Selling Points (comma-separated)</label>
-        <input
-          value={uniqueSellingPoints}
-          onChange={(e) => setUniqueSellingPoints(e.target.value)}
-          placeholder="e.g. Direct import from Italy, largest showroom in EA, expert installation"
-          className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
-        />
-      </div>
+              {/* Auto-fill confirmation */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2">
+                <Check className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-green-700">
+                  <span className="font-medium">Strategy fields auto-populated below.</span> Review and edit the extracted values, then save to apply.
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
-      <button
-        onClick={handleSave}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
-      >
-        {saved ? (
-          <>
-            <Check className="h-4 w-4" />
-            Saved!
-          </>
-        ) : (
-          <>
-            <Settings2 className="h-4 w-4" />
-            Save Strategy Context
-          </>
+      {/* Manual / Auto-filled Fields */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+          <Settings2 className="h-4 w-4 text-gray-500" />
+          Strategy Context
+          {analysis && (
+            <span className="text-[10px] px-2 py-0.5 bg-green-50 text-green-700 rounded-full ml-auto">
+              AI-populated
+            </span>
+          )}
+        </h3>
+        {!analysis && (
+          <p className="text-xs text-gray-500">
+            Define your business strategy manually, or upload a document above for automatic extraction.
+          </p>
         )}
-      </button>
+
+        <div>
+          <label className="text-xs font-medium text-gray-600">Brand Voice</label>
+          <input
+            value={brandVoice}
+            onChange={(e) => setBrandVoice(e.target.value)}
+            placeholder="e.g. Professional yet approachable, luxury-focused"
+            className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-gray-600">Target Market</label>
+          <input
+            value={targetMarket}
+            onChange={(e) => setTargetMarket(e.target.value)}
+            placeholder="e.g. Homeowners, architects, interior designers in East Africa"
+            className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-gray-600">Business Goals (comma-separated)</label>
+          <input
+            value={businessGoals}
+            onChange={(e) => setBusinessGoals(e.target.value)}
+            placeholder="e.g. Increase brand awareness, drive showroom visits, grow online sales"
+            className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-gray-600">Content Pillars (comma-separated)</label>
+          <input
+            value={contentPillars}
+            onChange={(e) => setContentPillars(e.target.value)}
+            placeholder="e.g. Design inspiration, product quality, customer stories, expert tips"
+            className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-gray-600">Product Focus (comma-separated)</label>
+          <input
+            value={productFocus}
+            onChange={(e) => setProductFocus(e.target.value)}
+            placeholder="e.g. Italian marble, porcelain tiles, natural stone, custom finishes"
+            className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-gray-600">Unique Selling Points (comma-separated)</label>
+          <input
+            value={uniqueSellingPoints}
+            onChange={(e) => setUniqueSellingPoints(e.target.value)}
+            placeholder="e.g. Direct import from Italy, largest showroom in EA, expert installation"
+            className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
+          />
+        </div>
+
+        {/* Extra fields from AI analysis */}
+        {context.salesObjectives?.length > 0 && (
+          <div>
+            <label className="text-xs font-medium text-gray-600">Sales Objectives (from analysis)</label>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {context.salesObjectives.map((obj: string, i: number) => (
+                <span key={i} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-lg">{obj}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {context.marketingObjectives?.length > 0 && (
+          <div>
+            <label className="text-xs font-medium text-gray-600">Marketing Objectives (from analysis)</label>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {context.marketingObjectives.map((obj: string, i: number) => (
+                <span key={i} className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-lg">{obj}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {context.targetAudience?.length > 0 && (
+          <div>
+            <label className="text-xs font-medium text-gray-600">Target Audience Segments (from analysis)</label>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {context.targetAudience.map((seg: string, i: number) => (
+                <span key={i} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-lg">{seg}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {context.competitorInsights?.length > 0 && (
+          <div>
+            <label className="text-xs font-medium text-gray-600">Competitor Insights (from analysis)</label>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {context.competitorInsights.map((ins: string, i: number) => (
+                <span key={i} className="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-lg">{ins}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {context.industryTrends?.length > 0 && (
+          <div>
+            <label className="text-xs font-medium text-gray-600">Industry Trends (from analysis)</label>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {context.industryTrends.map((trend: string, i: number) => (
+                <span key={i} className="text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded-lg">{trend}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={handleSave}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
+        >
+          {saved ? (
+            <>
+              <Check className="h-4 w-4" />
+              Saved!
+            </>
+          ) : (
+            <>
+              <Settings2 className="h-4 w-4" />
+              Save Strategy Context
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1048,6 +1319,9 @@ export default function MarketingAgentPage() {
     proposingCampaigns,
     strategyContext,
     setStrategyContext,
+    analyzeStrategy,
+    strategyAnalysis,
+    analyzingStrategy,
     error,
   } = useMarketingAgent();
 
@@ -1272,6 +1546,9 @@ export default function MarketingAgentPage() {
               <StrategySetupPanel
                 context={strategyContext}
                 onChange={setStrategyContext}
+                onAnalyzeFile={analyzeStrategy}
+                analysis={strategyAnalysis}
+                analyzing={analyzingStrategy}
               />
             </div>
           )}

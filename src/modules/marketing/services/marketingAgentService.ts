@@ -51,6 +51,164 @@ function getModel() {
   return genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 }
 
+function getThinkingModel() {
+  if (!genAI) throw new Error('Gemini API key not configured');
+  return genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash-preview-04-17',
+    generationConfig: {
+      // @ts-expect-error - thinkingConfig is supported but not yet in all type defs
+      thinkingConfig: { thinkingBudget: 8192 },
+    },
+  });
+}
+
+// ============================================
+// Strategy Document Analysis
+// ============================================
+
+/**
+ * Read file content as text or base64 depending on type
+ */
+async function readFileContent(file: File): Promise<{ text?: string; base64?: string; mimeType: string }> {
+  const mimeType = file.type || 'application/octet-stream';
+
+  // For text-based files, read as text
+  if (
+    mimeType.includes('text/') ||
+    mimeType.includes('application/json') ||
+    file.name.endsWith('.txt') ||
+    file.name.endsWith('.md') ||
+    file.name.endsWith('.csv')
+  ) {
+    const text = await file.text();
+    return { text, mimeType };
+  }
+
+  // For PDFs, images, and docs read as base64
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(',')[1]; // strip data:...;base64, prefix
+      resolve({ base64, mimeType });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+export interface StrategyAnalysisResult {
+  extractedContext: Partial<StrategyContext>;
+  summary: string;
+  keyInsights: string[];
+  documentType: string;
+  confidence: number;
+  thinkingProcess?: string;
+}
+
+/**
+ * Analyze an uploaded marketing strategy document using Gemini deep thinking
+ * Supports: PDF, DOCX (as text), TXT, images of strategy docs
+ */
+export async function analyzeStrategyDocument(
+  file: File
+): Promise<StrategyAnalysisResult> {
+  try {
+    const model = getThinkingModel();
+    const fileContent = await readFileContent(file);
+
+    const prompt = `You are a senior marketing strategist performing a deep analysis of a marketing strategy document. 
+
+Carefully read and analyze this document to extract a comprehensive strategy context. Think deeply about:
+- What are the explicit and implicit business goals?
+- Who is the target market and audience segmentation?
+- What brand voice and values emerge from the document?
+- What are the unique selling points and competitive advantages?
+- What sales objectives and pricing strategies are mentioned?
+- What marketing objectives and channel strategies are described?
+- What content pillars and themes are recommended?
+- What competitor insights are referenced?
+- What industry trends and seasonal factors are noted?
+- What promotions or product focus areas are highlighted?
+
+After your analysis, respond with a JSON object (no markdown fences) containing:
+{
+  "extractedContext": {
+    "businessGoals": ["array of business goals extracted"],
+    "targetMarket": "primary target market description",
+    "brandVoice": "brand voice/tone description",
+    "brandValues": ["array of brand values"],
+    "uniqueSellingPoints": ["array of USPs"],
+    "salesObjectives": ["array of sales objectives"],
+    "currentPromotions": ["array of current/planned promotions"],
+    "productFocus": ["array of product focus areas"],
+    "pricingStrategy": "pricing strategy if mentioned",
+    "marketingObjectives": ["array of marketing objectives"],
+    "targetAudience": ["array of audience segments"],
+    "contentPillars": ["array of content pillars/themes"],
+    "competitorInsights": ["array of competitor insights"],
+    "channelStrategy": { "facebook": "strategy", "instagram": "strategy", "linkedin": "strategy", "twitter": "strategy" },
+    "industryTrends": ["array of industry trends"],
+    "upcomingEvents": ["array of upcoming events or campaigns mentioned"]
+  },
+  "summary": "2-3 paragraph executive summary of the strategy",
+  "keyInsights": ["array of 5-8 key strategic insights extracted from the document"],
+  "documentType": "type of document (e.g. 'Marketing Plan', 'Brand Guidelines', 'Campaign Brief', 'Strategic Roadmap')",
+  "confidence": 85
+}
+
+For any fields where information is not available in the document, use empty arrays [] or empty strings "".
+The confidence score (0-100) should reflect how comprehensive the strategy document is.
+
+Respond ONLY with the JSON object. No additional text.`;
+
+    // Build parts array for multimodal input
+    const parts: any[] = [];
+
+    if (fileContent.text) {
+      parts.push({ text: prompt + '\n\nDocument content:\n\n' + fileContent.text });
+    } else if (fileContent.base64) {
+      parts.push({ text: prompt });
+      parts.push({
+        inlineData: {
+          mimeType: fileContent.mimeType,
+          data: fileContent.base64,
+        },
+      });
+    }
+
+    const result = await model.generateContent(parts);
+    const responseText = result.response.text().trim();
+
+    // Try to extract thinking process from response if available
+    let thinkingProcess: string | undefined;
+    const candidates = result.response.candidates;
+    if (candidates && candidates[0]?.content?.parts) {
+      for (const part of candidates[0].content.parts) {
+        if ((part as any).thought) {
+          thinkingProcess = (part as any).text;
+          break;
+        }
+      }
+    }
+
+    // Parse JSON response
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Failed to parse strategy analysis response');
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]) as StrategyAnalysisResult;
+    parsed.thinkingProcess = thinkingProcess;
+    return parsed;
+  } catch (error) {
+    console.error('Error analyzing strategy document:', error);
+    throw new Error(
+      `Failed to analyze strategy document: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
 /**
  * Safely parse JSON from Gemini response, stripping markdown fences
  */

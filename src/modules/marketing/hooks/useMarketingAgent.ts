@@ -14,6 +14,7 @@ import type {
   MarketingAgentConfig,
   CampaignProposal,
 } from '../types';
+import type { StrategyAnalysisResult } from '../services/marketingAgentService';
 import {
   chatWithAgent,
   generateContent,
@@ -25,6 +26,7 @@ import {
   getAgentConfig,
   saveAgentConfig,
   proposeCampaigns,
+  analyzeStrategyDocument,
 } from '../services/marketingAgentService';
 
 interface UseMarketingAgentReturn {
@@ -65,6 +67,9 @@ interface UseMarketingAgentReturn {
   // Strategy
   strategyContext: Partial<StrategyContext>;
   setStrategyContext: (ctx: Partial<StrategyContext>) => void;
+  analyzeStrategy: (file: File) => Promise<StrategyAnalysisResult | null>;
+  strategyAnalysis: StrategyAnalysisResult | null;
+  analyzingStrategy: boolean;
 
   // Error
   error: Error | null;
@@ -106,6 +111,10 @@ export function useMarketingAgent(companyId?: string): UseMarketingAgentReturn {
   // Campaign proposals state
   const [campaignProposals, setCampaignProposals] = useState<CampaignProposal[]>([]);
   const [proposingCampaigns, setProposingCampaigns] = useState(false);
+
+  // Strategy analysis state
+  const [strategyAnalysis, setStrategyAnalysis] = useState<StrategyAnalysisResult | null>(null);
+  const [analyzingStrategy, setAnalyzingStrategy] = useState(false);
 
   // Error
   const [error, setError] = useState<Error | null>(null);
@@ -253,6 +262,30 @@ export function useMarketingAgent(companyId?: string): UseMarketingAgentReturn {
     }
   }, []);
 
+  // Analyze strategy document
+  const analyzeStrategyFn = useCallback(async (file: File): Promise<StrategyAnalysisResult | null> => {
+    setAnalyzingStrategy(true);
+    setError(null);
+
+    try {
+      const result = await analyzeStrategyDocument(file);
+      setStrategyAnalysis(result);
+      // Auto-populate strategy context from analysis
+      if (result.extractedContext) {
+        setStrategyContext((prev) => ({
+          ...prev,
+          ...result.extractedContext,
+        }));
+      }
+      return result;
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to analyze strategy document'));
+      return null;
+    } finally {
+      setAnalyzingStrategy(false);
+    }
+  }, []);
+
   // Propose draft campaigns
   const proposeDraftCampaigns = useCallback(async (): Promise<CampaignProposal[]> => {
     if (!effectiveCompanyId) return [];
@@ -324,6 +357,9 @@ export function useMarketingAgent(companyId?: string): UseMarketingAgentReturn {
     proposingCampaigns,
     strategyContext,
     setStrategyContext,
+    analyzeStrategy: analyzeStrategyFn,
+    strategyAnalysis,
+    analyzingStrategy,
     error,
   };
 }
