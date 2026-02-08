@@ -699,7 +699,7 @@ export async function proposeCampaigns(
   keyDates: MarketingKeyDate[]
 ): Promise<CampaignProposal[]> {
   try {
-    const model = getModel();
+    const model = getThinkingModel();
 
     const upcomingDates = keyDates
       .filter((d) => d.date.toMillis() >= Date.now())
@@ -712,55 +712,82 @@ export async function proposeCampaigns(
         ).join('\n')}`
       : '';
 
-    const strategyStr = strategyContext
-      ? `\nStrategy Context:
-- Brand Voice: ${strategyContext.brandVoice || 'not set'}
-- Target Market: ${strategyContext.targetMarket || 'not set'}
-- Business Goals: ${(strategyContext.businessGoals || []).join(', ') || 'not set'}
-- Content Pillars: ${(strategyContext.contentPillars || []).join(', ') || 'not set'}
-- Product Focus: ${(strategyContext.productFocus || []).join(', ') || 'not set'}
-- Unique Selling Points: ${(strategyContext.uniqueSellingPoints || []).join(', ') || 'not set'}
-- Current Promotions: ${(strategyContext.currentPromotions || []).join(', ') || 'none'}`
-      : '';
+    // Build comprehensive strategy string including all analysis-extracted fields
+    const s = strategyContext;
+    const strategyParts: string[] = [];
+    if (s.brandVoice) strategyParts.push(`- Brand Voice: ${s.brandVoice}`);
+    if (s.targetMarket) strategyParts.push(`- Target Market: ${s.targetMarket}`);
+    if (s.businessGoals?.length) strategyParts.push(`- Business Goals: ${s.businessGoals.join(', ')}`);
+    if (s.contentPillars?.length) strategyParts.push(`- Content Pillars: ${s.contentPillars.join(', ')}`);
+    if (s.productFocus?.length) strategyParts.push(`- Product Focus: ${s.productFocus.join(', ')}`);
+    if (s.uniqueSellingPoints?.length) strategyParts.push(`- Unique Selling Points: ${s.uniqueSellingPoints.join(', ')}`);
+    if (s.currentPromotions?.length) strategyParts.push(`- Current Promotions: ${s.currentPromotions.join(', ')}`);
+    if (s.brandValues?.length) strategyParts.push(`- Brand Values: ${s.brandValues.join(', ')}`);
+    if (s.salesObjectives?.length) strategyParts.push(`- Sales Objectives: ${s.salesObjectives.join(', ')}`);
+    if (s.marketingObjectives?.length) strategyParts.push(`- Marketing Objectives: ${s.marketingObjectives.join(', ')}`);
+    if (s.targetAudience?.length) strategyParts.push(`- Target Audience Segments: ${s.targetAudience.join(', ')}`);
+    if (s.competitorInsights?.length) strategyParts.push(`- Competitor Insights: ${s.competitorInsights.join(', ')}`);
+    if (s.pricingStrategy) strategyParts.push(`- Pricing Strategy: ${s.pricingStrategy}`);
+    if (s.industryTrends?.length) strategyParts.push(`- Industry Trends: ${s.industryTrends.join(', ')}`);
+    if (s.upcomingEvents?.length) strategyParts.push(`- Upcoming Events: ${s.upcomingEvents.join(', ')}`);
+    if (s.channelStrategy) {
+      const channels = Object.entries(s.channelStrategy)
+        .filter(([, v]) => v)
+        .map(([k, v]) => `${k}: ${v}`);
+      if (channels.length) strategyParts.push(`- Channel Strategy:\n  ${channels.join('\n  ')}`);
+    }
+
+    const strategyStr = strategyParts.length > 0
+      ? `\nFull Strategy Context:\n${strategyParts.join('\n')}`
+      : '\nNo strategy context available — propose general-purpose campaigns.';
 
     const today = new Date().toISOString().slice(0, 10);
 
-    const prompt = `You are a marketing strategist. Based on the company's strategy and upcoming key dates, propose 3-5 marketing campaign ideas.
+    const prompt = `You are a senior marketing strategist. Think carefully and propose exactly 5 distinct marketing campaign ideas based on the company's full strategy and upcoming key dates.
 
 Today's date: ${today}
 ${strategyStr}
 ${keyDatesContext}
 
-For each campaign proposal, respond with a JSON array of objects with these fields:
+You MUST propose exactly 5 campaigns. Each should target a different objective, audience segment, or channel mix. Think about:
+1. A campaign tied to the nearest key date (if available)
+2. A brand awareness / brand building campaign
+3. A product promotion / sales-driven campaign
+4. A community engagement / content-led campaign  
+5. A seasonal or trend-based campaign
+
+For each campaign, provide ALL of these fields in a JSON array:
 - name: Campaign name (catchy, actionable)
 - description: 2-3 sentence campaign description
 - campaignType: one of "whatsapp", "social_media", "product_promotion", "hybrid"
-- objective: Primary campaign objective
-- targetAudience: Specific audience for this campaign
+- objective: Primary campaign objective (specific and measurable)
+- targetAudience: Specific audience segment for this campaign
 - channels: array of platforms from ["facebook", "instagram", "linkedin", "twitter"]
 - tone: one of "professional", "casual", "inspirational", "educational", "promotional", "storytelling"
 - suggestedStartDate: ISO date (YYYY-MM-DD)
 - suggestedEndDate: ISO date (YYYY-MM-DD)
-- durationDays: number
+- durationDays: number of days
 - linkedKeyDateName: name of the key date this relates to (if any, otherwise null)
 - contentIdeas: array of 3-5 specific content piece ideas
-- suggestedPosts: number of posts recommended
+- suggestedPosts: total number of posts recommended
 - keyMessages: array of 2-3 core messages
 - callToAction: primary CTA
 - hashtags: array of 3-5 relevant hashtags
-- goals: array of 2-3 measurable goals
+- estimatedBudget: budget estimate in UGX (e.g. "500,000 UGX" or "1,200,000 UGX")
+- goals: array of 2-3 measurable goals (with specific metrics)
 - strategyAlignmentScore: 0-100 how well this aligns with the strategy
-- reasoning: why this campaign makes sense given the strategy and timing
+- reasoning: 2-3 sentences explaining why this campaign makes sense given the strategy and timing
 - priority: "high", "medium", or "low"
 
-Important: 
+Rules:
+- You MUST return exactly 5 campaign objects in the JSON array
 - Campaigns tied to upcoming key dates should have higher priority
 - Start dates should account for lead time (preparation before the key date)
-- Each campaign should be distinct and target different goals or audiences
-- Include at least one key-date-linked campaign if dates are available
-- Budget estimates in UGX if possible
+- Each campaign MUST be distinct with different goals, audiences, or approaches
+- Make content ideas specific and actionable, not generic
+- Reasoning should reference specific elements from the strategy context
 
-Respond ONLY with a valid JSON array. No markdown, no explanation.`;
+Respond ONLY with a valid JSON array of 5 objects. No markdown fences, no explanation outside the JSON.`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
