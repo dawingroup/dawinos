@@ -476,3 +476,314 @@ export interface StrategyTreeNode {
   level: number;
   alignmentCount: number;
 }
+
+// ============================================================================
+// BUSINESS STRATEGY REVIEW TYPES
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// Business Model Canvas
+// ----------------------------------------------------------------------------
+export interface BusinessModelCanvas {
+  keyPartners: CanvasItem[];
+  keyActivities: CanvasItem[];
+  keyResources: CanvasItem[];
+  valuePropositions: CanvasItem[];
+  customerRelationships: CanvasItem[];
+  channels: CanvasItem[];
+  customerSegments: CanvasItem[];
+  costStructure: CanvasItem[];
+  revenueStreams: CanvasItem[];
+}
+
+export interface CanvasItem {
+  id: string;
+  text: string;
+  notes?: string;
+  priority?: 'high' | 'medium' | 'low';
+  isNew?: boolean;
+  isModified?: boolean;
+  aiSuggested?: boolean;
+}
+
+// ----------------------------------------------------------------------------
+// SWOT Analysis
+// ----------------------------------------------------------------------------
+export interface SWOTAnalysis {
+  strengths: SWOTItem[];
+  weaknesses: SWOTItem[];
+  opportunities: SWOTItem[];
+  threats: SWOTItem[];
+}
+
+export interface SWOTItem {
+  id: string;
+  text: string;
+  impact: 'high' | 'medium' | 'low';
+  notes?: string;
+  actionRequired?: string;
+  aiSuggested?: boolean;
+}
+
+// ----------------------------------------------------------------------------
+// Market & Competitive Analysis
+// ----------------------------------------------------------------------------
+export interface MarketAnalysis {
+  marketSize: string;
+  marketGrowthRate: string;
+  targetSegments: MarketSegment[];
+  marketTrends: string[];
+  marketChallenges: string[];
+  regulatoryEnvironment: string;
+  notes: string;
+}
+
+export interface MarketSegment {
+  id: string;
+  name: string;
+  size: string;
+  growthPotential: 'high' | 'medium' | 'low';
+  currentPenetration: string;
+  targetPenetration: string;
+  notes?: string;
+}
+
+export interface CompetitiveAnalysis {
+  competitors: CompetitorProfile[];
+  competitiveAdvantages: string[];
+  competitiveThreats: string[];
+  marketPositioning: string;
+  differentiationStrategy: string;
+}
+
+export interface CompetitorProfile {
+  id: string;
+  name: string;
+  strengths: string[];
+  weaknesses: string[];
+  marketShare: string;
+  threatLevel: 'high' | 'medium' | 'low';
+}
+
+// ----------------------------------------------------------------------------
+// Financial Projections
+// ----------------------------------------------------------------------------
+export interface FinancialProjections {
+  revenueTargets: FinancialTarget[];
+  costProjections: FinancialTarget[];
+  profitabilityTargets: FinancialTarget[];
+  fundingRequirements: string;
+  keyFinancialAssumptions: string[];
+  breakEvenAnalysis: string;
+  notes: string;
+}
+
+export interface FinancialTarget {
+  id: string;
+  label: string;
+  currentValue: number;
+  targetValue: number;
+  unit: string;
+  timeframe: string;
+  notes?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Implementation Roadmap
+// ----------------------------------------------------------------------------
+export interface ImplementationRoadmap {
+  phases: RoadmapPhase[];
+  criticalDependencies: string[];
+  resourceRequirements: string[];
+  notes: string;
+}
+
+export interface RoadmapPhase {
+  id: string;
+  name: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  milestones: RoadmapMilestone[];
+  status: 'not_started' | 'in_progress' | 'completed' | 'delayed';
+  owner: string;
+}
+
+export interface RoadmapMilestone {
+  id: string;
+  title: string;
+  targetDate: string;
+  status: 'pending' | 'completed' | 'delayed';
+  deliverables: string[];
+}
+
+// ----------------------------------------------------------------------------
+// Section Review
+// ----------------------------------------------------------------------------
+export type ReviewSectionStatus = 'not_started' | 'in_review' | 'needs_update' | 'approved';
+
+export interface SectionReview {
+  status: ReviewSectionStatus;
+  currentContent: string;
+  updatedContent: string;
+  reviewNotes: string;
+  score: number;
+  recommendations: string[];
+  lastReviewedAt?: string;
+  reviewedBy?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Strategy Review Data (Main Review Entity)
+// ----------------------------------------------------------------------------
+export interface StrategyReviewData {
+  id: string;
+  companyId: string;
+  strategyDocumentId?: string;
+  title: string;
+  reviewDate: string;
+  status: 'draft' | 'in_progress' | 'completed';
+
+  // Uploaded document
+  uploadedDocument?: UploadedStrategyDocument;
+
+  // Business Model Canvas
+  businessModelCanvas: BusinessModelCanvas;
+
+  // Analysis sections
+  swotAnalysis: SWOTAnalysis;
+  marketAnalysis: MarketAnalysis;
+  competitiveAnalysis: CompetitiveAnalysis;
+  financialProjections: FinancialProjections;
+  implementationRoadmap: ImplementationRoadmap;
+
+  // Section reviews
+  sectionReviews: {
+    executiveSummary: SectionReview;
+    visionMission: SectionReview;
+    businessModelCanvas: SectionReview;
+    marketAnalysis: SectionReview;
+    competitiveAnalysis: SectionReview;
+    swotAnalysis: SectionReview;
+    financialProjections: SectionReview;
+    riskAssessment: SectionReview;
+    implementationRoadmap: SectionReview;
+    okrKpiOutput: SectionReview;
+  };
+
+  // Outputs
+  generatedOKRs: GeneratedOKR[];
+  generatedKPIs: GeneratedKPI[];
+  actionItems: StrategyActionItem[];
+  overallScore: number;
+
+  // AI conversation history
+  aiConversationHistory: AIMessage[];
+
+  // Metadata
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  updatedBy: string;
+}
+
+export interface UploadedStrategyDocument {
+  fileName: string;
+  fileUrl: string;
+  fileSize: number;
+  mimeType: string;
+  uploadedAt: string;
+  parsedContent?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Generated OKRs & KPIs
+// ----------------------------------------------------------------------------
+export interface GeneratedOKR {
+  id: string;
+  objective: string;
+  description: string;
+  pillarId?: string;
+  pillarName?: string;
+  keyResults: GeneratedKeyResult[];
+  timeframe: string;
+  owner: string;
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  aiGenerated: boolean;
+  accepted: boolean;
+  linkedToOKRId?: string;
+}
+
+export interface GeneratedKeyResult {
+  id: string;
+  title: string;
+  targetValue: number;
+  currentValue: number;
+  unit: string;
+  weight: number;
+}
+
+export interface GeneratedKPI {
+  id: string;
+  name: string;
+  description: string;
+  category: 'financial' | 'operational' | 'customer' | 'employee' | 'growth';
+  targetValue: number;
+  currentValue: number;
+  unit: string;
+  frequency: 'daily' | 'weekly' | 'monthly' | 'quarterly';
+  owner: string;
+  aiGenerated: boolean;
+  accepted: boolean;
+  linkedToKPIId?: string;
+}
+
+export interface StrategyActionItem {
+  id: string;
+  title: string;
+  description: string;
+  section: string;
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  assignee: string;
+  dueDate: string;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
+// ----------------------------------------------------------------------------
+// AI Strategy Assistant Types
+// ----------------------------------------------------------------------------
+export interface AIMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  section?: string;
+  suggestions?: AISuggestion[];
+}
+
+export interface AISuggestion {
+  id: string;
+  type: 'bmc' | 'swot' | 'okr' | 'kpi' | 'risk' | 'market' | 'financial' | 'roadmap' | 'general';
+  title: string;
+  content: string;
+  confidence: number;
+  applied: boolean;
+}
+
+export interface AIStrategyAnalysisRequest {
+  companyId: string;
+  reviewId: string;
+  section: string;
+  currentData: Record<string, unknown>;
+  uploadedDocumentContent?: string;
+  question?: string;
+  conversationHistory?: AIMessage[];
+}
+
+export interface AIStrategyAnalysisResponse {
+  success: boolean;
+  message: string;
+  suggestions: AISuggestion[];
+  conversationMessage: AIMessage;
+  error?: string;
+}

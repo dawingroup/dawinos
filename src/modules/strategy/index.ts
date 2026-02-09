@@ -147,6 +147,32 @@ export type {
   // Hierarchy Types
   StrategyHierarchy,
   StrategyTreeNode,
+  // Business Strategy Review Types
+  BusinessModelCanvas,
+  CanvasItem,
+  SWOTAnalysis,
+  SWOTItem,
+  MarketAnalysis,
+  MarketSegment,
+  CompetitiveAnalysis,
+  CompetitorProfile,
+  FinancialProjections,
+  FinancialTarget,
+  ImplementationRoadmap,
+  RoadmapPhase,
+  RoadmapMilestone,
+  SectionReview,
+  ReviewSectionStatus,
+  StrategyReviewData,
+  UploadedStrategyDocument,
+  GeneratedOKR,
+  GeneratedKeyResult,
+  GeneratedKPI,
+  StrategyActionItem,
+  AIMessage,
+  AISuggestion,
+  AIStrategyAnalysisRequest,
+  AIStrategyAnalysisResponse,
 } from './types/strategy.types';
 
 // ----------------------------------------------------------------------------

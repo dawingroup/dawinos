@@ -8,3 +8,4 @@ export { StrategyOverview } from './StrategyOverview';
 export { OKRDashboard } from './OKRDashboard';
 export { KPIDashboard } from './KPIDashboard';
 export { PerformanceDeepDive } from './PerformanceDeepDive';
+export { StrategyReviewPage } from './StrategyReviewPage';

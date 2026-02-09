@@ -36,6 +36,7 @@ import type {
 import {
   KEY_DATES_COLLECTION,
   AGENT_CONFIG_COLLECTION,
+  STRATEGY_COLLECTION,
   PLATFORM_CHARACTER_LIMITS,
 } from '../types/marketing-agent.types';
 
@@ -1082,6 +1083,206 @@ function getQuickDraft(topic: string): string {
 }
 
 // ============================================
+// Strategy Context Persistence
+// ============================================
+
+/**
+ * Load saved strategy context from Firestore
+ */
+export async function loadStrategyContext(companyId: string): Promise<Partial<StrategyContext> | null> {
+  const q = query(
+    collection(db, STRATEGY_COLLECTION),
+    where('companyId', '==', companyId),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const data = snap.docs[0].data();
+  // Strip Firestore metadata fields
+  const { companyId: _cid, updatedAt: _u, createdAt: _c, ...strategyFields } = data;
+  return strategyFields as Partial<StrategyContext>;
+}
+
+/**
+ * Save strategy context to Firestore (upsert)
+ */
+export async function saveStrategyContext(
+  companyId: string,
+  strategyContext: Partial<StrategyContext>
+): Promise<void> {
+  const q = query(
+    collection(db, STRATEGY_COLLECTION),
+    where('companyId', '==', companyId),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+
+  const payload = {
+    companyId,
+    ...strategyContext,
+    updatedAt: serverTimestamp(),
+  };
+
+  if (snap.empty) {
+    await addDoc(collection(db, STRATEGY_COLLECTION), {
+      ...payload,
+      createdAt: serverTimestamp(),
+    });
+  } else {
+    await updateDoc(doc(db, STRATEGY_COLLECTION, snap.docs[0].id), payload);
+  }
+}
+
+// ============================================
+// AI Strategy Research & Update
+// ============================================
+
+export interface StrategyResearchResult {
+  currentAssessment: string;
+  marketTrends: string[];
+  competitorMoves: string[];
+  opportunities: string[];
+  threats: string[];
+  recommendations: {
+    section: string;
+    currentValue: string;
+    suggestedUpdate: string;
+    reasoning: string;
+    priority: 'high' | 'medium' | 'low';
+  }[];
+  suggestedStrategy: Partial<StrategyContext>;
+  keyDateAlignments: {
+    dateName: string;
+    strategicAction: string;
+  }[];
+  researchSummary: string;
+}
+
+/**
+ * AI-powered research for strategy updates.
+ * Uses Gemini Pro thinking model to analyze current strategy against market trends,
+ * key dates, and propose a refined strategy.
+ */
+export async function researchStrategyUpdate(
+  currentStrategy: Partial<StrategyContext>,
+  keyDates: MarketingKeyDate[]
+): Promise<StrategyResearchResult> {
+  try {
+    const model = getThinkingModel();
+
+    // Build current strategy summary
+    const s = currentStrategy;
+    const strategyParts: string[] = [];
+    if (s.brandVoice) strategyParts.push(`Brand Voice: ${s.brandVoice}`);
+    if (s.targetMarket) strategyParts.push(`Target Market: ${s.targetMarket}`);
+    if (s.businessGoals?.length) strategyParts.push(`Business Goals: ${s.businessGoals.join(', ')}`);
+    if (s.contentPillars?.length) strategyParts.push(`Content Pillars: ${s.contentPillars.join(', ')}`);
+    if (s.productFocus?.length) strategyParts.push(`Product Focus: ${s.productFocus.join(', ')}`);
+    if (s.uniqueSellingPoints?.length) strategyParts.push(`Unique Selling Points: ${s.uniqueSellingPoints.join(', ')}`);
+    if (s.currentPromotions?.length) strategyParts.push(`Current Promotions: ${s.currentPromotions.join(', ')}`);
+    if (s.brandValues?.length) strategyParts.push(`Brand Values: ${s.brandValues.join(', ')}`);
+    if (s.salesObjectives?.length) strategyParts.push(`Sales Objectives: ${s.salesObjectives.join(', ')}`);
+    if (s.marketingObjectives?.length) strategyParts.push(`Marketing Objectives: ${s.marketingObjectives.join(', ')}`);
+    if (s.targetAudience?.length) strategyParts.push(`Target Audience Segments: ${s.targetAudience.join(', ')}`);
+    if (s.competitorInsights?.length) strategyParts.push(`Competitor Insights: ${s.competitorInsights.join(', ')}`);
+    if (s.pricingStrategy) strategyParts.push(`Pricing Strategy: ${s.pricingStrategy}`);
+    if (s.industryTrends?.length) strategyParts.push(`Industry Trends: ${s.industryTrends.join(', ')}`);
+
+    const currentStrategyStr = strategyParts.length > 0
+      ? strategyParts.join('\n')
+      : 'No current strategy defined yet.';
+
+    // Build key dates context
+    const upcomingDates = keyDates
+      .filter((d) => d.date.toMillis() >= Date.now())
+      .sort((a, b) => a.date.toMillis() - b.date.toMillis())
+      .slice(0, 15);
+
+    const keyDatesStr = upcomingDates.length > 0
+      ? upcomingDates.map((d) =>
+          `- "${d.name}" on ${d.date.toDate().toISOString().slice(0, 10)} (${d.category}, relevance: ${d.relevanceScore}/100)\n  Themes: ${d.suggestedContentThemes.join(', ')}`
+        ).join('\n')
+      : 'No upcoming key dates available.';
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    const prompt = `You are a senior marketing strategist and researcher. Today is ${today}.
+
+A company in the interior design, building finishes, and architecture industry in East Africa has the following CURRENT marketing strategy:
+
+${currentStrategyStr}
+
+UPCOMING KEY DATES & EVENTS:
+${keyDatesStr}
+
+Your task: Research and propose strategic updates to improve their marketing strategy. Think deeply about:
+1. Current market trends in interior design, architecture, and building finishes in East Africa
+2. Digital marketing best practices for B2B and B2C in this sector
+3. How upcoming key dates create strategic opportunities
+4. Competitor strategies and market positioning
+5. Social media and content marketing trends for 2025-2026
+6. Seasonal patterns and buying cycles
+
+Respond with a JSON object (no markdown fences):
+{
+  "currentAssessment": "2-3 paragraph honest assessment of the current strategy's strengths and gaps",
+  "marketTrends": ["array of 5-8 relevant current market trends"],
+  "competitorMoves": ["array of 4-6 competitor strategies or industry moves to watch"],
+  "opportunities": ["array of 5-7 strategic opportunities identified"],
+  "threats": ["array of 3-5 potential threats or challenges"],
+  "recommendations": [
+    {
+      "section": "field name being updated (e.g. 'businessGoals', 'targetMarket')",
+      "currentValue": "what it currently is",
+      "suggestedUpdate": "what it should be changed to",
+      "reasoning": "why this change is recommended",
+      "priority": "high/medium/low"
+    }
+  ],
+  "suggestedStrategy": {
+    "businessGoals": ["updated business goals array"],
+    "targetMarket": "updated target market description",
+    "brandVoice": "updated brand voice",
+    "brandValues": ["updated brand values"],
+    "uniqueSellingPoints": ["updated USPs"],
+    "salesObjectives": ["updated sales objectives"],
+    "currentPromotions": ["suggested promotions based on key dates"],
+    "productFocus": ["updated product focus areas"],
+    "pricingStrategy": "updated pricing strategy",
+    "marketingObjectives": ["updated marketing objectives"],
+    "targetAudience": ["updated audience segments"],
+    "contentPillars": ["updated content pillars"],
+    "competitorInsights": ["updated competitor insights"],
+    "channelStrategy": { "facebook": "strategy", "instagram": "strategy", "linkedin": "strategy", "twitter": "strategy" },
+    "industryTrends": ["updated industry trends"],
+    "upcomingEvents": ["aligned with key dates"]
+  },
+  "keyDateAlignments": [
+    { "dateName": "name of key date", "strategicAction": "how strategy should leverage this date" }
+  ],
+  "researchSummary": "concise 2-3 paragraph summary of the research and key recommendations"
+}
+
+Provide at least 8 specific recommendations. The suggestedStrategy should be a complete, refined strategy that merges the best of the current strategy with your research-backed improvements.`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Failed to parse strategy research response');
+    }
+
+    return JSON.parse(jsonMatch[0]) as StrategyResearchResult;
+  } catch (error) {
+    console.error('Error researching strategy update:', error);
+    throw new Error(
+      `Failed to research strategy update: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+// ============================================
 // Agent Configuration
 // ============================================
 
@@ -1120,5 +1321,138 @@ export async function saveAgentConfig(config: MarketingAgentConfig): Promise<voi
       ...config,
       updatedAt: serverTimestamp(),
     });
+  }
+}
+
+// ============================================
+// AI Task Suggestions
+// ============================================
+
+export interface AISuggestedTask {
+  title: string;
+  description: string;
+  taskType: 'content_creation' | 'campaign_setup' | 'design_asset' | 'social_post' | 'review_approval' | 'analytics_report' | 'outreach' | 'event_prep' | 'general';
+  priority: 'urgent' | 'high' | 'medium' | 'low';
+  dueDate?: string; // ISO date
+  linkedKeyDateId?: string;
+  linkedKeyDateName?: string;
+  linkedCampaignId?: string;
+  linkedCampaignName?: string;
+  platforms?: string[];
+  contentTheme?: string;
+  tags: string[];
+  checklist?: string[];
+  reasoning: string;
+}
+
+/**
+ * Use Gemini AI to suggest marketing tasks based on strategy, key dates, and campaigns.
+ * Tasks are anchored by the AI intelligence layer — not standalone CRUD.
+ */
+export async function suggestTasksFromAI(
+  companyId: string,
+  strategyContext: Partial<StrategyContext>,
+  keyDates: MarketingKeyDate[],
+  campaignProposals: CampaignProposal[],
+  existingTaskTitles: string[]
+): Promise<AISuggestedTask[]> {
+  try {
+    const model = getModel();
+
+    const now = new Date();
+    const upcomingDates = keyDates
+      .filter((d) => d.date.toMillis() >= now.getTime())
+      .sort((a, b) => a.date.toMillis() - b.date.toMillis())
+      .slice(0, 15)
+      .map((d) => ({
+        id: d.id,
+        name: d.name,
+        date: d.date.toDate().toISOString().slice(0, 10),
+        category: d.category,
+        leadTimeDays: d.leadTimeDays,
+        suggestedActions: d.suggestedActions,
+        contentPlanned: d.contentPlanned,
+      }));
+
+    const campaigns = campaignProposals.slice(0, 10).map((c) => ({
+      id: c.id,
+      name: c.name,
+      type: c.campaignType,
+      startDate: c.suggestedStartDate,
+      endDate: c.suggestedEndDate,
+      channels: c.channels,
+      contentIdeas: c.contentIdeas.slice(0, 3),
+      priority: c.priority,
+    }));
+
+    const strategySnippet = strategyContext
+      ? `Brand voice: ${strategyContext.brandVoice || 'not set'}
+Target market: ${strategyContext.targetMarket || 'not set'}
+Business goals: ${(strategyContext.businessGoals || []).join(', ') || 'not set'}
+Content pillars: ${(strategyContext.contentPillars || []).join(', ') || 'not set'}
+Product focus: ${(strategyContext.productFocus || []).join(', ') || 'not set'}`
+      : 'No strategy context set.';
+
+    const existingNote = existingTaskTitles.length > 0
+      ? `\n\nExisting tasks (DO NOT duplicate these):\n${existingTaskTitles.map((t) => `- ${t}`).join('\n')}`
+      : '';
+
+    const prompt = `You are a marketing operations AI for Dawin Group, an interior design and building finishes company in East Africa.
+
+Based on the strategy context, upcoming key dates, and campaign plans below, suggest actionable marketing tasks that need to be completed. Focus on tasks that are timely, specific, and directly support the marketing goals.
+
+TODAY: ${now.toISOString().slice(0, 10)}
+
+STRATEGY:
+${strategySnippet}
+
+UPCOMING KEY DATES:
+${upcomingDates.length > 0 ? JSON.stringify(upcomingDates, null, 2) : 'None'}
+
+CAMPAIGN PLANS:
+${campaigns.length > 0 ? JSON.stringify(campaigns, null, 2) : 'None'}
+${existingNote}
+
+Generate 5-12 specific, actionable marketing tasks. For each task:
+- Derive it from the strategy, key dates, or campaigns above
+- Set appropriate priority and due dates relative to event dates / lead times
+- Include a short checklist of sub-steps where helpful
+- Link to the relevant key date or campaign if applicable
+
+Respond ONLY with JSON (no markdown fences):
+{
+  "tasks": [
+    {
+      "title": "Create social media content for [Event Name]",
+      "description": "Detailed description of what needs to be done",
+      "taskType": "content_creation|campaign_setup|design_asset|social_post|review_approval|analytics_report|outreach|event_prep|general",
+      "priority": "urgent|high|medium|low",
+      "dueDate": "YYYY-MM-DD",
+      "linkedKeyDateId": "id if linked to a key date, or null",
+      "linkedKeyDateName": "name if linked, or null",
+      "linkedCampaignId": "id if linked to campaign, or null",
+      "linkedCampaignName": "name if linked, or null",
+      "platforms": ["instagram", "facebook"],
+      "contentTheme": "theme if applicable",
+      "tags": ["ai-generated", "relevant-tag"],
+      "checklist": ["Step 1", "Step 2", "Step 3"],
+      "reasoning": "Why this task matters now"
+    }
+  ]
+}`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    const data = parseJSONResponse<{ tasks: AISuggestedTask[] }>(text);
+
+    return (data.tasks || []).map((t) => ({
+      ...t,
+      tags: [...(t.tags || []), 'ai-generated'],
+    }));
+  } catch (error) {
+    console.error('AI task suggestion failed:', error);
+    throw new Error(
+      `Failed to suggest tasks: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }

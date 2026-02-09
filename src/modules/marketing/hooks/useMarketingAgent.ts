@@ -3,7 +3,7 @@
  * React hook for the Marketing AI Agent with conversation state
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import type {
   AgentMessage,
@@ -14,7 +14,8 @@ import type {
   MarketingAgentConfig,
   CampaignProposal,
 } from '../types';
-import type { StrategyAnalysisResult } from '../services/marketingAgentService';
+import type { MarketingTask, MarketingTaskStatus } from '../types/marketing-task.types';
+import type { StrategyAnalysisResult, StrategyResearchResult, AISuggestedTask } from '../services/marketingAgentService';
 import {
   chatWithAgent,
   generateContent,
@@ -27,7 +28,17 @@ import {
   saveAgentConfig,
   proposeCampaigns,
   analyzeStrategyDocument,
+  loadStrategyContext,
+  saveStrategyContext,
+  researchStrategyUpdate,
+  suggestTasksFromAI,
 } from '../services/marketingAgentService';
+import {
+  getMarketingTasks,
+  createAISuggestedTasks,
+  updateTaskStatus as updateTaskStatusSvc,
+  deleteMarketingTask,
+} from '../services/marketingTaskService';
 
 interface UseMarketingAgentReturn {
   // Chat
@@ -67,9 +78,26 @@ interface UseMarketingAgentReturn {
   // Strategy
   strategyContext: Partial<StrategyContext>;
   setStrategyContext: (ctx: Partial<StrategyContext>) => void;
+  saveStrategy: (ctx: Partial<StrategyContext>) => Promise<void>;
+  loadStrategy: () => Promise<void>;
+  strategyLoaded: boolean;
   analyzeStrategy: (file: File) => Promise<StrategyAnalysisResult | null>;
   strategyAnalysis: StrategyAnalysisResult | null;
   analyzingStrategy: boolean;
+  researchStrategy: () => Promise<StrategyResearchResult | null>;
+  strategyResearch: StrategyResearchResult | null;
+  researchingStrategy: boolean;
+
+  // AI-Anchored Tasks
+  tasks: MarketingTask[];
+  tasksLoading: boolean;
+  suggestedTasks: AISuggestedTask[];
+  suggestingTasks: boolean;
+  loadTasks: () => Promise<void>;
+  suggestTasks: () => Promise<AISuggestedTask[]>;
+  acceptSuggestedTasks: (tasks: AISuggestedTask[]) => Promise<void>;
+  updateTaskStatus: (taskId: string, status: MarketingTaskStatus) => Promise<void>;
+  removeTask: (taskId: string) => Promise<void>;
 
   // Error
   error: Error | null;
@@ -115,9 +143,39 @@ export function useMarketingAgent(companyId?: string): UseMarketingAgentReturn {
   // Strategy analysis state
   const [strategyAnalysis, setStrategyAnalysis] = useState<StrategyAnalysisResult | null>(null);
   const [analyzingStrategy, setAnalyzingStrategy] = useState(false);
+  const [strategyLoaded, setStrategyLoaded] = useState(false);
+
+  // Strategy research state
+  const [strategyResearch, setStrategyResearch] = useState<StrategyResearchResult | null>(null);
+  const [researchingStrategy, setResearchingStrategy] = useState(false);
+
+  // AI-anchored task state
+  const [tasks, setTasks] = useState<MarketingTask[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [suggestedTasks, setSuggestedTasks] = useState<AISuggestedTask[]>([]);
+  const [suggestingTasks, setSuggestingTasks] = useState(false);
 
   // Error
   const [error, setError] = useState<Error | null>(null);
+
+  // Auto-load strategy context from Firestore on mount
+  useEffect(() => {
+    if (!effectiveCompanyId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const saved = await loadStrategyContext(effectiveCompanyId);
+        if (!cancelled && saved) {
+          setStrategyContext(saved);
+        }
+      } catch (err) {
+        console.warn('Failed to load saved strategy:', err);
+      } finally {
+        if (!cancelled) setStrategyLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [effectiveCompanyId]);
 
   // Send chat message
   const sendMessage = useCallback(async (content: string) => {
@@ -270,12 +328,13 @@ export function useMarketingAgent(companyId?: string): UseMarketingAgentReturn {
     try {
       const result = await analyzeStrategyDocument(file);
       setStrategyAnalysis(result);
-      // Auto-populate strategy context from analysis
+      // Auto-populate strategy context from analysis and persist
       if (result.extractedContext) {
-        setStrategyContext((prev) => ({
-          ...prev,
-          ...result.extractedContext,
-        }));
+        const merged = { ...strategyContext, ...result.extractedContext };
+        setStrategyContext(merged);
+        if (effectiveCompanyId) {
+          await saveStrategyContext(effectiveCompanyId, merged);
+        }
       }
       return result;
     } catch (err) {
@@ -284,7 +343,7 @@ export function useMarketingAgent(companyId?: string): UseMarketingAgentReturn {
     } finally {
       setAnalyzingStrategy(false);
     }
-  }, []);
+  }, [effectiveCompanyId, strategyContext]);
 
   // Propose draft campaigns
   const proposeDraftCampaigns = useCallback(async (): Promise<CampaignProposal[]> => {
@@ -308,6 +367,122 @@ export function useMarketingAgent(companyId?: string): UseMarketingAgentReturn {
       setProposingCampaigns(false);
     }
   }, [effectiveCompanyId, strategyContext, keyDates]);
+
+  // Load tasks
+  const loadTasksFn = useCallback(async () => {
+    if (!effectiveCompanyId) return;
+    setTasksLoading(true);
+    try {
+      const result = await getMarketingTasks(effectiveCompanyId);
+      setTasks(result);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to load tasks'));
+    } finally {
+      setTasksLoading(false);
+    }
+  }, [effectiveCompanyId]);
+
+  // Suggest tasks via AI
+  const suggestTasksFn = useCallback(async (): Promise<AISuggestedTask[]> => {
+    if (!effectiveCompanyId) return [];
+    setSuggestingTasks(true);
+    setError(null);
+    try {
+      const existing = tasks.map((t) => t.title);
+      const suggestions = await suggestTasksFromAI(
+        effectiveCompanyId,
+        strategyContext,
+        keyDates,
+        campaignProposals,
+        existing
+      );
+      setSuggestedTasks(suggestions);
+      return suggestions;
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to suggest tasks'));
+      return [];
+    } finally {
+      setSuggestingTasks(false);
+    }
+  }, [effectiveCompanyId, strategyContext, keyDates, campaignProposals, tasks]);
+
+  // Accept AI-suggested tasks and save to Firestore
+  const acceptSuggestedTasksFn = useCallback(async (toAccept: AISuggestedTask[]) => {
+    if (!effectiveCompanyId || !user) return;
+    try {
+      await createAISuggestedTasks(
+        effectiveCompanyId,
+        toAccept,
+        user.uid,
+        user.displayName || 'Unknown'
+      );
+      setSuggestedTasks([]);
+      await loadTasksFn();
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to create tasks'));
+    }
+  }, [effectiveCompanyId, user, loadTasksFn]);
+
+  // Update task status
+  const updateTaskStatusFn = useCallback(async (taskId: string, status: MarketingTaskStatus) => {
+    try {
+      await updateTaskStatusSvc(taskId, status);
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status } : t)));
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to update task'));
+    }
+  }, []);
+
+  // Delete task
+  const removeTaskFn = useCallback(async (taskId: string) => {
+    try {
+      await deleteMarketingTask(taskId);
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to delete task'));
+    }
+  }, []);
+
+  // Save strategy
+  const saveStrategyFn = useCallback(async (ctx: Partial<StrategyContext>) => {
+    if (!effectiveCompanyId) return;
+    try {
+      await saveStrategyContext(effectiveCompanyId, ctx);
+      setStrategyContext(ctx);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to save strategy'));
+    }
+  }, [effectiveCompanyId]);
+
+  // Load strategy
+  const loadStrategyFn = useCallback(async () => {
+    if (!effectiveCompanyId) return;
+    try {
+      const saved = await loadStrategyContext(effectiveCompanyId);
+      if (saved) setStrategyContext(saved);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to load strategy'));
+    } finally {
+      setStrategyLoaded(true);
+    }
+  }, [effectiveCompanyId]);
+
+  // Research strategy
+  const researchStrategyFn = useCallback(async (): Promise<StrategyResearchResult | null> => {
+    if (!effectiveCompanyId) return null;
+    setResearchingStrategy(true);
+    setError(null);
+    try {
+      const result = await researchStrategyUpdate(strategyContext, keyDates);
+      setStrategyResearch(result);
+      return result;
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to research strategy'));
+      return null;
+    } finally {
+      setResearchingStrategy(false);
+    }
+  }, [strategyContext, keyDates]);
 
   // Load config
   const loadConfigFn = useCallback(async () => {
@@ -357,9 +532,24 @@ export function useMarketingAgent(companyId?: string): UseMarketingAgentReturn {
     proposingCampaigns,
     strategyContext,
     setStrategyContext,
+    saveStrategy: saveStrategyFn,
+    loadStrategy: loadStrategyFn,
+    strategyLoaded,
     analyzeStrategy: analyzeStrategyFn,
     strategyAnalysis,
     analyzingStrategy,
+    researchStrategy: researchStrategyFn,
+    strategyResearch,
+    researchingStrategy,
+    tasks,
+    tasksLoading,
+    suggestedTasks,
+    suggestingTasks,
+    loadTasks: loadTasksFn,
+    suggestTasks: suggestTasksFn,
+    acceptSuggestedTasks: acceptSuggestedTasksFn,
+    updateTaskStatus: updateTaskStatusFn,
+    removeTask: removeTaskFn,
     error,
   };
 }

@@ -56,6 +56,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: 'overview', label: 'Executive Overview', icon: <DashboardIcon />, path: '/strategy/dashboard' },
   { id: 'strategy', label: 'Strategic Plans', icon: <StrategyIcon />, path: '/strategy/plans' },
+  { id: 'review', label: 'Strategy Review', icon: <BusinessIcon />, path: '/strategy/plans/review/new' },
   { id: 'okrs', label: 'OKRs', icon: <OKRIcon />, path: '/strategy/okrs' },
   { id: 'kpis', label: 'KPIs & Scorecards', icon: <KPIIcon />, path: '/strategy/kpis' },
   { id: 'analytics', label: 'Performance Analytics', icon: <AnalyticsIcon />, path: '/strategy/analytics' },

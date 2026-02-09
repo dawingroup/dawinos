@@ -27,6 +27,9 @@ const KPIDashboard = lazy(() =>
 const PerformanceDeepDive = lazy(() => 
   import('../pages/PerformanceDeepDive').then(m => ({ default: m.PerformanceDeepDive }))
 );
+const StrategyReviewPage = lazy(() => 
+  import('../pages/StrategyReviewPage').then(m => ({ default: m.StrategyReviewPage }))
+);
 
 // Loading component
 const PageLoader: React.FC = () => (
@@ -67,8 +70,20 @@ export const strategyRoutes: RouteObject[] = [
         element: withSuspense(StrategyOverview),
       },
       {
+        path: 'plans/review/new',
+        element: withSuspense(StrategyReviewPage),
+      },
+      {
+        path: 'plans/review/:reviewId',
+        element: withSuspense(StrategyReviewPage),
+      },
+      {
         path: 'plans/:planId',
         element: withSuspense(StrategyOverview),
+      },
+      {
+        path: 'plans/:planId/review',
+        element: withSuspense(StrategyReviewPage),
       },
       {
         path: 'okrs',

@@ -159,6 +159,7 @@ const StrategyOverview = lazy(() => import('@/modules/strategy/pages/StrategyOve
 const OKRDashboard = lazy(() => import('@/modules/strategy/pages/OKRDashboard').then(m => ({ default: m.OKRDashboard })));
 const KPIDashboard = lazy(() => import('@/modules/strategy/pages/KPIDashboard').then(m => ({ default: m.KPIDashboard })));
 const PerformanceDeepDive = lazy(() => import('@/modules/strategy/pages/PerformanceDeepDive').then(m => ({ default: m.PerformanceDeepDive })));
+const StrategyReviewPage = lazy(() => import('@/modules/strategy/pages/StrategyReviewPage').then(m => ({ default: m.StrategyReviewPage })));
 
 // Error Pages
 const NotFoundPage = lazy(() => import('@/pages/errors/NotFoundPage'));
@@ -550,7 +551,10 @@ export const router = createBrowserRouter([
           { index: true, element: <ExecutiveDashboard /> },
           { path: 'dashboard', element: <ExecutiveDashboard /> },
           { path: 'plans', element: <StrategyOverview /> },
+          { path: 'plans/review/new', element: <StrategyReviewPage /> },
+          { path: 'plans/review/:reviewId', element: <StrategyReviewPage /> },
           { path: 'plans/:planId', element: <StrategyOverview /> },
+          { path: 'plans/:planId/review', element: <StrategyReviewPage /> },
           { path: 'okrs', element: <OKRDashboard /> },
           { path: 'okrs/new', element: <OKRDashboard /> },
           { path: 'okrs/:objectiveId', element: <OKRDashboard /> },

@@ -1075,8 +1075,22 @@ exports.api = onRequest({
           res.status(405).json({ error: 'Method not allowed' });
         }
         break;
+      case '/ai/strategy-review':
+        if (req.method === 'POST') {
+          await handleStrategyReviewAI(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
+      case '/ai/strategy-parse-document':
+        if (req.method === 'POST') {
+          await handleStrategyDocumentParse(req, res);
+        } else {
+          res.status(405).json({ error: 'Method not allowed' });
+        }
+        break;
       default:
-        res.json({ status: 'ok', message: 'API proxy is running', path, availableEndpoints: ['/customers', '/projects', '/log-activity', '/ai/analyze-brief', '/ai/dfm-check', '/ai/design-chat', '/ai/strategy-research', '/ai/analyze-image', '/ai/feature-cache', '/ai/feature-context', '/katana/sync-product', '/katana/get-materials', '/notion/sync-milestone'] });
+        res.json({ status: 'ok', message: 'API proxy is running', path, availableEndpoints: ['/customers', '/projects', '/log-activity', '/ai/analyze-brief', '/ai/dfm-check', '/ai/design-chat', '/ai/strategy-research', '/ai/analyze-image', '/ai/feature-cache', '/ai/feature-context', '/katana/sync-product', '/katana/get-materials', '/notion/sync-milestone', '/ai/strategy-review', '/ai/strategy-parse-document'] });
     }
   } catch (error) {
     console.error('API Error:', error);
@@ -4747,6 +4761,233 @@ async function handleAuditProduct(req, res) {
     });
   } catch (error) {
     console.error('Audit Product error:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// ============================================
+// CEO STRATEGY REVIEW AI - Claude-Powered Strategy Analysis
+// ============================================
+
+const STRATEGY_REVIEW_SYSTEM_PROMPT = `You are an expert business strategy consultant and AI assistant for the Dawin Group CEO Strategy Command. You help executives review, analyze, and improve their business strategy.
+
+Your role:
+1. Analyze uploaded strategy documents and provide structured feedback
+2. Guide users through each section of the strategy review
+3. Suggest improvements to the Business Model Canvas
+4. Identify strategic risks and opportunities
+5. Generate actionable OKRs and KPIs from strategic objectives
+6. Provide competitive and market analysis insights
+
+Context about the organization:
+- Dawin Group is a diversified company with subsidiaries: Dawin Finishes (manufacturing/interior finishing), Dawin Advisory (consulting), Dawin Technology, and Dawin Capital
+- Operations primarily in East Africa (Uganda headquarters)
+- The CEO Strategy Command is a tool for strategic planning and performance tracking
+
+When providing suggestions, always return valid JSON in this format:
+{
+  "message": "Your analysis and recommendations in markdown",
+  "suggestions": [
+    {
+      "id": "unique-id",
+      "type": "bmc|swot|okr|kpi|risk|market|financial|roadmap|general",
+      "title": "Short title",
+      "content": "Detailed suggestion content",
+      "confidence": 0.85
+    }
+  ]
+}
+
+Be specific, actionable, and reference industry best practices. Consider the East African market context.`;
+
+const SECTION_PROMPTS = {
+  executiveSummary: 'Analyze the executive summary. Evaluate clarity, completeness, strategic coherence, and alignment between stated objectives and business model.',
+  visionMission: 'Review vision and mission statements. Evaluate clarity, inspirational quality, specificity, and alignment with market reality.',
+  businessModelCanvas: 'Analyze the Business Model Canvas blocks. Evaluate completeness, internal consistency between blocks, gaps, and innovation opportunities. Return suggestions as structured items for each BMC block.',
+  marketAnalysis: 'Evaluate the market analysis. Consider market sizing, target segments, growth projections, regulatory factors, and market trends.',
+  competitiveAnalysis: 'Review the competitive landscape. Assess competitor identification, competitive positioning, differentiation strategy, and sustainable advantages.',
+  swotAnalysis: 'Analyze the SWOT assessment. Evaluate whether strengths are genuine advantages, weaknesses are honestly assessed, opportunities are feasible, and threats are thorough. Suggest additional items with impact ratings.',
+  financialProjections: 'Review financial projections. Assess revenue assumptions, cost sustainability, capital efficiency, break-even feasibility, and funding alignment.',
+  riskAssessment: 'Evaluate strategic risk assessment. Consider completeness across categories, accuracy of ratings, quality of mitigation strategies, and missing risks.',
+  implementationRoadmap: 'Review the implementation roadmap. Assess phase sequencing, milestone feasibility, resource adequacy, and quick wins vs long-term balance.',
+  okrKpiOutput: 'Generate recommended OKRs (3-5 objectives with 2-4 key results each) and KPIs (8-12 across financial, operational, customer, employee, growth categories). Return as structured JSON arrays within suggestions.',
+  full_analysis: 'Provide a comprehensive assessment of the entire business strategy document. Score each section 1-5, identify key strengths and gaps, and pre-populate suggestions for Business Model Canvas, SWOT, OKRs, and KPIs.',
+};
+
+async function handleStrategyReviewAI(req, res) {
+  try {
+    const { section, currentData, uploadedDocumentContent, question, conversationHistory } = req.body;
+
+    if (!section) {
+      res.status(400).json({ error: 'Section is required' });
+      return;
+    }
+
+    console.log('Strategy Review AI - Section:', section);
+
+    const client = getAnthropicClient();
+
+    // Build messages from conversation history
+    const messages = [];
+
+    if (conversationHistory && conversationHistory.length > 0) {
+      for (const msg of conversationHistory.slice(-10)) {
+        messages.push({
+          role: msg.role === 'user' ? 'user' : 'assistant',
+          content: msg.content,
+        });
+      }
+    }
+
+    // Build the current user message
+    let userMessage = '';
+
+    if (uploadedDocumentContent) {
+      userMessage += `## Uploaded Strategy Document Content:\n${uploadedDocumentContent.substring(0, 15000)}\n\n`;
+    }
+
+    if (currentData && Object.keys(currentData).length > 0) {
+      userMessage += `## Current Review Data:\n${JSON.stringify(currentData, null, 2).substring(0, 8000)}\n\n`;
+    }
+
+    const sectionPrompt = SECTION_PROMPTS[section] || SECTION_PROMPTS.full_analysis;
+    userMessage += `## Task:\n${sectionPrompt}\n\n`;
+
+    if (question) {
+      userMessage += `## Specific Question:\n${question}\n\n`;
+    }
+
+    userMessage += `\nRespond with valid JSON containing "message" (markdown analysis) and "suggestions" array. Each suggestion must have: id, type, title, content, confidence (0-1).`;
+
+    messages.push({ role: 'user', content: userMessage });
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 8192,
+      system: STRATEGY_REVIEW_SYSTEM_PROMPT,
+      messages,
+    });
+
+    const responseText = response.content[0]?.type === 'text' ? response.content[0].text : '';
+    console.log('Strategy Review AI response length:', responseText.length);
+
+    // Parse JSON from response
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseError) {
+      // Try to extract JSON from markdown code blocks
+      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        try {
+          result = JSON.parse(jsonMatch[1]);
+        } catch (e) {
+          // Fallback: use raw text as message
+          result = {
+            message: responseText,
+            suggestions: [],
+          };
+        }
+      } else {
+        // Try to find a JSON object in the text
+        const objMatch = responseText.match(/\{[\s\S]*\}/);
+        if (objMatch) {
+          try {
+            result = JSON.parse(objMatch[0]);
+          } catch (e) {
+            result = { message: responseText, suggestions: [] };
+          }
+        } else {
+          result = { message: responseText, suggestions: [] };
+        }
+      }
+    }
+
+    // Ensure suggestions have IDs
+    const suggestions = (result.suggestions || []).map((s, i) => ({
+      id: s.id || `suggestion_${Date.now()}_${i}`,
+      type: s.type || 'general',
+      title: s.title || `Suggestion ${i + 1}`,
+      content: s.content || '',
+      confidence: typeof s.confidence === 'number' ? s.confidence : 0.7,
+      applied: false,
+    }));
+
+    const assistantMessage = {
+      id: `ai_${Date.now()}`,
+      role: 'assistant',
+      content: result.message || responseText,
+      timestamp: new Date().toISOString(),
+      section,
+      suggestions,
+    };
+
+    res.json({
+      success: true,
+      message: result.message || responseText,
+      suggestions,
+      conversationMessage: assistantMessage,
+    });
+  } catch (error) {
+    console.error('Strategy Review AI error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: '',
+      suggestions: [],
+      conversationMessage: {
+        id: `ai_error_${Date.now()}`,
+        role: 'assistant',
+        content: `I encountered an error: ${error.message}. Please try again.`,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  }
+}
+
+async function handleStrategyDocumentParse(req, res) {
+  try {
+    // For now, handle text-based content extraction
+    // In production, this would use a PDF parser or document AI
+    const { textContent, companyId } = req.body;
+
+    if (!textContent) {
+      res.status(400).json({ error: 'No document content provided' });
+      return;
+    }
+
+    console.log('Strategy Document Parse - Content length:', textContent.length);
+
+    // Use Claude to extract and structure the document content
+    const client = getAnthropicClient();
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 8192,
+      system: 'You are a document parser. Extract and structure the content of this business strategy document into clear sections. Return a JSON object with keys: executiveSummary, vision, mission, values (array), businessModel, marketAnalysis, competitiveAnalysis, financialProjections, risks, implementationPlan, and any other relevant sections. Each value should be the extracted text content for that section.',
+      messages: [{
+        role: 'user',
+        content: `Parse and structure this business strategy document:\n\n${textContent.substring(0, 20000)}`,
+      }],
+    });
+
+    const responseText = response.content[0]?.type === 'text' ? response.content[0].text : '';
+
+    let parsedContent;
+    try {
+      parsedContent = JSON.parse(responseText);
+    } catch (e) {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      parsedContent = jsonMatch ? JSON.parse(jsonMatch[0]) : { rawContent: responseText };
+    }
+
+    res.json({
+      success: true,
+      content: JSON.stringify(parsedContent),
+      sections: parsedContent,
+    });
+  } catch (error) {
+    console.error('Strategy Document Parse error:', error);
     res.status(500).json({ error: error.message });
   }
 }

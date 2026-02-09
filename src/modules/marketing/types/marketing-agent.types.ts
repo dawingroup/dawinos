@@ -264,6 +264,7 @@ export interface CampaignProposal {
 export const AGENT_COLLECTION = 'marketingAgentConversations';
 export const KEY_DATES_COLLECTION = 'marketingKeyDates';
 export const AGENT_CONFIG_COLLECTION = 'marketingAgentConfig';
+export const STRATEGY_COLLECTION = 'marketingStrategy';
 
 export const CONTENT_TONES: Record<ContentTone, { label: string; description: string }> = {
   professional: { label: 'Professional', description: 'Formal and business-oriented' },

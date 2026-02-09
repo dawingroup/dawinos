@@ -293,6 +293,59 @@ export function subscribeToMarketingTasks(
 }
 
 /**
+ * Batch-create tasks from AI suggestions.
+ * This is the primary entry point for AI-anchored task creation.
+ */
+export async function createAISuggestedTasks(
+  companyId: string,
+  suggestions: Array<{
+    title: string;
+    description: string;
+    taskType: MarketingTask['taskType'];
+    priority: MarketingTask['priority'];
+    dueDate?: string;
+    linkedKeyDateId?: string;
+    linkedKeyDateName?: string;
+    linkedCampaignId?: string;
+    linkedCampaignName?: string;
+    platforms?: string[];
+    contentTheme?: string;
+    tags: string[];
+    checklist?: string[];
+  }>,
+  userId: string,
+  userName: string
+): Promise<string[]> {
+  const ids: string[] = [];
+  for (const s of suggestions) {
+    const id = await createMarketingTask(
+      companyId,
+      {
+        title: s.title,
+        description: s.description,
+        taskType: s.taskType,
+        priority: s.priority,
+        dueDate: s.dueDate ? new Date(s.dueDate) : undefined,
+        source: 'ai_suggestion',
+        sourceName: 'Marketing AI Agent',
+        linkedKeyDateId: s.linkedKeyDateId || undefined,
+        linkedKeyDateName: s.linkedKeyDateName || undefined,
+        linkedCampaignId: s.linkedCampaignId || undefined,
+        linkedCampaignName: s.linkedCampaignName || undefined,
+        platforms: s.platforms as any,
+        contentTheme: s.contentTheme,
+        tags: [...(s.tags || []), 'ai-generated'],
+        checklist: s.checklist?.map((text) => ({ text })),
+      },
+      userId,
+      userName
+    );
+    ids.push(id);
+  }
+  return ids;
+}
+
+/**
  * Get task summary stats for dashboard
  */
 export async function getTaskStats(companyId: string): Promise<{
