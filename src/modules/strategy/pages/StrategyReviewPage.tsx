@@ -4,7 +4,7 @@
 // Main page for comprehensive business strategy review with AI assistant
 // ============================================================================
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   ArrowLeft,
   Save,
@@ -22,8 +22,9 @@ import {
   Target,
   ChevronRight,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../../shared/hooks/useAuth';
+import { useStrategyReview } from '../hooks/useStrategyReview';
 
 import {
   StrategyDocumentUpload,
@@ -35,7 +36,6 @@ import {
 } from '../components/review';
 
 import type {
-  StrategyReviewData,
   UploadedStrategyDocument,
   SectionReview,
   AIMessage,
@@ -48,7 +48,6 @@ import {
   REVIEW_SECTIONS,
   REVIEW_SECTION_ORDER,
   REVIEW_SECTION_LABELS,
-  createEmptyReviewData,
   type ReviewSectionKey,
 } from '../constants/strategyReview.constants';
 
@@ -73,28 +72,24 @@ const SECTION_ICONS: Record<string, React.FC<{ className?: string }>> = {
 
 export const StrategyReviewPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  useAuth();
+  const { reviewId } = useParams<{ reviewId?: string }>();
   const companyId = 'dawin_group';
 
-  // Review data state
-  const [reviewData, setReviewData] = useState<StrategyReviewData>(
-    createEmptyReviewData(companyId, user?.uid || '') as unknown as StrategyReviewData
-  );
+  // Firestore-backed review state with auto-save
+  const {
+    reviewData,
+    setReviewData,
+    isSaving,
+    lastSavedAt,
+    save,
+    isLoading,
+  } = useStrategyReview({ companyId, reviewId });
+
   const [activeSection, setActiveSection] = useState<ReviewSectionKey>(REVIEW_SECTIONS.EXECUTIVE_SUMMARY);
-  const [isSaving, setIsSaving] = useState(false);
   const [isAILoading, setIsAILoading] = useState(false);
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
   const [isAnalyzingDocument, setIsAnalyzingDocument] = useState(false);
-
-  // Auto-save debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      // Auto-save logic would go here (Firestore)
-      // For now, just update the timestamp
-      setReviewData(prev => ({ ...prev, updatedAt: new Date().toISOString() }));
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [reviewData]);
 
   // Document upload handler
   const handleDocumentUploaded = useCallback((doc: UploadedStrategyDocument, parsedContent?: string) => {
@@ -361,6 +356,17 @@ export const StrategyReviewPage: React.FC = () => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
+          <p className="text-sm text-gray-600">Loading strategy review...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Top Bar */}
@@ -378,6 +384,9 @@ export const StrategyReviewPage: React.FC = () => {
               <p className="text-xs text-gray-500">
                 {reviewData.status === 'draft' ? 'Draft' : reviewData.status === 'in_progress' ? 'In Progress' : 'Completed'}
                 {' — '}{completedSections}/{totalSections} sections • Score: {avgScore}/5
+                {lastSavedAt && (
+                  <span className="ml-2 text-green-600">• Saved {new Date(lastSavedAt).toLocaleTimeString()}</span>
+                )}
               </p>
             </div>
           </div>
@@ -406,10 +415,7 @@ export const StrategyReviewPage: React.FC = () => {
             </button>
 
             <button
-              onClick={() => {
-                setIsSaving(true);
-                setTimeout(() => setIsSaving(false), 1000);
-              }}
+              onClick={() => save()}
               disabled={isSaving}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >

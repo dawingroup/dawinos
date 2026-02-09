@@ -237,6 +237,7 @@ export type {
 // Services
 // ----------------------------------------------------------------------------
 export { strategyDocumentService } from './services/strategyDocument.service';
+export { strategyReviewService } from './services/strategyReview.service';
 
 // ----------------------------------------------------------------------------
 // Hooks
